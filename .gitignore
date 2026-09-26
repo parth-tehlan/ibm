@@ -6,3 +6,6 @@ IBM-BobUserSetup-x64-1.126.0+bob2.2.0.exe
 northstar/.bob/scratch/
 northstar/evidence/clause-wall.json
 northstar/evidence/manifest.json
+
+# TrustGap runtime writer artifacts (never committed)
+northstar/trustgap/TrustGap.json.bak

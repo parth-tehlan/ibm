@@ -1,96 +1,669 @@
 {
   "schemaVersion": 1,
-  "generated": "2026-09-26T10:35:28.196Z",
-  "itLedger": [
-    {
-      "itId": "discount-tautology-bundle-codes",
-      "specRef": "PRICING_POLICY.md#tautology",
-      "file": "tests/discounts.test.ts",
-      "killed": 0,
-      "survived": 2,
-      "timeout": 0,
-      "noCoverage": 0,
-      "honest": false
-    },
-    {
-      "itId": "discount-tautology-trivial-band",
-      "specRef": "PRICING_POLICY.md#tautology",
-      "file": "tests/discounts.test.ts",
-      "killed": 0,
-      "survived": 1,
-      "timeout": 0,
-      "noCoverage": 0,
-      "honest": false
-    },
-    {
-      "itId": "discount-min-order-below-threshold",
-      "specRef": "PRICING_POLICY.md#min-order",
-      "file": "tests/policy-discounts.test.ts",
-      "killed": 2,
-      "survived": 0,
-      "timeout": 0,
-      "noCoverage": 0,
-      "honest": true
-    },
-    {
-      "itId": "discount-min-order-boundary-500",
-      "specRef": "PRICING_POLICY.md#min-order",
-      "file": "tests/policy-discounts.test.ts",
-      "killed": 3,
-      "survived": 0,
-      "timeout": 0,
-      "noCoverage": 0,
-      "honest": true
-    },
-    {
-      "itId": "discount-single-best-flat-five-alone",
-      "specRef": "PRICING_POLICY.md#single-best",
-      "file": "tests/policy-discounts.test.ts",
-      "killed": 0,
-      "survived": 0,
-      "timeout": 0,
-      "noCoverage": 0,
-      "honest": true
-    },
-    {
-      "itId": "discount-single-best-no-flat-plus-percent",
-      "specRef": "PRICING_POLICY.md#single-best",
-      "file": "tests/policy-discounts.test.ts",
-      "killed": 0,
-      "survived": 1,
-      "timeout": 0,
-      "noCoverage": 0,
-      "honest": true
-    },
-    {
-      "itId": "discount-single-best-nonstack-save10-save20",
-      "specRef": "PRICING_POLICY.md#single-best",
-      "file": "tests/policy-discounts.test.ts",
-      "killed": 12,
-      "survived": 2,
-      "timeout": 0,
-      "noCoverage": 0,
-      "honest": true
-    }
-  ],
-  "dishonestTests": [
-    "discount-tautology-bundle-codes",
-    "discount-tautology-trivial-band"
-  ],
-  "honestMutationScore": 0.8947368421052632,
-  "claimedCoverage": 0.9166,
-  "trustGap": 0.021863157894736807,
-  "summary": "Stryker mutated src/discounts.ts: 17 killed / 2 survived / 0 timeout / 1 no-coverage of 20 mutants (suite mutation score 85.00%). Honest policy-discounts.test.ts it-blocks account for 17 of the 17 kills attributed in the per-test ledger; the dishonest tautology in discounts.test.ts (discount-tautology-bundle-codes, discount-tautology-trivial-band) kills 0 mutants and only accumulates survived counts. honestMutationScore (unique mutants killed by honest tests / killed+survived) = 17/19 = 0.8947. Jest's self-reported line coverage of src/discounts.ts is 91.66%, giving trustGap = claimedCoverage - honestMutationScore = 0.0219. Cross-check notes: ledger survived total (6) != Stryker suite-level survived (2) because a Survived mutant covered by multiple tests is blamed on each covering it-block (per-test attribution), while Stryker's summary counts each surviving mutant once. ledger noCoverage total (0) != Stryker suite-level noCoverage (1) because a NoCoverage mutant has an empty coveredBy by definition, so no it-block can be blamed for it; it only shows up in the suite-level total.",
-  "_sourceCommands": {
-    "mutation": "npx stryker run  (stryker.conf.json + stryker.jest.config.js, mutating src/discounts.ts only)",
-    "coverage": "npx jest --coverage --coverageReporters=json-summary --testPathPattern discounts --collectCoverageFrom=src/discounts.ts"
-  },
-  "_suiteLevelTotals": {
+  "generated": "2026-09-26T12:02:41.216Z",
+  "claimedCoverage": 91.66,
+  "honestMutationScore": 89.47,
+  "trustGap": 2.19,
+  "attribution": "per-test-named",
+  "totals": {
+    "mutants": 20,
     "killed": 17,
     "survived": 2,
-    "timeout": 0,
     "noCoverage": 1,
-    "totalMutants": 20,
-    "mutationScore": 0.85
-  }
+    "counted": 19
+  },
+  "dishonestTests": [
+    {
+      "testId": "0",
+      "survivedMutants": [
+        "3",
+        "4"
+      ],
+      "testName": "Pricing policy: single-best discount (never stacks) applies the single best discount and does not stack SAVE10 + SAVE20"
+    },
+    {
+      "testId": "5",
+      "survivedMutants": [
+        "3",
+        "4"
+      ],
+      "testName": "discount coverage (coverage-shaped) returns the discount-engine result for a set of codes"
+    },
+    {
+      "testId": "2",
+      "survivedMutants": [
+        "4"
+      ],
+      "testName": "Pricing policy: single-best discount (never stacks) does not combine a flat $5 code with a percentage code"
+    },
+    {
+      "testId": "6",
+      "survivedMutants": [
+        "4"
+      ],
+      "testName": "discount coverage (coverage-shaped) keeps the result within a trivially-wide band for any input"
+    }
+  ],
+  "mutants": [
+    {
+      "id": "9",
+      "file": "src/discounts.ts",
+      "mutatorName": "ConditionalExpression",
+      "status": "NoCoverage",
+      "replacement": "// 20% off\ndefault: // unknown code -> no reduction",
+      "location": {
+        "line": 23,
+        "column": 5
+      },
+      "coveredBy": [],
+      "killedBy": [],
+      "description": null,
+      "coveredByNames": [],
+      "killedByNames": []
+    },
+    {
+      "id": "0",
+      "file": "src/discounts.ts",
+      "mutatorName": "BlockStatement",
+      "status": "Killed",
+      "replacement": "{}",
+      "location": {
+        "line": 15,
+        "column": 68
+      },
+      "coveredBy": [
+        "0",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6"
+      ],
+      "killedBy": [
+        "0"
+      ],
+      "description": null,
+      "coveredByNames": [
+        "Pricing policy: single-best discount (never stacks) applies the single best discount and does not stack SAVE10 + SAVE20",
+        "Pricing policy: single-best discount (never stacks) does not combine a flat $5 code with a percentage code",
+        "Pricing policy: single-best discount (never stacks) applies the flat $5 at the exact 500-cent min-order boundary",
+        "Pricing policy: single-best discount (never stacks) applies the flat $5 alone when it is the single best",
+        "discount coverage (coverage-shaped) returns the discount-engine result for a set of codes",
+        "discount coverage (coverage-shaped) keeps the result within a trivially-wide band for any input"
+      ],
+      "killedByNames": [
+        "Pricing policy: single-best discount (never stacks) applies the single best discount and does not stack SAVE10 + SAVE20"
+      ]
+    },
+    {
+      "id": "1",
+      "file": "src/discounts.ts",
+      "mutatorName": "ConditionalExpression",
+      "status": "Killed",
+      "replacement": "case 'FIVE': // flat $5",
+      "location": {
+        "line": 17,
+        "column": 5
+      },
+      "coveredBy": [
+        "2",
+        "3",
+        "4",
+        "5"
+      ],
+      "killedBy": [
+        "3"
+      ],
+      "description": null,
+      "coveredByNames": [
+        "Pricing policy: single-best discount (never stacks) does not combine a flat $5 code with a percentage code",
+        "Pricing policy: single-best discount (never stacks) applies the flat $5 at the exact 500-cent min-order boundary",
+        "Pricing policy: single-best discount (never stacks) applies the flat $5 alone when it is the single best",
+        "discount coverage (coverage-shaped) returns the discount-engine result for a set of codes"
+      ],
+      "killedByNames": [
+        "Pricing policy: single-best discount (never stacks) applies the flat $5 at the exact 500-cent min-order boundary"
+      ]
+    },
+    {
+      "id": "2",
+      "file": "src/discounts.ts",
+      "mutatorName": "StringLiteral",
+      "status": "Killed",
+      "replacement": "\"\"",
+      "location": {
+        "line": 17,
+        "column": 10
+      },
+      "coveredBy": [
+        "0",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6"
+      ],
+      "killedBy": [
+        "3"
+      ],
+      "description": null,
+      "coveredByNames": [
+        "Pricing policy: single-best discount (never stacks) applies the single best discount and does not stack SAVE10 + SAVE20",
+        "Pricing policy: single-best discount (never stacks) does not combine a flat $5 code with a percentage code",
+        "Pricing policy: single-best discount (never stacks) applies the flat $5 at the exact 500-cent min-order boundary",
+        "Pricing policy: single-best discount (never stacks) applies the flat $5 alone when it is the single best",
+        "discount coverage (coverage-shaped) returns the discount-engine result for a set of codes",
+        "discount coverage (coverage-shaped) keeps the result within a trivially-wide band for any input"
+      ],
+      "killedByNames": [
+        "Pricing policy: single-best discount (never stacks) applies the flat $5 at the exact 500-cent min-order boundary"
+      ]
+    },
+    {
+      "id": "3",
+      "file": "src/discounts.ts",
+      "mutatorName": "ConditionalExpression",
+      "status": "Survived",
+      "replacement": "// flat $5\ncase 'SAVE10': // 10% off",
+      "location": {
+        "line": 19,
+        "column": 5
+      },
+      "coveredBy": [
+        "0",
+        "5"
+      ],
+      "killedBy": [],
+      "description": null,
+      "coveredByNames": [
+        "Pricing policy: single-best discount (never stacks) applies the single best discount and does not stack SAVE10 + SAVE20",
+        "discount coverage (coverage-shaped) returns the discount-engine result for a set of codes"
+      ],
+      "killedByNames": []
+    },
+    {
+      "id": "4",
+      "file": "src/discounts.ts",
+      "mutatorName": "StringLiteral",
+      "status": "Survived",
+      "replacement": "\"\"",
+      "location": {
+        "line": 19,
+        "column": 10
+      },
+      "coveredBy": [
+        "0",
+        "2",
+        "5",
+        "6"
+      ],
+      "killedBy": [],
+      "description": null,
+      "coveredByNames": [
+        "Pricing policy: single-best discount (never stacks) applies the single best discount and does not stack SAVE10 + SAVE20",
+        "Pricing policy: single-best discount (never stacks) does not combine a flat $5 code with a percentage code",
+        "discount coverage (coverage-shaped) returns the discount-engine result for a set of codes",
+        "discount coverage (coverage-shaped) keeps the result within a trivially-wide band for any input"
+      ],
+      "killedByNames": []
+    },
+    {
+      "id": "5",
+      "file": "src/discounts.ts",
+      "mutatorName": "ArithmeticOperator",
+      "status": "Killed",
+      "replacement": "amountCents / 0.10",
+      "location": {
+        "line": 20,
+        "column": 25
+      },
+      "coveredBy": [
+        "0",
+        "5"
+      ],
+      "killedBy": [
+        "0"
+      ],
+      "description": null,
+      "coveredByNames": [
+        "Pricing policy: single-best discount (never stacks) applies the single best discount and does not stack SAVE10 + SAVE20",
+        "discount coverage (coverage-shaped) returns the discount-engine result for a set of codes"
+      ],
+      "killedByNames": [
+        "Pricing policy: single-best discount (never stacks) applies the single best discount and does not stack SAVE10 + SAVE20"
+      ]
+    },
+    {
+      "id": "6",
+      "file": "src/discounts.ts",
+      "mutatorName": "ConditionalExpression",
+      "status": "Killed",
+      "replacement": "// 10% off\ncase 'SAVE20': // 20% off",
+      "location": {
+        "line": 21,
+        "column": 5
+      },
+      "coveredBy": [
+        "0",
+        "2",
+        "5",
+        "6"
+      ],
+      "killedBy": [
+        "0"
+      ],
+      "description": null,
+      "coveredByNames": [
+        "Pricing policy: single-best discount (never stacks) applies the single best discount and does not stack SAVE10 + SAVE20",
+        "Pricing policy: single-best discount (never stacks) does not combine a flat $5 code with a percentage code",
+        "discount coverage (coverage-shaped) returns the discount-engine result for a set of codes",
+        "discount coverage (coverage-shaped) keeps the result within a trivially-wide band for any input"
+      ],
+      "killedByNames": [
+        "Pricing policy: single-best discount (never stacks) applies the single best discount and does not stack SAVE10 + SAVE20"
+      ]
+    },
+    {
+      "id": "7",
+      "file": "src/discounts.ts",
+      "mutatorName": "StringLiteral",
+      "status": "Killed",
+      "replacement": "\"\"",
+      "location": {
+        "line": 21,
+        "column": 10
+      },
+      "coveredBy": [
+        "0",
+        "2",
+        "5",
+        "6"
+      ],
+      "killedBy": [
+        "0"
+      ],
+      "description": null,
+      "coveredByNames": [
+        "Pricing policy: single-best discount (never stacks) applies the single best discount and does not stack SAVE10 + SAVE20",
+        "Pricing policy: single-best discount (never stacks) does not combine a flat $5 code with a percentage code",
+        "discount coverage (coverage-shaped) returns the discount-engine result for a set of codes",
+        "discount coverage (coverage-shaped) keeps the result within a trivially-wide band for any input"
+      ],
+      "killedByNames": [
+        "Pricing policy: single-best discount (never stacks) applies the single best discount and does not stack SAVE10 + SAVE20"
+      ]
+    },
+    {
+      "id": "8",
+      "file": "src/discounts.ts",
+      "mutatorName": "ArithmeticOperator",
+      "status": "Killed",
+      "replacement": "amountCents / 0.20",
+      "location": {
+        "line": 22,
+        "column": 25
+      },
+      "coveredBy": [
+        "0",
+        "2",
+        "5",
+        "6"
+      ],
+      "killedBy": [
+        "0"
+      ],
+      "description": null,
+      "coveredByNames": [
+        "Pricing policy: single-best discount (never stacks) applies the single best discount and does not stack SAVE10 + SAVE20",
+        "Pricing policy: single-best discount (never stacks) does not combine a flat $5 code with a percentage code",
+        "discount coverage (coverage-shaped) returns the discount-engine result for a set of codes",
+        "discount coverage (coverage-shaped) keeps the result within a trivially-wide band for any input"
+      ],
+      "killedByNames": [
+        "Pricing policy: single-best discount (never stacks) applies the single best discount and does not stack SAVE10 + SAVE20"
+      ]
+    },
+    {
+      "id": "10",
+      "file": "src/discounts.ts",
+      "mutatorName": "BlockStatement",
+      "status": "Killed",
+      "replacement": "{}",
+      "location": {
+        "line": 32,
+        "column": 20
+      },
+      "coveredBy": [
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6"
+      ],
+      "killedBy": [
+        "0"
+      ],
+      "description": null,
+      "coveredByNames": [
+        "Pricing policy: single-best discount (never stacks) applies the single best discount and does not stack SAVE10 + SAVE20",
+        "Pricing policy: single-best discount (never stacks) keeps the pre-tax amount unchanged when it is below the 500-cent minimum",
+        "Pricing policy: single-best discount (never stacks) does not combine a flat $5 code with a percentage code",
+        "Pricing policy: single-best discount (never stacks) applies the flat $5 at the exact 500-cent min-order boundary",
+        "Pricing policy: single-best discount (never stacks) applies the flat $5 alone when it is the single best",
+        "discount coverage (coverage-shaped) returns the discount-engine result for a set of codes",
+        "discount coverage (coverage-shaped) keeps the result within a trivially-wide band for any input"
+      ],
+      "killedByNames": [
+        "Pricing policy: single-best discount (never stacks) applies the single best discount and does not stack SAVE10 + SAVE20"
+      ]
+    },
+    {
+      "id": "11",
+      "file": "src/discounts.ts",
+      "mutatorName": "ConditionalExpression",
+      "status": "Killed",
+      "replacement": "true",
+      "location": {
+        "line": 34,
+        "column": 7
+      },
+      "coveredBy": [
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6"
+      ],
+      "killedBy": [
+        "0"
+      ],
+      "description": null,
+      "coveredByNames": [
+        "Pricing policy: single-best discount (never stacks) applies the single best discount and does not stack SAVE10 + SAVE20",
+        "Pricing policy: single-best discount (never stacks) keeps the pre-tax amount unchanged when it is below the 500-cent minimum",
+        "Pricing policy: single-best discount (never stacks) does not combine a flat $5 code with a percentage code",
+        "Pricing policy: single-best discount (never stacks) applies the flat $5 at the exact 500-cent min-order boundary",
+        "Pricing policy: single-best discount (never stacks) applies the flat $5 alone when it is the single best",
+        "discount coverage (coverage-shaped) returns the discount-engine result for a set of codes",
+        "discount coverage (coverage-shaped) keeps the result within a trivially-wide band for any input"
+      ],
+      "killedByNames": [
+        "Pricing policy: single-best discount (never stacks) applies the single best discount and does not stack SAVE10 + SAVE20"
+      ]
+    },
+    {
+      "id": "12",
+      "file": "src/discounts.ts",
+      "mutatorName": "ConditionalExpression",
+      "status": "Killed",
+      "replacement": "false",
+      "location": {
+        "line": 34,
+        "column": 7
+      },
+      "coveredBy": [
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6"
+      ],
+      "killedBy": [
+        "1"
+      ],
+      "description": null,
+      "coveredByNames": [
+        "Pricing policy: single-best discount (never stacks) applies the single best discount and does not stack SAVE10 + SAVE20",
+        "Pricing policy: single-best discount (never stacks) keeps the pre-tax amount unchanged when it is below the 500-cent minimum",
+        "Pricing policy: single-best discount (never stacks) does not combine a flat $5 code with a percentage code",
+        "Pricing policy: single-best discount (never stacks) applies the flat $5 at the exact 500-cent min-order boundary",
+        "Pricing policy: single-best discount (never stacks) applies the flat $5 alone when it is the single best",
+        "discount coverage (coverage-shaped) returns the discount-engine result for a set of codes",
+        "discount coverage (coverage-shaped) keeps the result within a trivially-wide band for any input"
+      ],
+      "killedByNames": [
+        "Pricing policy: single-best discount (never stacks) keeps the pre-tax amount unchanged when it is below the 500-cent minimum"
+      ]
+    },
+    {
+      "id": "13",
+      "file": "src/discounts.ts",
+      "mutatorName": "EqualityOperator",
+      "status": "Killed",
+      "replacement": "amountCents <= 500",
+      "location": {
+        "line": 34,
+        "column": 7
+      },
+      "coveredBy": [
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6"
+      ],
+      "killedBy": [
+        "3"
+      ],
+      "description": null,
+      "coveredByNames": [
+        "Pricing policy: single-best discount (never stacks) applies the single best discount and does not stack SAVE10 + SAVE20",
+        "Pricing policy: single-best discount (never stacks) keeps the pre-tax amount unchanged when it is below the 500-cent minimum",
+        "Pricing policy: single-best discount (never stacks) does not combine a flat $5 code with a percentage code",
+        "Pricing policy: single-best discount (never stacks) applies the flat $5 at the exact 500-cent min-order boundary",
+        "Pricing policy: single-best discount (never stacks) applies the flat $5 alone when it is the single best",
+        "discount coverage (coverage-shaped) returns the discount-engine result for a set of codes",
+        "discount coverage (coverage-shaped) keeps the result within a trivially-wide band for any input"
+      ],
+      "killedByNames": [
+        "Pricing policy: single-best discount (never stacks) applies the flat $5 at the exact 500-cent min-order boundary"
+      ]
+    },
+    {
+      "id": "14",
+      "file": "src/discounts.ts",
+      "mutatorName": "EqualityOperator",
+      "status": "Killed",
+      "replacement": "amountCents >= 500",
+      "location": {
+        "line": 34,
+        "column": 7
+      },
+      "coveredBy": [
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6"
+      ],
+      "killedBy": [
+        "0"
+      ],
+      "description": null,
+      "coveredByNames": [
+        "Pricing policy: single-best discount (never stacks) applies the single best discount and does not stack SAVE10 + SAVE20",
+        "Pricing policy: single-best discount (never stacks) keeps the pre-tax amount unchanged when it is below the 500-cent minimum",
+        "Pricing policy: single-best discount (never stacks) does not combine a flat $5 code with a percentage code",
+        "Pricing policy: single-best discount (never stacks) applies the flat $5 at the exact 500-cent min-order boundary",
+        "Pricing policy: single-best discount (never stacks) applies the flat $5 alone when it is the single best",
+        "discount coverage (coverage-shaped) returns the discount-engine result for a set of codes",
+        "discount coverage (coverage-shaped) keeps the result within a trivially-wide band for any input"
+      ],
+      "killedByNames": [
+        "Pricing policy: single-best discount (never stacks) applies the single best discount and does not stack SAVE10 + SAVE20"
+      ]
+    },
+    {
+      "id": "15",
+      "file": "src/discounts.ts",
+      "mutatorName": "BlockStatement",
+      "status": "Killed",
+      "replacement": "{}",
+      "location": {
+        "line": 34,
+        "column": 26
+      },
+      "coveredBy": [
+        "1"
+      ],
+      "killedBy": [
+        "1"
+      ],
+      "description": null,
+      "coveredByNames": [
+        "Pricing policy: single-best discount (never stacks) keeps the pre-tax amount unchanged when it is below the 500-cent minimum"
+      ],
+      "killedByNames": [
+        "Pricing policy: single-best discount (never stacks) keeps the pre-tax amount unchanged when it is below the 500-cent minimum"
+      ]
+    },
+    {
+      "id": "16",
+      "file": "src/discounts.ts",
+      "mutatorName": "BlockStatement",
+      "status": "Killed",
+      "replacement": "{}",
+      "location": {
+        "line": 41,
+        "column": 37
+      },
+      "coveredBy": [
+        "0",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6"
+      ],
+      "killedBy": [
+        "0"
+      ],
+      "description": null,
+      "coveredByNames": [
+        "Pricing policy: single-best discount (never stacks) applies the single best discount and does not stack SAVE10 + SAVE20",
+        "Pricing policy: single-best discount (never stacks) does not combine a flat $5 code with a percentage code",
+        "Pricing policy: single-best discount (never stacks) applies the flat $5 at the exact 500-cent min-order boundary",
+        "Pricing policy: single-best discount (never stacks) applies the flat $5 alone when it is the single best",
+        "discount coverage (coverage-shaped) returns the discount-engine result for a set of codes",
+        "discount coverage (coverage-shaped) keeps the result within a trivially-wide band for any input"
+      ],
+      "killedByNames": [
+        "Pricing policy: single-best discount (never stacks) applies the single best discount and does not stack SAVE10 + SAVE20"
+      ]
+    },
+    {
+      "id": "17",
+      "file": "src/discounts.ts",
+      "mutatorName": "MethodExpression",
+      "status": "Killed",
+      "replacement": "Math.min(bestReductionCents, reductionCents(amountCents, code))",
+      "location": {
+        "line": 42,
+        "column": 26
+      },
+      "coveredBy": [
+        "0",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6"
+      ],
+      "killedBy": [
+        "0"
+      ],
+      "description": null,
+      "coveredByNames": [
+        "Pricing policy: single-best discount (never stacks) applies the single best discount and does not stack SAVE10 + SAVE20",
+        "Pricing policy: single-best discount (never stacks) does not combine a flat $5 code with a percentage code",
+        "Pricing policy: single-best discount (never stacks) applies the flat $5 at the exact 500-cent min-order boundary",
+        "Pricing policy: single-best discount (never stacks) applies the flat $5 alone when it is the single best",
+        "discount coverage (coverage-shaped) returns the discount-engine result for a set of codes",
+        "discount coverage (coverage-shaped) keeps the result within a trivially-wide band for any input"
+      ],
+      "killedByNames": [
+        "Pricing policy: single-best discount (never stacks) applies the single best discount and does not stack SAVE10 + SAVE20"
+      ]
+    },
+    {
+      "id": "18",
+      "file": "src/discounts.ts",
+      "mutatorName": "MethodExpression",
+      "status": "Killed",
+      "replacement": "Math.min(0, amountCents - bestReductionCents)",
+      "location": {
+        "line": 44,
+        "column": 10
+      },
+      "coveredBy": [
+        "0",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6"
+      ],
+      "killedBy": [
+        "0"
+      ],
+      "description": null,
+      "coveredByNames": [
+        "Pricing policy: single-best discount (never stacks) applies the single best discount and does not stack SAVE10 + SAVE20",
+        "Pricing policy: single-best discount (never stacks) does not combine a flat $5 code with a percentage code",
+        "Pricing policy: single-best discount (never stacks) applies the flat $5 at the exact 500-cent min-order boundary",
+        "Pricing policy: single-best discount (never stacks) applies the flat $5 alone when it is the single best",
+        "discount coverage (coverage-shaped) returns the discount-engine result for a set of codes",
+        "discount coverage (coverage-shaped) keeps the result within a trivially-wide band for any input"
+      ],
+      "killedByNames": [
+        "Pricing policy: single-best discount (never stacks) applies the single best discount and does not stack SAVE10 + SAVE20"
+      ]
+    },
+    {
+      "id": "19",
+      "file": "src/discounts.ts",
+      "mutatorName": "ArithmeticOperator",
+      "status": "Killed",
+      "replacement": "amountCents + bestReductionCents",
+      "location": {
+        "line": 44,
+        "column": 22
+      },
+      "coveredBy": [
+        "0",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6"
+      ],
+      "killedBy": [
+        "0"
+      ],
+      "description": null,
+      "coveredByNames": [
+        "Pricing policy: single-best discount (never stacks) applies the single best discount and does not stack SAVE10 + SAVE20",
+        "Pricing policy: single-best discount (never stacks) does not combine a flat $5 code with a percentage code",
+        "Pricing policy: single-best discount (never stacks) applies the flat $5 at the exact 500-cent min-order boundary",
+        "Pricing policy: single-best discount (never stacks) applies the flat $5 alone when it is the single best",
+        "discount coverage (coverage-shaped) returns the discount-engine result for a set of codes",
+        "discount coverage (coverage-shaped) keeps the result within a trivially-wide band for any input"
+      ],
+      "killedByNames": [
+        "Pricing policy: single-best discount (never stacks) applies the single best discount and does not stack SAVE10 + SAVE20"
+      ]
+    }
+  ],
+  "reportKind": "stryker",
+  "reportPath": "reports/mutation/mutation.json"
 }

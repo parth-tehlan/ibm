@@ -522,6 +522,7 @@ async function courtWarpathContext() {
   const logsRaw = readMaybe(c.fixtures.logs, {});
   const logWindow = (logsRaw.log || logsRaw.logs || []).map((l) => ({
     t: l.t, level: l.level, msg: l.msg || l.message || JSON.stringify(l), event: l.event || null, component: l.component || null,
+    spec: l.spec || null, runbook: l.runbook || null,
   }));
   return {
     court: 'WARPATH',
@@ -547,10 +548,12 @@ async function courtWarpathTriage() {
     return {
       court: 'WARPATH',
       status: 'no-signal-window',
-      detail: 'metrics fixture has no window — cannot correlate',
+      detail: 'metrics fixture has no window (window or errorRate.windowStart) — cannot correlate',
     };
   }
-  const [wStart, wEnd] = String(metrics.window).split('..').map((s) => new Date(s).getTime());
+  const [wStart, wEndRaw] = String(metrics.window).split('..').map((s) => new Date(s).getTime());
+  // Open-ended window (point start): treat end as +infinity.
+  const wEnd = metrics.windowOpenEnded ? Number.POSITIVE_INFINITY : wEndRaw;
   if (Number.isNaN(wStart) || Number.isNaN(wEnd)) {
     return { court: 'WARPATH', status: 'bad-window', detail: `metrics.window '${metrics.window}' is not ISO..ISO` };
   }
@@ -582,11 +585,22 @@ async function courtWarpathTriage() {
       openThreshold: metrics.openThreshold,
     },
     evidence: evidenceLines,
-    // Rule citation comes from config (repo-agnostic), with the W6 semantics
-    // spelled out only when the repo points at a runbook.
-    rule: cfg().rules.runbook
-      ? `${rel(cfg().rules.runbook)}: breaker SHALL NOT trip below openThreshold — breakerState(${metrics.breakerState}) at consecutiveFailures=${metrics.consecutiveFailures} < openThreshold=${metrics.openThreshold} is the defect`
-      : null,
+    // The violated rule is *derived from the data*: when the breaker opened
+    // below its configured threshold, cite the runbook (if configured) plus
+    // any spec anchor found on the evidence lines — never a hardcoded clause.
+    rule: (() => {
+      const below = typeof metrics.consecutiveFailures === 'number' &&
+                    typeof metrics.openThreshold === 'number' &&
+                    metrics.consecutiveFailures < metrics.openThreshold &&
+                    /open/i.test(metrics.breakerState || '');
+      if (!below) return null;
+      const anchor = (evidenceLines.find((l) => l.spec) || {}).spec;
+      const runbook = cfg().rules.runbook ? rel(cfg().rules.runbook) : (evidenceLines.find((l) => l.runbook) || {}).runbook;
+      const defect = `breaker opened at consecutiveFailures=${metrics.consecutiveFailures} < openThreshold=${metrics.openThreshold}`;
+      return [runbook, anchor].filter(Boolean).length
+        ? `${[runbook, anchor].filter(Boolean).join(' + ')}: breaker SHALL NOT trip below openThreshold — ${defect} is the defect`
+        : defect;
+    })(),
   };
 }
 
