@@ -84,8 +84,10 @@ async function cmdInstallCourts() {
       vscode.window.showErrorMessage(`TRIUMPH ${h}: ${e.message}`);
     }
   }
+  const extVersion = require('../package.json').version;
   const choice = await vscode.window.showInformationMessage(
-    `TRIUMPH courts installed (${hosts.join(', ')}). ${written.length} files written.`,
+    `TRIUMPH courts installed (${hosts.join(', ')}) — extension v${extVersion}. ${written.length} files written. ` +
+    `If you expected skills/rules/modes and only see agents+mcp.json, reload the window (Developer: Reload Window) so the host picks up the current extension build.`,
     'Show files'
   );
   if (choice === 'Show files') {
