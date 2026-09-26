@@ -118,6 +118,46 @@ const full = (r, s, w) => ({ redline: r, splitbrain: s, warpath: w });
     }
   });
 
+  await t('git provenance: real repo yields commit/branch/dirty; non-repo is null', async () => {
+    const { gitProvenance } = require('../src/dashboard');
+    const real = await gitProvenance('/home/ubuntu/ibm-bob/northstar');
+    assert.match(real.checkedOutCommit, /^[0-9a-f]{40}$/, 'commit should be a full SHA');
+    assert.strictEqual(typeof real.branch, 'string');
+    assert.strictEqual(typeof real.workingTreeDirty, 'boolean');
+    const none = await gitProvenance(fs.mkdtempSync(path.join(os.tmpdir(), 'nogit-')));
+    assert.deepStrictEqual(none, { checkedOutCommit: null, branch: null, workingTreeDirty: null });
+  });
+
+  await t('session: one dashboard serves an unsolicited run then a browser run-again', async () => {
+    const vscode = { workspace: { workspaceFolders: [{ uri: { toString: () => 'file:///tmp/triumph-sess' } }] } };
+    const { ensureSession, stopSession } = require('../src/dashboard');
+    const historyDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dash-sess-'));
+    // Stub enginePath with a repo that has no courts — proves session+polling plumbing
+    // without needing a full court run. We only check the session stays connected and
+    // a browser request surfaces on poll().
+    const session = await ensureSession(vscode, { root: '/tmp', enginePath: require('path').join(__dirname, '..', 'court.js'), historyDir });
+    try {
+      assert.ok(session.dash.connected, 'session should be connected');
+      const again = await ensureSession(vscode, { root: '/tmp', enginePath: session.enginePath, historyDir });
+      assert.strictEqual(again, session, 'same project must reuse the live session (no second process)');
+      // Browser run-again surfaces via the persistent session's poll.
+      const http = require('http');
+      await new Promise((res, rej) => {
+        const u = new URL(session.dash.url + '/api/projects/' + session.project.id + '/run');
+        const d = Buffer.from(JSON.stringify({ courts: ['warpath'] }));
+        const rq = http.request({ host: u.hostname, port: u.port, path: u.pathname, method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': d.length } }, (x) => { x.resume(); x.on('end', res); });
+        rq.on('error', rej); rq.write(d); rq.end();
+      });
+      let pending = null;
+      for (let i = 0; i < 12 && !pending; i++) { await new Promise(r => setTimeout(r, 400)); pending = await session.dash.poll(); }
+      assert.ok(pending && pending.runId, 'browser run-again should surface on the persistent session');
+      assert.deepStrictEqual(pending.courts, ['warpath']);
+      await session.dash.acknowledge(pending.requestId);
+    } finally {
+      await stopSession();
+    }
+  });
+
   await t('re-register the same project after a clean disconnect', async () => {
     const historyDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dash-hist-'));
     const pid = projectId('file:///tmp/triumph-reconn');
