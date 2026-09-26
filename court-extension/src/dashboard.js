@@ -235,4 +235,13 @@ async function stopAll() {
   }
 }
 
-module.exports = { runAndPublish, startSession, stopAll, preflight, projectFor, collectCourts, outcome };
+function isConnected() {
+  return sessions.size > 0 && !!(sharedServer && sharedServer.child && sharedServer.child.connected);
+}
+
+// Compatibility with the extension's public session lifecycle. stopAll safely
+// closes every live project in a multi-root window.
+const ensureSession = startSession;
+const stopSession = stopAll;
+module.exports = { runAndPublish, startSession, ensureSession, stopAll, stopSession, isConnected,
+  preflight, projectFor, collectCourts, outcome, gitProvenance };

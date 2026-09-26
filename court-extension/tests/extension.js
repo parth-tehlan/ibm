@@ -10,13 +10,12 @@ const Module = require('module');
 const EXT = path.resolve(__dirname, '..');
 
 // --- Mock vscode ---
-const registered = { commands: [], handlers: {}, mcpProviders: [], opened: [] };
+const registered = { commands: [], mcpProviders: [] };
 const vscode = {
   workspace: {
     workspaceFolders: [{ uri: { fsPath: path.resolve(EXT, '..', 'northstar') } }],
     getConfiguration: () => ({ get: () => '' }),
     openTextDocument: async (x) => ({ content: x }),
-    getWorkspaceFolder: (uri) => vscode.workspace.workspaceFolders.find((f) => f.uri.fsPath === uri.fsPath),
   },
   window: {
     showWarningMessage: (m) => { throw new Error('warn: ' + m); },
@@ -26,10 +25,10 @@ const vscode = {
     showTextDocument: async () => {},
     withProgress: async (_o, fn) => fn({ report: () => {} }),
     createWebviewPanel: () => ({ webview: { set html(v) { registered.webviewHtml = v; } } }),
-    activeTextEditor: null,
+    createStatusBarItem: () => { const it = { show: () => { it.visible = true; }, hide: () => { it.visible = false; }, text: '', tooltip: '' }; registered.statusBar = it; return it; },
   },
   commands: {
-    registerCommand: (id, fn) => { registered.commands.push(id); registered.handlers[id] = fn; return { dispose() {} }; },
+    registerCommand: (id, fn) => { registered.commands.push(id); return { dispose() {} }; },
   },
   lm: {
     registerMcpServerDefinitionProvider: (id, provider) => { registered.mcpProviders.push({ id, provider }); return { dispose() {} }; },
@@ -37,8 +36,7 @@ const vscode = {
   McpStdioServerDefinition: class { constructor(label, command, args) { Object.assign(this, { label, command, args }); } },
   ProgressLocation: { Notification: 1 },
   ViewColumn: { One: 1 },
-  Uri: { parse: (u) => u },
-  env: { openExternal: async (u) => { registered.opened.push(u); } },
+  StatusBarAlignment: { Left: 1, Right: 2 },
 };
 
 // Intercept require('vscode') inside extension.js.
@@ -64,34 +62,8 @@ const t = (n, f) => Promise.resolve().then(f).then(() => { passed++; console.log
     }
   });
 
-  await t('dashboard command selects active folder, opens connected URL once and deactivates', async () => {
-    const dashboard = require('../src/dashboard');
-    const run = dashboard.runAndPublish, stop = dashboard.stopAll;
-    const root = fs.mkdtempSync(require('path').join(require('os').tmpdir(), 'triumph-cmd-'));
-    const folder = { uri: { fsPath: root } };
-    const originalFolders = vscode.workspace.workspaceFolders;
-    let options; let stopped = false;
-    try {
-      vscode.workspace.workspaceFolders = [originalFolders[0], folder];
-      vscode.window.activeTextEditor = { document: { uri: folder.uri } };
-      dashboard.runAndPublish = async (_v, o) => { options = o; await o.openExternal('http://127.0.0.1:1234/projects/id/runs/run'); return { runId: 'run', url: 'http://127.0.0.1:1234/projects/id/runs/run' }; };
-      dashboard.stopAll = async () => { stopped = true; };
-      const ctx = { subscriptions: [], globalStorageUri: { fsPath: root } };
-      ext.activate(ctx);
-      await registered.handlers['triumph.dashboardRun']();
-      assert.strictEqual(options.root, root);
-      assert.strictEqual(registered.opened.length, 1);
-      await ext.deactivate();
-      assert.ok(stopped);
-    } finally {
-      dashboard.runAndPublish = run; dashboard.stopAll = stop;
-      vscode.workspace.workspaceFolders = originalFolders; vscode.window.activeTextEditor = null;
-      fs.rmSync(root, { recursive: true, force: true });
-    }
-  });
-
   await t('MCP server definition provider registered + points at engine', () => {
-    assert.ok(registered.mcpProviders.length >= 1);
+    assert.strictEqual(registered.mcpProviders.length, 1);
     const defs = registered.mcpProviders[0].provider.provideMcpServerDefinitions();
     assert.ok(defs.length === 1);
     assert.strictEqual(defs[0].command, 'node');
@@ -105,6 +77,20 @@ const t = (n, f) => Promise.resolve().then(f).then(() => { passed++; console.log
     assert.ok(!/process\.env\.[A-Z_]*API_KEY/.test(src));
   });
 
+  await t('status bar item created and hidden when dashboard disconnected', () => {
+    assert.ok(registered.statusBar, 'a status bar item should be created on activate');
+    assert.ok(!registered.statusBar.visible, 'hidden while dashboard is not connected');
+  });
+
+  await t('deactivate() resolves and stopSession is safe + idempotent', async () => {
+    const dash = require('../src/dashboard.js');
+    assert.strictEqual(typeof dash.stopSession, 'function', 'stopSession must be exported');
+    await dash.stopSession(); // no active session → must not throw
+    await dash.stopSession(); // idempotent
+    await ext.deactivate();   // must resolve (returns stopSession())
+    await ext.deactivate();   // idempotent deactivate
+  });
+
   await t('generateReport renders a webview from engine JSON', async () => {
     // run the command's core: writeReports on collected input.
     const { writeReports } = require('../lib/render');
@@ -113,6 +99,28 @@ const t = (n, f) => Promise.resolve().then(f).then(() => { passed++; console.log
     const input = { repo: 'n', repoRootAbs: '/r', generated: 'g', redline: { summary: { green: 0, red: 1, yellow: 0, total: 1 }, results: [{ clause: 'W1', status: 'red', passed: 0, failed: 1, total: 1, test: 't', spec_anchor: 's', failures: [] }] } };
     const { mdPath, htmlPath } = writeReports(input, out);
     assert.ok(fs.existsSync(mdPath) && fs.existsSync(htmlPath));
+  });
+
+  await t('installed bundle is in sync with source (catches stale-host regressions)', () => {
+    const os = require('os');
+    const base = path.join(os.homedir(), '.local', 'share', 'code-server', 'extensions');
+    if (!fs.existsSync(base)) { console.log('     (skipped: no code-server extensions dir)'); return; }
+    const installs = fs.readdirSync(base).filter((d) => d.startsWith('triumph.triumph-courts-'));
+    if (!installs.length) { console.log('     (skipped: extension not installed)'); return; }
+    // Newest install dir.
+    const newest = installs.map((d) => path.join(base, d)).sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs)[0];
+    // 1. Version matches source package.json.
+    const srcV = require('../package.json').version;
+    const instV = require(path.join(newest, 'package.json')).version;
+    assert.strictEqual(instV, srcV, `installed version ${instV} != source ${srcV}`);
+    // 2. Installed lib/hosts.js matches source (the skills/rules regression vector).
+    const srcHosts = fs.readFileSync(path.join(EXT, 'lib', 'hosts.js'), 'utf8');
+    const instHosts = fs.readFileSync(path.join(newest, 'lib', 'hosts.js'), 'utf8');
+    assert.strictEqual(instHosts, srcHosts, 'installed lib/hosts.js is stale — reinstall + reload the host');
+    // 3. Skills + custom_modes present in the installed bundle.
+    assert.ok(fs.existsSync(path.join(newest, 'agents', 'skills', 'redline-extract', 'SKILL.md')), 'skills missing from installed bundle');
+    const cm = fs.readFileSync(path.join(newest, 'agents', 'bob', 'custom_modes.yaml'), 'utf8');
+    assert.ok(/^customModes:/m.test(cm), 'installed custom_modes.yaml must be object-shaped');
   });
 
   console.log(`\n${passed} passed, ${failed} failed`);

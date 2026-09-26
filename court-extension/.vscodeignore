@@ -9,8 +9,9 @@ node_modules/
 .gitignore
 package-lock.json
 
-# Keep the dashboard's pinned production runtime dependencies (express, zod);
-# exclude only non-dashboard node_modules.
+# Keep the dashboard's pinned production runtime dependencies (express, zod) and
+# its lockfile (exact pinned versions); exclude only non-dashboard node_modules.
 !dashboard/node_modules/**
+!dashboard/package-lock.json
 dashboard/**/*.map
 
