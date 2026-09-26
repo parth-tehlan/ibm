@@ -32,6 +32,10 @@ test('private revisioned storage, project isolation, stale and conflicting revis
   await assert.rejects(history.save(a), { code: 'CONFLICT' });
   await assert.rejects(history.save({ ...newer, branch: 'forged' }), { code: 'CONFLICT' });
   await assert.rejects(history.save({ ...newer, revision: 2, project: { ...a.project, name: 'Changed' } }), { code: 'CONFLICT' });
+  await assert.rejects(history.save({ ...newer, revision: 2, state: 'running' }), { code: 'CONFLICT' });
+  await assert.rejects(history.save({ ...newer, revision: 2, state: 'complete' }), { code: 'CONFLICT' });
+  const c = fixture(); await history.save(c);
+  await assert.rejects(history.save({ ...c, revision: 1, updatedAt: '2025-12-31T00:00:00.000Z' }), { code: 'CONFLICT' });
   const file = path.join(dir, 'projects', a.project.id, 'runs', a.runId, '1.json');
   assert.equal((await stat(file)).mode & 0o077, 0);
   assert.deepEqual((await readdir(path.dirname(file))).sort(), ['0.json', '1.json']);

@@ -60,6 +60,26 @@ test('poll/ack and authenticated submissions enforce project and run isolation',
   assert.notEqual(next.runId, req.runId);
 });
 
+test('a pending browser request is not pollable until its placeholder is durable', async (t) => {
+  const { bridge, history } = await setup(t);
+  const project = { id: randomUUID(), name: 'Concurrent' };
+  const { token } = bridge.registerProject({ project });
+  let release;
+  const pending = new Promise((resolve) => { release = resolve; });
+  let writing;
+  const reached = new Promise((resolve) => { writing = resolve; });
+  const started = bridge.requestRun({ projectId: project.id, courts: ['redline'], prepare: async (request) => {
+    writing(request); await pending;
+    await history.save({ ...snapshot(project, request.runId), createdAt: request.createdAt, updatedAt: request.createdAt });
+  } });
+  const request = await reached;
+  assert.equal(bridge.poll({ projectId: project.id, token }), null);
+  await assert.rejects(bridge.requestRun({ projectId: project.id, courts: ['warpath'] }), { code: 'CONFLICT' });
+  release(); await started;
+  assert.equal(bridge.poll({ projectId: project.id, token }).runId, request.runId);
+  assert.equal((await history.load(project.id, request.runId)).revision, 0);
+});
+
 test('expiration and disconnect fail closed, interrupt persisted running run', async (t) => {
   let clock = Date.parse('2026-01-01T00:00:00.000Z');
   const { bridge, history } = await setup(t, { now: () => clock, heartbeatTimeoutMs: 100 });

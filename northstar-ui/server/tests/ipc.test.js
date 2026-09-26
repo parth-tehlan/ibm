@@ -34,7 +34,7 @@ test('editor-launched dashboard registers over private IPC; HTTP never grants cr
     ? path.resolve(process.env.TRIUMPH_RUNTIME_DIR, 'server/index.js')
     : fileURLToPath(new URL('../index.js', import.meta.url));
   const child = fork(entry, [], {
-    execArgv: [], env: { ...process.env, PORT: '0', TRIUMPH_HOST: '127.0.0.1', XDG_DATA_HOME: data }, stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
+    execArgv: [], env: { ...process.env, PORT: '0', TRIUMPH_HOST: '127.0.0.1', XDG_DATA_HOME: data, TRIUMPH_LEGACY_DIR: path.join(data, 'no-legacy') }, stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
   });
   t.after(async () => {
     child.kill(); await new Promise((resolve) => child.once('exit', resolve));

@@ -29,8 +29,28 @@ test('opaque extension evidence is accepted for any project, without falsely acc
   const report = base();
   report.redline = { ...empty(), state: 'complete', payload: { assertions: [{ requirementId: 'Z-1', evidence: 'independent' }] } };
   assert.equal(isV2Snapshot(report), true);
+  report.redline.payload = { court: 'REDLINE', assertions: [{ requirementId: 'Z-1', evidence: 'independent' }] };
+  assert.equal(isV2Snapshot(report), true, 'court brand alone is not the dashboard verdict schema');
   report.redline.payload = { court: 'REDLINE', summary: { green: 1, red: 0, total: 1 }, results: [] };
   assert.equal(isV2Snapshot(report), false);
+});
+
+test('branded engine evidence stays opaque; recognized fractional verdicts still fail strict validation', () => {
+  const report = base();
+  report.state = 'complete';
+  report.splitbrain = { ...empty(), state: 'complete', payload: {
+    court: 'SPLITBRAIN', status: 'ok', schemaVersion: 1, claimedCoverage: null,
+    honestMutationScore: 89.47, trustGap: null,
+    dishonestTests: [{ testId: 'tests/weak.test.js', survivedMutants: ['m-2'] }],
+    itLedger: [], survivors: [{ id: 'm-2' }], summary: 'Engine evidence',
+  } };
+  report.warpath = { ...empty(), state: 'complete', payload: { court: 'WARPATH', status: 'triaged', suspect: { id: 'deploy-1' }, evidence: [{ message: 'latency increased' }] } };
+  assert.equal(isV2Snapshot(report), true);
+  assert.equal(normalizeSnapshot(report).splitbrain.payload.honestMutationScore, 89.47);
+  report.splitbrain.payload = { court: 'SPLITBRAIN', status: 'ok', claimedCoverage: 0.9, honestMutationScore: 89.47, trustGap: 0.01, dishonestTests: [], mutants: [] };
+  assert.equal(isV2Snapshot(report), false, 'malformed known fractional shape must not use generic fallback');
+  report.splitbrain.payload.claimedCoverage = null;
+  assert.equal(isV2Snapshot(report), false, 'null coverage in known fractional shape is not a valid structured verdict');
 });
 
 test('browser and server derive the same legacy identity and provenance', async () => {

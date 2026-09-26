@@ -1,186 +1,269 @@
 #!/usr/bin/env node
-/**
- * lib/hosts.js — TRIUMPH setup orchestrator: per-host writers.
- *
- * Materializes the court subagent prompts + MCP wiring into the recognized
- * location of every agent host the user might be in. Written once, adapted
- * per host. Path-1 by construction: we only ever write *files*; each host's
- * own model executes the subagents.
- *
- * Supported hosts:
- *   claude  → .claude/agents/<name>.md            + .mcp.json
- *   bob     → .bob/agents/<name>.md (rules-ready) + .bob/mcp.json
- *   codex   → .codex/agents/<name>.md             + .codex/config.json (mcp_servers)
- *   vscode  → .vscode/mcp.json (+ chatmode briefs) — chat participants need the
- *             extension host, so the extension registers the MCP server itself.
- *   generic → .triumph/agents/*.md                + .triumph/mcp.json
- *
- * Merges, never clobbers: existing MCP servers / agents are preserved.
- */
-
+/** Non-destructive, per-host court setup. No destination is written until the
+ * whole host's config, source files and target paths have passed preflight. */
 'use strict';
 
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 const AGENTS = ['spec-witness', 'test-author', 'mutant-analyst', 'war-room'];
 const ENGINE_TOOL_NAMES = [
   'redline_clauses', 'redline_verdict_all', 'redline_clause',
   'splitbrain_trustgap', 'splitbrain_mutants', 'splitbrain_mutate', 'splitbrain_status',
-  'warpath_context', 'warpath_triage', 'warpath_postmortem',
-  'courts_about',
+  'warpath_context', 'warpath_triage', 'warpath_postmortem', 'courts_about',
 ];
-
-/** Absolute path of the extension directory (one level up from lib/). */
 const EXT_DIR = path.resolve(__dirname, '..');
 const ENGINE_ENTRY = path.join(EXT_DIR, 'court.js');
+const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 
-function readJsonSafe(fp) {
-  try { return JSON.parse(fs.readFileSync(fp, 'utf8')); } catch { return null; }
+function safeStat(fp) {
+  try { return fs.lstatSync(fp); }
+  catch (error) { if (error.code === 'ENOENT') return null; throw error; }
 }
-function writeJsonMerged(fp, merge) {
-  const existing = readJsonSafe(fp) || {};
-  const merged = merge(existing);
-  fs.mkdirSync(path.dirname(fp), { recursive: true });
-  fs.writeFileSync(fp, JSON.stringify(merged, null, 2) + '\n', 'utf8');
-  return merged;
-}
-function engineMcpEntry(repoRoot) {
-  return {
-    command: 'node',
-    args: [ENGINE_ENTRY, '--repo', repoRoot],
-    alwaysAllow: ENGINE_TOOL_NAMES,
-    disabled: false,
-  };
-}
-function copyAgents(destDir, transform) {
-  fs.mkdirSync(destDir, { recursive: true });
-  const written = [];
-  for (const name of AGENTS) {
-    const src = path.join(EXT_DIR, 'agents', name + '.md');
-    let body = fs.readFileSync(src, 'utf8');
-    if (transform) body = transform(body, name);
-    const dest = path.join(destDir, name + '.md');
-    fs.writeFileSync(dest, body, 'utf8');
-    written.push(dest);
+
+function validateDirectory(fp) {
+  const parent = path.dirname(fp);
+  if (parent !== fp) validateDirectory(parent);
+  const stat = safeStat(fp);
+  if (stat && (!stat.isDirectory() || stat.isSymbolicLink())) {
+    throw new Error(`unsafe directory (not a real directory): ${fp}`);
   }
-  return written;
 }
 
-/** Recursively copy a directory tree, returning every written file. */
-function copyTree(srcDir, destDir) {
-  const written = [];
-  if (!fs.existsSync(srcDir)) return written;
-  for (const entry of fs.readdirSync(srcDir, { withFileTypes: true })) {
-    const s = path.join(srcDir, entry.name);
-    const d = path.join(destDir, entry.name);
-    if (entry.isDirectory()) {
-      written.push(...copyTree(s, d));
-    } else {
-      fs.mkdirSync(path.dirname(d), { recursive: true });
-      fs.copyFileSync(s, d);
-      written.push(d);
+function validateTarget(fp) {
+  validateDirectory(path.dirname(fp));
+  const stat = safeStat(fp);
+  if (stat && (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1)) {
+    throw new Error(`unsafe target (not a regular unlinked file): ${fp}`);
+  }
+  return stat;
+}
+
+function readJson(fp) {
+  const stat = validateTarget(fp);
+  if (!stat) return {};
+  let parsed;
+  try { parsed = JSON.parse(fs.readFileSync(fp, 'utf8')); }
+  catch (error) { throw new Error(`invalid JSON in ${fp}: ${error.message}`); }
+  if (!isObject(parsed)) throw new Error(`expected JSON object in ${fp}`);
+  return parsed;
+}
+
+function serverConfig(repoRoot, kind, old) {
+  const base = isObject(old) ? old : {};
+  const entry = { ...base, command: 'node', args: [ENGINE_ENTRY, '--repo', repoRoot] };
+  if (kind === 'vscode') entry.type = 'stdio';
+  if (kind === 'mcp' && !isObject(old)) {
+    entry.alwaysAllow = ENGINE_TOOL_NAMES;
+    entry.disabled = false;
+  }
+  return entry;
+}
+
+function mergeMcp(fp, repoRoot, kind) {
+  const j = readJson(fp);
+  const key = kind === 'codex' ? 'mcp_servers' : kind === 'vscode' ? 'servers' : 'mcpServers';
+  if (j[key] !== undefined && !isObject(j[key])) throw new Error(`expected ${key} object in ${fp}`);
+  const servers = j[key] || {};
+  if (Object.prototype.hasOwnProperty.call(servers, 'triumph-courts') &&
+      !isObject(servers['triumph-courts'])) {
+    throw new Error(`expected triumph-courts object in ${fp}`);
+  }
+  // Only refresh the engine location. Preserve disabled, alwaysAllow and all
+  // other user-supplied server settings, including those on our own entry.
+  servers['triumph-courts'] = serverConfig(repoRoot, kind, servers['triumph-courts']);
+  j[key] = servers;
+  return JSON.stringify(j, null, 2) + '\n';
+}
+
+function loadYaml() {
+  // Bundle the parser with the extension: Bob installs must work without an
+  // unrelated global npm installation, while the court engine remains zero-dep.
+  return require('../vendor/yaml');
+}
+
+function modeSlugs(modes, fp) {
+  if (!isObject(modes) || !Array.isArray(modes.customModes)) {
+    throw new Error(`expected customModes array in ${fp}`);
+  }
+  const seen = new Set();
+  for (const mode of modes.customModes) {
+    if (!isObject(mode) || typeof mode.slug !== 'string' || !mode.slug || seen.has(mode.slug)) {
+      throw new Error(`invalid or duplicate custom mode slug in ${fp}`);
+    }
+    seen.add(mode.slug);
+  }
+  return seen;
+}
+
+function mergeModes(fp) {
+  const source = path.join(EXT_DIR, 'agents', 'bob', 'custom_modes.yaml');
+  const existing = validateTarget(fp) ? fs.readFileSync(fp, 'utf8') : null;
+  const incoming = fs.readFileSync(source, 'utf8');
+  const yaml = loadYaml();
+  const parse = (text, name) => {
+    const doc = yaml.parseDocument(text, { uniqueKeys: true });
+    if (doc.errors.length) throw new Error(`invalid YAML in ${name}: ${doc.errors[0].message}`);
+    modeSlugs(doc.toJS(), name);
+    return doc;
+  };
+  const sourceDoc = parse(incoming, source);
+  if (existing === null) return incoming;
+  const doc = parse(existing, fp);
+  const present = modeSlugs(doc.toJS(), fp);
+  const targetSeq = doc.get('customModes', true);
+  let added = false;
+  for (const item of sourceDoc.get('customModes', true).items) {
+    if (!present.has(item.get('slug'))) {
+      targetSeq.add(item.clone());
+      added = true;
     }
   }
-  return written;
+  return added ? String(doc) : existing;
 }
 
-const HOSTS = {
-  claude: {
-    name: 'Claude Code',
-    install(repoRoot) {
-      const agents = copyAgents(path.join(repoRoot, '.claude', 'agents'));
-      writeJsonMerged(path.join(repoRoot, '.mcp.json'), (j) => {
-        j.mcpServers = j.mcpServers || {};
-        j.mcpServers['triumph-courts'] = engineMcpEntry(repoRoot);
-        return j;
-      });
-      return { files: [...agents, path.join(repoRoot, '.mcp.json')] };
-    },
-  },
+function collectTree(src, dest, add) {
+  if (!safeStat(src)) return;
+  for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+    const from = path.join(src, entry.name);
+    const to = path.join(dest, entry.name);
+    if (entry.isDirectory()) collectTree(from, to, add);
+    else if (entry.isFile()) add(to, fs.readFileSync(from), true);
+    else throw new Error(`unsafe source entry: ${from}`);
+  }
+}
 
-  bob: {
-    name: 'IBM Bob',
-    install(repoRoot) {
-      const bobDir = path.join(repoRoot, '.bob');
-      // Subagent prompts (the four court personas).
-      const agents = copyAgents(path.join(bobDir, 'agents'));
-      // Skills, rule packs, and custom modes — the full Bob-native structure.
-      const skills = copyTree(path.join(EXT_DIR, 'agents', 'skills'), path.join(bobDir, 'skills'));
-      const rules = copyTree(path.join(EXT_DIR, 'agents', 'bob'), bobDir); // rules-*/ + custom_modes.yaml land at .bob/
-      const files = [...agents, ...skills, ...rules];
-      writeJsonMerged(path.join(bobDir, 'mcp.json'), (j) => {
-        j.mcpServers = j.mcpServers || {};
-        j.mcpServers['triumph-courts'] = engineMcpEntry(repoRoot);
-        return j;
-      });
-      files.push(path.join(bobDir, 'mcp.json'));
-      return { files };
-    },
-  },
+function createPlan(hostId, root) {
+  const files = [];
+  const changes = [];
+  const seen = new Set();
+  function add(fp, body, onlyIfMissing = false) {
+    if (seen.has(fp)) throw new Error(`duplicate destination: ${fp}`);
+    seen.add(fp);
+    const stat = validateTarget(fp);
+    files.push(fp);
+    if (stat && onlyIfMissing) return; // Never replace a user's agent/skill/rule edits.
+    const content = Buffer.isBuffer(body) ? body : Buffer.from(body, 'utf8');
+    const original = stat ? fs.readFileSync(fp) : null;
+    if (original && original.equals(content)) return;
+    changes.push({ fp, content, original, stat });
+  }
+  const agentsDir = path.join(root, hostId === 'claude' ? '.claude' :
+    hostId === 'bob' ? '.bob' : hostId === 'codex' ? '.codex' : '.triumph', 'agents');
+  if (hostId !== 'vscode') {
+    for (const name of AGENTS) {
+      add(path.join(agentsDir, name + '.md'),
+        fs.readFileSync(path.join(EXT_DIR, 'agents', name + '.md')), true);
+    }
+  }
+  if (hostId === 'bob') {
+    const bob = path.join(root, '.bob');
+    collectTree(path.join(EXT_DIR, 'agents', 'skills'), path.join(bob, 'skills'), add);
+    collectTree(path.join(EXT_DIR, 'agents', 'bob'), bob, (fp, body, onlyIfMissing) => {
+      if (path.basename(fp) === 'custom_modes.yaml' && fp === path.join(bob, 'custom_modes.yaml')) {
+        add(fp, mergeModes(fp));
+      } else add(fp, body, onlyIfMissing);
+    });
+  }
+  const config = hostId === 'claude' ? path.join(root, '.mcp.json') :
+    hostId === 'vscode' ? path.join(root, '.vscode', 'mcp.json') :
+    path.join(root, hostId === 'bob' ? '.bob' : hostId === 'codex' ? '.codex' : '.triumph',
+      hostId === 'codex' ? 'config.json' : 'mcp.json');
+  add(config, mergeMcp(config, root, hostId === 'codex' ? 'codex' : hostId === 'vscode' ? 'vscode' : 'mcp'));
+  if (hostId === 'vscode') {
+    for (const name of AGENTS) {
+      const body = fs.readFileSync(path.join(EXT_DIR, 'agents', name + '.md'), 'utf8')
+        .replace(/^name:/m, 'description:');
+      add(path.join(root, '.github', 'chatmodes', `triumph-${name}.chatmode.md`), body, true);
+    }
+  }
+  return { files, changes };
+}
 
-  codex: {
-    name: 'OpenAI Codex',
-    install(repoRoot) {
-      const agents = copyAgents(path.join(repoRoot, '.codex', 'agents'));
-      writeJsonMerged(path.join(repoRoot, '.codex', 'config.json'), (j) => {
-        j.mcp_servers = j.mcp_servers || {};
-        j.mcp_servers['triumph-courts'] = {
-          command: 'node',
-          args: [ENGINE_ENTRY, '--repo', repoRoot],
-        };
-        return j;
-      });
-      return { files: [...agents, path.join(repoRoot, '.codex', 'config.json')] };
-    },
-  },
-
-  vscode: {
-    name: 'VS Code Chat',
-    install(repoRoot) {
-      // mcp.json wires the engine for Copilot agent mode / MCP-aware chat.
-      writeJsonMerged(path.join(repoRoot, '.vscode', 'mcp.json'), (j) => {
-        j.servers = j.servers || {};
-        j.servers['triumph-courts'] = {
-          type: 'stdio',
-          command: 'node',
-          args: [ENGINE_ENTRY, '--repo', repoRoot],
-        };
-        return j;
-      });
-      // Chatmode briefs let Copilot Chat adopt a court persona (>= VS Code 1.101).
-      const chatDir = path.join(repoRoot, '.github', 'chatmodes');
-      fs.mkdirSync(chatDir, { recursive: true });
-      const files = [path.join(repoRoot, '.vscode', 'mcp.json')];
-      for (const name of AGENTS) {
-        const body = fs.readFileSync(path.join(EXT_DIR, 'agents', name + '.md'), 'utf8')
-          .replace(/^name:/m, 'description:').replace(/^description:.*$/m, (m) => m); // keep description
-        const dest = path.join(chatDir, `triumph-${name}.chatmode.md`);
-        fs.writeFileSync(dest, body, 'utf8');
-        files.push(dest);
+function installChanges(changes) {
+  const createdDirs = [];
+  const applied = [];
+  const scratch = [];
+  const retainedBackups = new Set();
+  const unique = (fp, kind = 'temp') => path.join(path.dirname(fp), `.${path.basename(fp)}.triumph-${kind}-${process.pid}-${crypto.randomBytes(12).toString('hex')}`);
+  function mkdir(dir) {
+    if (safeStat(dir)) { validateDirectory(dir); return; }
+    mkdir(path.dirname(dir));
+    fs.mkdirSync(dir);
+    createdDirs.push(dir);
+  }
+  try {
+    for (const change of changes) {
+      const { fp, content, original, stat } = change;
+      mkdir(path.dirname(fp));
+      const current = validateTarget(fp);
+      if (Boolean(current) !== Boolean(stat) ||
+          (current && (current.ino !== stat.ino || current.dev !== stat.dev ||
+            current.mode !== stat.mode || !fs.readFileSync(fp).equals(original)))) {
+        throw new Error(`destination changed during setup: ${fp}`);
       }
-      return { files };
-    },
-  },
+      let backup;
+      if (stat) {
+        backup = unique(fp, 'backup');
+        scratch.push(backup); // cleanup even if the copy partially creates it
+        fs.copyFileSync(fp, backup, fs.constants.COPYFILE_EXCL);
+        fs.chmodSync(backup, stat.mode & 0o7777);
+      }
+      const temp = unique(fp);
+      scratch.push(temp);
+      fs.writeFileSync(temp, content, { flag: 'wx', mode: stat ? stat.mode & 0o7777 : 0o666 });
+      if (stat) fs.chmodSync(temp, stat.mode & 0o7777);
+      fs.renameSync(temp, fp); // atomic replacement on the same filesystem
+      applied.push({ fp, backup });
+    }
+    // Retain backups after a successful install so the caller can explicitly
+    // restore its previous configuration; keep original permissions (secrets).
+    for (const { backup } of applied) if (backup) retainedBackups.add(backup);
+  } catch (error) {
+    const failures = [];
+    for (const { fp, backup } of applied.reverse()) {
+      try {
+        if (backup) fs.renameSync(backup, fp);
+        else fs.unlinkSync(fp);
+      } catch (rollbackError) {
+        if (backup) retainedBackups.add(backup);
+        failures.push(`${fp}: ${rollbackError.message}${backup ? ` (backup: ${backup})` : ''}`);
+      }
+    }
+    for (const dir of createdDirs.reverse()) {
+      try { fs.rmdirSync(dir); }
+      catch (rollbackError) { failures.push(`${dir}: ${rollbackError.message}`); }
+    }
+    if (failures.length) error.message += `; rollback incomplete: ${failures.join('; ')}`;
+    throw error;
+  } finally {
+    for (const fp of scratch) {
+      if (retainedBackups.has(fp)) continue;
+      try { fs.unlinkSync(fp); }
+      catch (error) { if (error.code !== 'ENOENT') console.error(`could not remove setup scratch file ${fp}: ${error.message}`); }
+    }
+  }
+  return [...retainedBackups];
+}
 
-  generic: {
-    name: 'Generic MCP host',
-    install(repoRoot) {
-      const agents = copyAgents(path.join(repoRoot, '.triumph', 'agents'));
-      writeJsonMerged(path.join(repoRoot, '.triumph', 'mcp.json'), (j) => {
-        j.mcpServers = j.mcpServers || {};
-        j.mcpServers['triumph-courts'] = engineMcpEntry(repoRoot);
-        return j;
-      });
-      return { files: [...agents, path.join(repoRoot, '.triumph', 'mcp.json')] };
-    },
-  },
-};
+const HOSTS = Object.fromEntries([
+  ['claude', 'Claude Code'], ['bob', 'IBM Bob'], ['codex', 'OpenAI Codex'],
+  ['vscode', 'VS Code Chat'], ['generic', 'Generic MCP host'],
+].map(([id, name]) => [id, { name, install(repoRoot) {
+  const plan = createPlan(id, repoRoot);
+  const backups = installChanges(plan.changes);
+  return { files: plan.files, backups };
+} }]));
 
 function installHost(hostId, repoRoot) {
   const host = HOSTS[hostId];
   if (!host) throw new Error('unknown host ' + hostId + ' (known: ' + Object.keys(HOSTS).join(', ') + ')');
-  return { host: hostId, hostName: host.name, ...host.install(path.resolve(repoRoot)) };
+  const root = path.resolve(repoRoot);
+  const stat = safeStat(root);
+  if (!stat || !stat.isDirectory() || stat.isSymbolicLink()) throw new Error(`unsafe repository directory: ${root}`);
+  validateDirectory(root);
+  return { host: hostId, hostName: host.name, ...host.install(root) };
 }
 
 module.exports = { HOSTS, installHost, AGENTS, ENGINE_TOOL_NAMES, ENGINE_ENTRY, EXT_DIR };

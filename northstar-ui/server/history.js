@@ -75,6 +75,69 @@ export function createHistory({ dir = defaultHistoryDir(), legacyDir = fileURLTo
   const root = path.resolve(dir);
   const projectsDir = path.join(root, 'projects');
   const importsDir = path.join(root, 'imports');
+  const owned = new Set();
+  const ownerToken = randomUUID();
+  const leaseMs = 45_000;
+  const ownerFile = (projectId, runId) => path.join(runDir(projectId, runId), '.owner.json');
+  async function processStart(pid) {
+    try {
+      const stat = await fs.readFile(`/proc/${pid}/stat`, 'utf8');
+      return stat.slice(stat.lastIndexOf(')') + 2).split(' ')[19]; // field 22, pid reuse guard
+    } catch { return null; }
+  }
+  const started = processStart(process.pid);
+  async function ownerAlive(owner, file) {
+    if (!owner || !uuid(owner.token) || !Number.isSafeInteger(owner.pid) || typeof owner.start !== 'string') return false;
+    const info = await fs.lstat(file);
+    if (!info.isFile() || info.isSymbolicLink()) throw new Error('Unsafe history owner');
+    if (Date.now() - info.mtimeMs > leaseMs) return false;
+    // On Linux a dead process (or reused PID) is abandoned immediately.
+    const actual = await processStart(owner.pid);
+    return actual === null ? false : actual === owner.start;
+  }
+  async function ownership(projectId, runId) {
+    const file = ownerFile(projectId, runId);
+    if (!(await safeDirectoryChain(path.dirname(file)))) return null;
+    const record = await readJson(file);
+    return record ? { record, alive: await ownerAlive(record, file) } : null;
+  }
+  async function claimRun(projectId, runId) {
+    const folder = runDir(projectId, runId);
+    await directory(root); await directory(projectsDir);
+    await directory(path.join(projectsDir, validId(projectId)));
+    await directory(path.join(projectsDir, validId(projectId), 'runs'));
+    await directory(folder);
+    const file = ownerFile(projectId, runId);
+    const existing = await ownership(projectId, runId);
+    if (existing) {
+      if (existing.record.token === ownerToken && existing.alive) return;
+      throw conflict('Run is owned by another server or awaiting recovery');
+    }
+    if (await load(projectId, runId)) throw conflict('Existing run cannot be claimed by a new server');
+    try { await atomicCreate(file, { token: ownerToken, pid: process.pid, start: await started }); }
+    catch (e) { if (e.code === 'EEXIST') throw conflict('Run is already owned'); throw e; }
+    owned.add(`${validId(projectId)}/${validId(runId)}`);
+  }
+  async function renewOwned() {
+    for (const key of owned) {
+      const [projectId, runId] = key.split('/');
+      const file = ownerFile(projectId, runId);
+      const record = await ownership(projectId, runId);
+      if (record?.record.token !== ownerToken || !record.alive) { owned.delete(key); continue; }
+      const handle = await fs.open(file, constants.O_RDONLY | (constants.O_NOFOLLOW || 0));
+      try {
+        if (!(await handle.stat()).isFile()) throw new Error('Unsafe history owner');
+        const now = new Date();
+        await handle.utimes(now, now); // never follow a swapped symlink
+      } finally { await handle.close(); }
+    }
+  }
+  async function assertOwned(projectId, runId) {
+    const key = `${validId(projectId)}/${validId(runId)}`;
+    const holder = owned.has(key) ? await ownership(projectId, runId) : null;
+    if (!holder?.alive || holder.record.token !== ownerToken) throw conflict('Run ownership expired');
+  }
+
   const runDir = (projectId, runId) => path.join(projectsDir, validId(projectId), 'runs', validId(runId));
   async function safeDirectoryChain(target) {
     const relative = path.relative(root, target);
@@ -114,6 +177,8 @@ export function createHistory({ dir = defaultHistoryDir(), legacyDir = fileURLTo
     if (current) {
       if (current.project.name !== snapshot.project.name || current.createdAt !== snapshot.createdAt) throw conflict('Run identity cannot change');
       if (current.revision > snapshot.revision) throw conflict('Stale snapshot revision');
+      if (current.revision < snapshot.revision && current.state !== 'running') throw conflict('Finished runs cannot be reopened or revised');
+      if (current.revision < snapshot.revision && Date.parse(snapshot.updatedAt) < Date.parse(current.updatedAt)) throw conflict('Snapshot timestamp moved backwards');
       if (current.revision === snapshot.revision) {
         if (JSON.stringify(current) !== JSON.stringify(snapshot)) throw conflict('Conflicting snapshot revision');
         return current;
@@ -172,23 +237,38 @@ export function createHistory({ dir = defaultHistoryDir(), legacyDir = fileURLTo
     }
     return result;
   }
-  // Call at startup after a server restart, when no prior process's extension
-  // credentials survive. Keep the existing revision and evidence intact.
-  async function recoverInterrupted() {
+  // Only orphaned runs are recovered. A live owner in another dashboard window
+  // remains untouched. A timed-out owner is fenced from further submissions.
+  async function recoverInterrupted({ ownedOnly = false, force = false } = {}) {
     const recovered = [];
     for (const { project } of await listProjects()) {
-      for (const run of await listRuns(project.id)) {
-        if (run.state !== 'running') continue;
-        const updatedAt = new Date().toISOString();
-        const next = { ...run, revision: run.revision + 1, updatedAt, state: 'interrupted' };
-        for (const court of ['redline', 'splitbrain', 'warpath']) {
-          if (next[court].state === 'running') next[court] = {
-            state: 'error', collectedAt: updatedAt, sourceGeneratedAt: null, payload: null,
-            errors: ['Extension connection lost on server restart.'],
-          };
+      for (const listed of await listRuns(project.id)) {
+        if (listed.state !== 'running') continue;
+        const key = `${validId(project.id)}/${validId(listed.runId)}`;
+        if (ownedOnly && !owned.has(key)) continue;
+        const holder = await ownership(project.id, listed.runId);
+        if (!force && holder?.alive) continue;
+        // Reload after checking ownership; retries handle competing recovery
+        // processes committing the same revision via atomicCreate.
+        for (let attempt = 0; attempt < 8; attempt++) {
+          const run = await load(project.id, listed.runId);
+          if (run?.state !== 'running') break;
+          if (!force && (await ownership(project.id, run.runId))?.alive) break;
+          const updatedAt = new Date(Math.max(Date.now(), Date.parse(run.updatedAt))).toISOString();
+          const next = { ...run, revision: run.revision + 1, updatedAt, state: 'interrupted' };
+          for (const court of ['redline', 'splitbrain', 'warpath']) {
+            if (next[court].state === 'running') next[court] = {
+              state: 'error', collectedAt: updatedAt, sourceGeneratedAt: null, payload: null,
+              errors: ['Extension connection lost on server restart.'],
+            };
+          }
+          try {
+            await save(next);
+            if ((await load(project.id, run.runId)).state === 'interrupted') recovered.push(next);
+            break;
+          } catch (error) { if (error.code !== 'CONFLICT') throw error; }
         }
-        await save(next);
-        recovered.push(next);
+        if (force) owned.delete(key);
       }
     }
     return recovered;
@@ -208,5 +288,5 @@ export function createHistory({ dir = defaultHistoryDir(), legacyDir = fileURLTo
     }
     return migrated;
   }
-  return { dir: root, save, load, listProjects, listRuns, importReport, loadImport, listImports, migrateLegacy, recoverInterrupted };
+  return { dir: root, save, load, listProjects, listRuns, importReport, loadImport, listImports, migrateLegacy, recoverInterrupted, claimRun, assertOwned, renewOwned };
 }

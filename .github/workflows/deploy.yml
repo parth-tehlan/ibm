@@ -41,16 +41,23 @@ jobs:
         run: |
           npm install --no-audit --no-fund
           # vsce is a packaging-time only dep; pull it on demand so extension stays zero-dependency
-          echo "using $(npx --yes @vscode/vsce --version)"
+          echo "using $(npx --yes @vscode/vsce@2.15.0 --version)"
 
-      - name: Run test suite
+      - name: Build isolated dashboard runtime
+        working-directory: northstar-ui
+        run: npm ci && npm run typecheck && npm test && npm run package:runtime
+
+      - name: Stage runtime and run tests
         working-directory: court-extension
-        run: npm test
+        run: npm run stage:dashboard && npm test
 
       - name: Package .vsix
         working-directory: court-extension
         run: |
-          npx --yes @vscode/vsce package --no-dependencies --out triumph-courts.vsix
+          npx --yes @vscode/vsce@2.15.0 package --no-dependencies --out triumph-courts.vsix
+          node bin/verify-vsix.js triumph-courts.vsix
+          node ../scripts/verify-packaged-vsix.mjs triumph-courts.vsix
+          node ../scripts/verify-packaged-bob.mjs triumph-courts.vsix
           echo "built $(du -h triumph-courts.vsix | cut -f1)"
 
       - name: Upload .vsix artifact

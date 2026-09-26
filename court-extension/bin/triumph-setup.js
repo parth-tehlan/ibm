@@ -74,6 +74,7 @@ function main() {
       const r = installHost(h, repo);
       console.log(`installed courts for ${r.hostName}:`);
       for (const f of r.files) console.log('  · ' + path.relative(repo, f));
+      for (const f of r.backups || []) console.log('  backup (restore manually if needed): ' + path.relative(repo, f));
     } catch (e) {
       console.error(`host ${h}: ${e.message}`);
       process.exitCode = 1;

@@ -10,7 +10,7 @@
     "start": "node server/index.js",
     "build": "vite build",
     "package:runtime": "npm run build && node scripts/stage-runtime.mjs",
-    "test": "node --test server/tests/*.test.js contracts/tests/*.test.js client/tests/*.test.cjs integration/tests/*.test.js",
+    "test": "node --test server/tests/*.test.js contracts/tests/*.test.js client/tests/*.test.cjs client/tests/*.test.js integration/tests/*.test.js",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -23,6 +23,7 @@
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^4.3.4",
     "concurrently": "^9.1.2",
+    "jsdom": "^26.1.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "typescript": "^5.7.3",

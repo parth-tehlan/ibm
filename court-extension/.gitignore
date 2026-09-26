@@ -1,7 +1,6 @@
 # Dependencies
 # Top-level node_modules (dev deps: @types/vscode) — never tracked.
-# The dashboard keeps its own node_modules pinned because it ships inside the
-# packaged VSIX (see .vscodeignore), so do NOT ignore dashboard/node_modules.
+# Build-time dashboard dependencies are staged for packaging, never committed.
 node_modules/
 
 # Build artifacts

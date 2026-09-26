@@ -65,17 +65,29 @@ NAME="$(pkg_field name)"
 PUB="$(pkg_field publisher)"
 EXT_ID="${PUB}.${NAME}"
 
-# --- 1. Test -----------------------------------------------------------------
-log "Running extension test suite…"
+# --- 1. Stage the isolated runtime before tests and packaging -------------------
+log "Staging dashboard runtime…"
+npm run stage:dashboard
+
+# --- 2. Test (offline/disposable only; npm run test:live is opt-in) ------------
+log "Running extension test suite (no live Northstar mutation)…"
 npm test
 
-# --- 2. Package ----------------------------------------------------------------
+# --- 3. Package ----------------------------------------------------------------
 log "Packaging $EXT_ID@$VERSION → $(basename "$VSIX_OUT")…"
 # Always via npx @vscode/vsce (no vendored-vsce assumption). --no-dependencies:
 # runtime deps (express, zod) live under dashboard/node_modules and are shipped
 # as-is, not re-resolved by vsce.
-npx --yes @vscode/vsce package --no-dependencies --out "$VSIX_OUT"
+# Pin a Node 18-compatible CLI rather than resolving latest vsce (Node 20+).
+# A transitive undici release expects File on globalThis; Node 18 exports it
+# from node:buffer. This shim applies only to the packaging subprocess.
+NODE_OPTIONS="--require=$ROOT/bin/vsce-node18.cjs ${NODE_OPTIONS:-}" \
+  npx --yes @vscode/vsce@2.15.0 package --no-dependencies --out "$VSIX_OUT"
 [[ -s "$VSIX_OUT" ]] || die "packaging failed: $VSIX_OUT missing/empty"
+node bin/verify-vsix.js "$VSIX_OUT"
+# Exercise the exact just-packaged archive in an isolated temporary Bob workspace.
+# This does not install into an IDE or mutate a real Bob configuration.
+node "$ROOT/../scripts/verify-packaged-bob.mjs" "$VSIX_OUT"
 pass "built $(du -h "$VSIX_OUT" | cut -f1) → $(basename "$VSIX_OUT")"
 
 if [[ "$INSTALL" -ne 0 ]]; then

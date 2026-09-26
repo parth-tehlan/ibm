@@ -44,7 +44,7 @@ function sourceGeneratedAt(court, engineResult) {
     engineResult.timestamp,
   ];
   for (const c of candidates) {
-    if (typeof c === 'number' && Number.isFinite(c)) return new Date(c).toISOString();
+    if (typeof c === 'number' && Number.isFinite(c) && Number.isFinite(new Date(c).getTime())) return new Date(c).toISOString();
     if (typeof c === 'string') { const t = Date.parse(c); if (!Number.isNaN(t)) return new Date(t).toISOString(); }
   }
   return null;
@@ -65,7 +65,9 @@ function courtEnvelope(court, outcome, collectedAt) {
     env.errors = outcome.errors || [];
   } else if (outcome.kind === 'error' || outcome.kind === 'unavailable') {
     env.collectedAt = collectedAt;
-    env.errors = outcome.errors && outcome.errors.length ? outcome.errors : [outcome.kind === 'error' ? 'court failed' : 'court unavailable'];
+    env.payload = outcome.payload && typeof outcome.payload === 'object' && !Array.isArray(outcome.payload) ? outcome.payload : null;
+    env.sourceGeneratedAt = sourceGeneratedAt(court, env.payload);
+    env.errors = outcome.errors && outcome.errors.length ? outcome.errors : [outcome.kind === 'error' ? 'court failed' : 'court unavailable']; // preserve failure evidence when available.
   }
   // not_run: everything stays null/[]
   return env;

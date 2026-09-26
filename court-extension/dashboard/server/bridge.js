@@ -22,9 +22,9 @@ function validateCourts(selected) {
  * never from browser routes. Give its returned random token ONLY to that host.
  * Browser routes may call requestRun({projectId,courts}); a connected, timely
  * extension is required. Extension routes require {projectId,token} for
- * heartbeat, poll, acknowledge, submit, disconnect. Poll returns the same
- * request until acknowledged; a request is complete when its runId's final
- * snapshot is submitted. Call sweep() on an app timer (and on demand) to expire
+ * heartbeat, poll, acknowledge, submit, disconnect. Poll returns a pending
+ * request until acknowledged, and offers it again after the short ack lease
+ * unless its final snapshot is submitted. Call sweep() on an app timer to expire
  * dead connections and interrupt persisted running snapshots. Stop accepting
  * requests on process restart until
  * the trusted host registers again (tokens are deliberately not persisted).
@@ -46,6 +46,7 @@ export function createBridge({ history, heartbeatTimeoutMs = 30_000, now = Date.
     for (const runId of connection.activeRuns) {
       const run = await history.load(connection.project.id, runId);
       if (run?.state !== 'running') continue;
+      if (history.assertOwned) { try { await history.assertOwned(connection.project.id, runId); } catch { continue; } }
       const updated = { ...run, state: 'interrupted', revision: run.revision + 1, updatedAt: new Date(time()).toISOString() };
       for (const court of courts) {
         if (updated[court].state === 'running') updated[court] = {
@@ -82,15 +83,19 @@ export function createBridge({ history, heartbeatTimeoutMs = 30_000, now = Date.
   }
   function poll({ projectId, token }) {
     const connection = get(projectId, token);
-    return connection.request?.status === 'pending' ? { ...connection.request } : null;
+    if (!connection.ready || !connection.request) return null;
+    if (connection.request.status === 'accepted' && time() - connection.request.acceptedAt < 5_000) return null;
+    return { ...connection.request, status: 'pending' };
   }
   function acknowledge({ projectId, token, requestId }) {
     const connection = get(projectId, token);
     if (!uuid(requestId) || connection.request?.requestId !== requestId) throw error('Unknown run request', 'NOT_FOUND');
+    // Acceptance is a short lease, not a terminal state.
     connection.request.status = 'accepted';
+    connection.request.acceptedAt = time();
     return { ...connection.request };
   }
-  async function requestRun({ projectId, courts: selected }) {
+  async function requestRun({ projectId, courts: selected, prepare }) {
     if (!uuid(projectId)) throw error('Project is not connected', 'NOT_CONNECTED');
     validateCourts(selected);
     await sweep();
@@ -100,7 +105,25 @@ export function createBridge({ history, heartbeatTimeoutMs = 30_000, now = Date.
     const request = { requestId: randomUUID(), runId: randomUUID(), projectId: connection.project.id,
       courts: [...selected], createdAt: new Date(time()).toISOString(), status: 'pending' };
     connection.request = request;
+    connection.ready = !prepare;
     connection.activeRuns.add(request.runId); // Includes pending requests with a persisted placeholder.
+    if (history.claimRun) {
+      try { await history.claimRun(connection.project.id, request.runId); }
+      catch (cause) { cancelRequest({ projectId, requestId: request.requestId }); throw cause; }
+    }
+    if (prepare) {
+      try {
+        // Do not expose a request to polling until its browser placeholder is
+        // durable. Otherwise an early extension update can win revision 0.
+        await prepare(request, connection.project);
+        if (connections.get(connection.project.id) !== connection) {
+          connection.activeRuns.add(request.runId);
+          await interrupt(connection); // disconnect may have raced persistence
+          throw error('Project disconnected', 'NOT_CONNECTED');
+        }
+        connection.ready = true;
+      } catch (cause) { cancelRequest({ projectId, requestId: request.requestId }); throw cause; }
+    }
     return { ...request };
   }
   async function submit({ projectId, token, snapshot }) {
@@ -110,6 +133,8 @@ export function createBridge({ history, heartbeatTimeoutMs = 30_000, now = Date.
     if (connection.request && parsed.runId !== connection.request.runId) throw error('Report run does not match requested run');
     // A trusted extension may submit an unsolicited run when no run request is
     // active. Imports cannot reach this method without a live extension token.
+    if (history.claimRun && !connection.activeRuns.has(parsed.runId)) await history.claimRun(connection.project.id, parsed.runId);
+    if (history.assertOwned) await history.assertOwned(connection.project.id, parsed.runId);
     const result = await history.save(parsed);
     if (result.state === 'running') connection.activeRuns.add(result.runId);
     else connection.activeRuns.delete(result.runId);

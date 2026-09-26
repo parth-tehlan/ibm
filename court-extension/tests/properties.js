@@ -13,7 +13,6 @@ const readline = require('readline');
 
 const EXT = path.resolve(__dirname, '..');
 const ENGINE = path.join(EXT, 'court.js');
-const NORTHSTAR = path.resolve(EXT, '..', 'northstar');
 
 let passed = 0, failed = 0;
 const failures = [];
@@ -46,30 +45,14 @@ function withEngine(repo, calls) {
       child.stdin.write(JSON.stringify({ jsonrpc: '2.0', id: rid, method: 'tools/call', params: c }) + '\n');
     };
     next();
-    child.on('close', () => resolve({ results, stderr: err }));
-    setTimeout(() => { child.kill('SIGKILL'); reject(new Error('engine timeout')); }, 150_000);
-  });
-}
-
-/** Persistent engine session for multi-round interactions (async polling). */
-function engineSession(repo) {
-  const child = spawn('node', [ENGINE, '--repo', repo]);
-  const rl = readline.createInterface({ input: child.stdout });
-  const pending = new Map();
-  rl.on('line', (line) => {
-    let msg; try { msg = JSON.parse(line); } catch { return; }
-    if (pending.has(msg.id)) { pending.get(msg.id)(msg); pending.delete(msg.id); }
-  });
-  let id = 0;
-  const call = (name, args) => new Promise((resolve, reject) => {
-    const rid = ++id;
-    pending.set(rid, (msg) => {
-      if (msg.error) return reject(new Error(msg.error.message));
-      try { resolve(JSON.parse(msg.result.content[0].text)); } catch (e) { reject(e); }
+    const timeout = setTimeout(() => { child.kill('SIGKILL'); reject(new Error('engine timeout')); }, 150_000);
+    child.on('error', (error) => { clearTimeout(timeout); reject(error); });
+    child.on('close', (code) => {
+      clearTimeout(timeout);
+      if (code !== 0) reject(new Error(`engine exited ${code}: ${err.slice(0, 400)}`));
+      else resolve({ results, stderr: err });
     });
-    child.stdin.write(JSON.stringify({ jsonrpc: '2.0', id: rid, method: 'tools/call', params: { name, arguments: args || {} } }) + '\n');
   });
-  return { call, close: () => child.stdin.end(), kill: () => child.kill('SIGKILL') };
 }
 
 (async () => {
@@ -124,28 +107,46 @@ function engineSession(repo) {
 
   // 4. WALL-ENFORCING — engine refuses clause ids that escape the tests dir.
   await t('Wall-enforcing: redline_clause rejects path escape + honors denyGlobs', async () => {
-    const { results } = await withEngine(NORTHSTAR, [
-      { name: 'redline_clause', arguments: { clause_id: '../../src/circuit' } },
-      { name: 'redline_clause', arguments: { clause_id: 'W4' } },
-    ]);
-    const escMsg = results[0].error ? results[0].error.message : JSON.parse(results[0].result.content[0].text).error || '';
-    assert.ok(/invalid clause_id/.test(escMsg), 'escape not rejected: ' + escMsg);
-    const ok = JSON.parse(results[1].result.content[0].text);
-    assert.strictEqual(ok.clause, 'W4');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'triumph-wall-'));
+    try {
+      fs.mkdirSync(path.join(dir, 'docs'));
+      fs.mkdirSync(path.join(dir, 'tests'));
+      fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ devDependencies: { jest: '^29' } }));
+      fs.writeFileSync(path.join(dir, 'docs', 'spec.md'), '# S\n\n## W4 — safety\n\n1. x MUST y\n');
+      fs.writeFileSync(path.join(dir, 'tests', 'clause-W4.test.js'), 'test("safety",()=>expect(1).toBe(1));');
+      fs.writeFileSync(path.join(dir, 'jest.config.js'), 'module.exports={testEnvironment:"node",testMatch:["**/tests/**/*.test.js"]}');
+      fs.writeFileSync(path.join(dir, '.triumph.yml'), 'version: 1\nspec: { path: docs/spec.md, clausePattern: \'^## (W\\d+)\', clauseIdPattern: \'^W\\d+$\' }\ntests: { framework: jest, dir: tests, clauseTestPattern: \'clause-{{clause}}.test.js\' }\nmutation: { tool: custom, report: null, command: null }\nwall: { denyGlobs: [\'src/**\'] }\n');
+      const { results } = await withEngine(dir, [
+        { name: 'redline_clause', arguments: { clause_id: '../../src/circuit' } },
+        { name: 'redline_clause', arguments: { clause_id: 'W4' } },
+      ]);
+      const escMsg = results[0].error ? results[0].error.message : JSON.parse(results[0].result.content[0].text).error || '';
+      assert.ok(/invalid clause_id/.test(escMsg), 'escape not rejected: ' + escMsg);
+      const ok = JSON.parse(results[1].result.content[0].text);
+      assert.strictEqual(ok.clause, 'W4');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 
-  // 5. FALSIFIABLE — trust gap is derived from the report, dishonest tests
-  //    named; a doctored report changes the verdict.
+  // 5. FALSIFIABLE — derive the trust gap from an isolated mutation report.
+  //    Generated Northstar reports are not versioned and may not exist on a fresh checkout.
   await t('Falsifiable: trustgap follows the report (kill a survivor → gap closes)', () => {
     const { computeTrustGap, loadMutationReport } = require('../lib/trustgap');
-    const { mutants } = loadMutationReport(path.join(NORTHSTAR, 'reports', 'mutation', 'mutation.json'));
-    const before = computeTrustGap(mutants, 91.66);
-    assert.ok(before.dishonestTests.length > 0, 'expected dishonest tests in real report');
-    // Flip survivors to killed — the gap must close.
-    const healed = mutants.map((m) => m.status === 'Survived' ? { ...m, status: 'Killed' } : m);
-    const after = computeTrustGap(healed, 91.66);
-    assert.strictEqual(after.dishonestTests.length, 0);
-    assert.ok(after.honestMutationScore > before.honestMutationScore, 'score did not rise after healing survivors');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'triumph-mutants-'));
+    try {
+      const file = path.join(dir, 'mutation.json');
+      fs.writeFileSync(file, JSON.stringify({ mutants: [
+        { id: 'survivor', status: 'Survived', coveredBy: ['tautology'] },
+        { id: 'killed', status: 'Killed', coveredBy: ['witness'], killedBy: ['witness'] },
+      ] }));
+      const { mutants } = loadMutationReport(file);
+      const before = computeTrustGap(mutants, 91.66);
+      assert.deepStrictEqual(before.dishonestTests.map((d) => d.testId), ['tautology']);
+      assert.strictEqual(before.honestMutationScore, 50);
+      const healed = mutants.map((m) => m.status === 'Survived' ? { ...m, status: 'Killed' } : m);
+      const after = computeTrustGap(healed, 91.66);
+      assert.strictEqual(after.dishonestTests.length, 0);
+      assert.strictEqual(after.honestMutationScore, 100);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 
   // 6. REPO-AGNOSTIC — engine runs on a second, differently-shaped repo.
@@ -180,31 +181,8 @@ function engineSession(repo) {
     assert.strictEqual(triage.suspect.id, 'd1');
   });
 
-  // 7. INCREMENTAL FOR CHAT — splitbrain_mutate returns immediately, status
-  //    polls, and a completed job (with claimed_coverage) carries the gap.
-  await t('Incremental: splitbrain_mutate non-blocking; completed job carries trust gap', async () => {
-    const sess = engineSession(NORTHSTAR);
-    try {
-      const t0 = Date.now();
-      const start = await sess.call('splitbrain_mutate', { claimed_coverage: 91.66 });
-      const elapsed = Date.now() - t0;
-      assert.ok(start.status === 'started', 'expected started, got ' + start.status);
-      assert.ok(start.job_id, 'no job_id');
-      assert.ok(elapsed < 5000, 'mutate blocked for ' + elapsed + 'ms');
-      // Poll on the SAME session (jobs are in-memory per process).
-      let st, tries = 0;
-      do {
-        await new Promise((r) => setTimeout(r, 1500));
-        st = await sess.call('splitbrain_status', { job_id: start.job_id });
-        tries++;
-      } while (st.status === 'running' && tries < 90);
-      assert.strictEqual(st.status, 'done', 'job did not finish: ' + JSON.stringify(st).slice(0, 200));
-      assert.ok(st.result && typeof st.result.trustGap === 'number', 'completed job missing trustGap: ' + JSON.stringify(st.result).slice(0, 200));
-      assert.ok(st.result.trustGap > 0, 'expected a positive trust gap on northstar (planted tautology), got ' + st.result.trustGap);
-    } finally {
-      sess.kill();
-    }
-  });
+  // 7. Live mutation is deliberately NOT in the default suite. Run
+  //    `npm run test:live` explicitly to mutate the Northstar fixture.
 
   // 7b. WARPATH on the canonical challenge schema (no metrics.window; uses
   //     errorRate.windowStart + breaker.consecutiveFailuresAtOpen).
@@ -226,13 +204,23 @@ function engineSession(repo) {
     assert.ok(/#W6/.test(t2.rule), 'rule should cite spec anchor from evidence: ' + t2.rule);
   });
 
-  // 8. REPORT — both artifacts render deterministically from engine JSON.
+  // 8. REPORT — render from fixed evidence without relying on ignored build outputs.
   await t('Reports: render is deterministic (same input → byte-identical)', () => {
     const { renderMarkdown, renderHtml } = require('../lib/render');
-    const input = JSON.parse(fs.readFileSync(path.join(NORTHSTAR, 'reports', 'triumph', 'triumph-input.json'), 'utf8'));
-    assert.strictEqual(renderMarkdown(input), renderMarkdown(input), 'md not deterministic');
-    assert.strictEqual(renderHtml(input), renderHtml(input), 'html not deterministic');
-    assert.ok(renderMarkdown(input).includes('REDLINE') && renderHtml(input).includes('WARPATH'));
+    const input = {
+      repo: 'isolated-fixture', generated: '2026-09-26T00:00:00.000Z',
+      redline: { summary: { total: 1, green: 0, red: 1, yellow: 0 }, results: [
+        { clause: 'W1', status: 'red', passed: 0, failed: 1, total: 1, test: 'tests/clause-W1.test.js', failures: [{ title: 'counterexample', message: 'expected failure' }] },
+      ] },
+      splitbrain: { status: 'not-run', note: 'No mutation report provided' },
+      warpath: { status: 'no-fixtures', detail: 'No incident evidence supplied' },
+    };
+    const md = renderMarkdown(input);
+    const html = renderHtml(input);
+    assert.strictEqual(md, renderMarkdown(input), 'md not deterministic');
+    assert.strictEqual(html, renderHtml(input), 'html not deterministic');
+    assert.ok(md.includes('REDLINE') && html.includes('WARPATH'));
+    assert.ok(md.includes('counterexample') && html.includes('counterexample'));
   });
 
   console.log(`\n${passed} passed, ${failed} failed`);

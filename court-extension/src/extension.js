@@ -59,10 +59,6 @@ async function cmdInstallCourts() {
   const root = repoRoot();
   if (!root) return vscode.window.showWarningMessage('TRIUMPH: open a workspace folder first.');
 
-  // Ensure config exists first (auto-detect if missing).
-  const hasConfig = ['.triumph.yml', '.triumph.yaml', '.triumph.json'].some((n) => fs.existsSync(path.join(root, n)));
-  if (!hasConfig) await cmdDetectConfig();
-
   const cfgDefault = vscode.workspace.getConfiguration('triumph').get('defaultHost') || 'all';
   const picked = await vscode.window.showQuickPick(
     ['all', ...Object.keys(HOSTS)].map((id) => ({
@@ -74,24 +70,31 @@ async function cmdInstallCourts() {
   );
   if (!picked) return;
   const hosts = picked.label === 'all' ? Object.keys(HOSTS) : [picked.label];
+  const hasConfig = ['.triumph.yml', '.triumph.yaml', '.triumph.json'].some((n) => fs.existsSync(path.join(root, n)));
+  if (!hasConfig) await cmdDetectConfig();
 
   const written = [];
+  const backups = [];
+  const failures = [];
   for (const h of hosts) {
     try {
       const r = installHost(h, root);
       written.push(...r.files.map((f) => path.relative(root, f)));
+      backups.push(...(r.backups || []).map((f) => path.relative(root, f)));
     } catch (e) {
+      failures.push(`${h}: ${e.message}`);
       vscode.window.showErrorMessage(`TRIUMPH ${h}: ${e.message}`);
     }
   }
+  if (!written.length) return;
   const extVersion = require('../package.json').version;
   const choice = await vscode.window.showInformationMessage(
-    `TRIUMPH courts installed (${hosts.join(', ')}) — extension v${extVersion}. ${written.length} files written. ` +
-    `If you expected skills/rules/modes and only see agents+mcp.json, reload the window (Developer: Reload Window) so the host picks up the current extension build.`,
-    'Show files'
+    `TRIUMPH installed ${hosts.length - failures.length}/${hosts.length} hosts — extension v${extVersion}. ` +
+    `${backups.length} previous files backed up. Reload the window to pick up new skills, rules and modes.`,
+    'Show files and backups'
   );
-  if (choice === 'Show files') {
-    vscode.window.showQuickPick(written, { placeHolder: 'Installed files' });
+  if (choice === 'Show files and backups') {
+    vscode.window.showQuickPick([...written, ...backups.map((f) => `backup: ${f}`)], { placeHolder: 'Installed files and restorable backups' });
   }
 }
 
@@ -114,8 +117,20 @@ async function cmdRunCourt() {
     } else if (court.label === 'SPLITBRAIN') {
       const start = await client.call('splitbrain_mutate');
       if (start.status === 'started') {
-        vscode.window.showInformationMessage(`SPLITBRAIN mutation running (job ${start.job_id}). Poll: splitbrain_status.`);
-        result = start;
+        result = await vscode.window.withProgress(
+          { location: vscode.ProgressLocation.Notification, title: 'SPLITBRAIN mutation running…', cancellable: false },
+          async () => {
+            const timeout = Date.now() + 20 * 60_000;
+            let job;
+            do {
+              if (Date.now() > timeout) throw new Error('SPLITBRAIN mutation timed out');
+              await new Promise((resolve) => setTimeout(resolve, 1000));
+              job = await client.call('splitbrain_status', { job_id: start.job_id });
+            } while (job.status === 'running');
+            if (job.status !== 'done') throw new Error(job.error || `SPLITBRAIN mutation ${job.status}`);
+            return client.call('splitbrain_trustgap');
+          }
+        );
       } else {
         result = await client.call('splitbrain_trustgap');
       }
@@ -188,17 +203,16 @@ async function cmdDashboardRun(context) {
       try {
         const historyDir = path.join(context.globalStorageUri.fsPath, 'dashboard-history');
         fs.mkdirSync(historyDir, { recursive: true });
-        const { runId, url } = await dashboardCmd.runAndPublish(vscode, {
+        await dashboardCmd.runAndPublish(vscode, {
           root,
           enginePath: enginePath(),
           requested: ['redline', 'splitbrain', 'warpath'],
           existingRun: null,
           historyDir,
           openExternal: (u) => vscode.env.openExternal(vscode.Uri.parse(u)),
+          onError: (e) => vscode.window.showErrorMessage('TRIUMPH rerun: ' + e.message),
         });
-        vscode.window.showInformationMessage(`TRIUMPH run published.`, 'Open in dashboard').then((p) => {
-          if (p) vscode.env.openExternal(vscode.Uri.parse(url));
-        });
+        vscode.window.showInformationMessage('TRIUMPH run published. Dashboard stays available for reruns.');
       } catch (e) {
         vscode.window.showErrorMessage('TRIUMPH dashboard: ' + (e && e.message ? e.message : e));
       }
@@ -232,6 +246,6 @@ function activate(context) {
   registerMcpProvider(context);
 }
 
-function deactivate() {}
+function deactivate() { return dashboardCmd.stopAll(); }
 
 module.exports = { activate, deactivate };

@@ -1,7 +1,7 @@
 export const COURTS = ['redline', 'splitbrain', 'warpath'] as const;
 export type Court = (typeof COURTS)[number];
 export type CourtState = 'not_run' | 'running' | 'complete' | 'error' | 'unavailable';
-export type CourtResult<T> = { state: CourtState; collectedAt: string | null; sourceGeneratedAt: string | null; payload: T | null; errors: string[] };
+export type CourtResult<T> = { state: CourtState; collectedAt: string | null; sourceGeneratedAt: string | null; payload: T | Record<string, unknown> | null; errors: string[] };
 export type Redline = { court: 'REDLINE'; summary: { green: number; red: number; total: number }; results: { clause: string; status: 'red' | 'yellow' | 'green'; passed: number; failed: number; total: number; spec_anchor: string; spec_text?: string; failures: { title: string; message: string }[] }[] };
 export type Splitbrain = { court: 'SPLITBRAIN'; status: 'ok'; claimedCoverage: number; honestMutationScore: number; trustGap: number; dishonestTests: string[]; mutants: unknown[]; summary?: string | null; itLedger?: { itId: string; specRef?: string; file?: string; killed: number; survived: number; timeout: number; noCoverage: number; honest: boolean }[]; suiteLevelTotals?: { killed: number; survived: number; timeout: number; noCoverage: number; totalMutants: number; mutationScore: number } | null; stale?: boolean; warnings?: string[]; codeCommitAt?: string | null }; 
 export type LedgerEntry = NonNullable<Splitbrain['itLedger']>[number];
@@ -33,11 +33,30 @@ export const warpath = (v: unknown): v is Warpath => {
   const { context, triage } = v;
   return context.court === 'WARPATH' && triage.court === 'WARPATH' && arr(context.deploys, record) && record(context.metrics) && arr(context.logWindow, record) && (triage.status === undefined || smallString(triage.status)) && (triage.detail === undefined || smallString(triage.detail)) && (triage.incidentWindow === undefined || smallString(triage.incidentWindow)) && (triage.suspect === undefined || triage.suspect === null || record(triage.suspect)) && (triage.clearedDeploys === undefined || arr(triage.clearedDeploys, record)) && (triage.breakerSnapshot === undefined || record(triage.breakerSnapshot)) && (triage.evidence === undefined || arr(triage.evidence, record)) && (triage.rule === undefined || smallString(triage.rule));
 };
+// Engine output is a different wire format from the dashboard's fractional
+// artifact. These guards recognize only fields the engine actually emits; they
+// do not convert units, fill missing coverage, or recompute its ledger.
+export type EngineDishonestTest = { testId: string; testName?: string | null; survivedMutants: unknown[] };
+export type EngineSplitbrain = { court: 'SPLITBRAIN'; status: 'ok'; schemaVersion: 1; claimedCoverage: number | null; honestMutationScore: number | null; trustGap: number | null; dishonestTests: EngineDishonestTest[]; attribution?: string; attributionNote?: string; totals?: Record<string, unknown>; survivors?: unknown[]; mutants?: unknown[]; itLedger?: unknown[]; summary?: string | null; source?: string; reportPath?: string; generated?: string };
+const points = (v: unknown): v is number | null => v === null || number(v) && v >= 0 && v <= 100;
+const gapPoints = (v: unknown): v is number | null => v === null || number(v) && v >= -100 && v <= 100;
+const engineTest = (v: unknown): v is EngineDishonestTest => record(v) && smallString(v.testId) && (v.testName === undefined || v.testName === null || smallString(v.testName)) && Array.isArray(v.survivedMutants) && v.survivedMutants.length <= 5000;
+export const engineSplitbrain = (v: unknown): v is EngineSplitbrain => record(v) && v.court === 'SPLITBRAIN' && v.status === 'ok' && v.schemaVersion === 1 && points(v.claimedCoverage) && points(v.honestMutationScore) && gapPoints(v.trustGap) && arr(v.dishonestTests, engineTest) && (v.totals === undefined || record(v.totals)) && (v.mutants === undefined || Array.isArray(v.mutants)) && (v.survivors === undefined || Array.isArray(v.survivors)) && (v.itLedger === undefined || Array.isArray(v.itLedger)) && (v.summary === undefined || v.summary === null || string(v.summary)) && (v.attribution === undefined || smallString(v.attribution)) && (v.attributionNote === undefined || string(v.attributionNote)) && (v.generated === undefined || smallString(v.generated));
+export type EngineWarpath = { court: 'WARPATH'; incidentWindow: string; suspect: Record<string, unknown> | null; breakerSnapshot: Record<string, unknown>; evidence: Record<string, unknown>[]; clearedDeploys: Record<string, unknown>[]; rule: string | null };
+export const engineWarpath = (v: unknown): v is EngineWarpath => record(v) && v.court === 'WARPATH' && smallString(v.incidentWindow) && (v.suspect === null || record(v.suspect)) && record(v.breakerSnapshot) && arr(v.evidence, record) && arr(v.clearedDeploys, record) && (v.rule === null || smallString(v.rule));
+// An engine's court brand identifies its source, not its payload schema. Only
+// recognize the dashboard's *specific* fractional-score shape when the key
+// fields have that shape. In particular, a percentage-point score plus object
+// dishonestTests is opaque evidence, not a broken fractional score to convert.
+// Once recognized, retain the full guard (including bounds and consistency):
+// invalid known-schema metrics must not silently fall back to generic evidence.
+const recognizedSplitbrain = (p: Record<string, unknown>): boolean =>
+  p.court === 'SPLITBRAIN' && p.status === 'ok' && 'claimedCoverage' in p && 'honestMutationScore' in p && 'trustGap' in p && arr(p.dishonestTests, smallString) && Array.isArray(p.mutants);
 function result<T>(v: unknown, guard: (v: unknown) => v is T, recognized: (v: Record<string, unknown>) => boolean, generic = false): v is CourtResult<T> {
   if (!record(v)) return false;
   return ['not_run', 'running', 'complete', 'error', 'unavailable'].includes(String(v.state)) && nullableDate(v.collectedAt) && nullableDate(v.sourceGeneratedAt) && arr(v.errors, smallString) && (v.state === 'complete' ? (generic && record(v.payload) && !recognized(v.payload) ? true : guard(v.payload)) : v.payload === null || record(v.payload));
 }
-const courts = (v: Record<string, unknown>, generic = false): boolean => result(v.redline, redline, (p) => p.court === 'REDLINE' || 'summary' in p || 'results' in p, generic) && result(v.splitbrain, splitbrain, (p) => p.court === 'SPLITBRAIN' || 'claimedCoverage' in p || 'honestMutationScore' in p, generic) && result(v.warpath, warpath, (p) => 'context' in p || 'triage' in p, generic);
+const courts = (v: Record<string, unknown>, generic = false): boolean => result(v.redline, redline, (p) => 'summary' in p || 'results' in p, generic) && result(v.splitbrain, splitbrain, recognizedSplitbrain, generic) && result(v.warpath, warpath, (p) => 'context' in p || 'triage' in p, generic);
 export function isLegacySnapshot(v: unknown): v is LegacySnapshot {
   return record(v) && v.schemaVersion === 1 && isUuid(v.runId) && smallString(v.repository) && v.repository.length > 0 && (v.checkedOutCommit === null || smallString(v.checkedOutCommit)) && (v.workingTreeDirty === null || typeof v.workingTreeDirty === 'boolean') && date(v.createdAt) && (v.state === 'running' || v.state === 'complete') && courts(v);
 }

@@ -6,7 +6,7 @@
   "publisher": "triumph",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/your-org/triumph-courts.git"
+    "url": "git+https://github.com/parth-tehlan/ibm.git"
   },
   "license": "MIT",
   "engines": { "vscode": "^1.101.0" },
@@ -55,7 +55,8 @@
         { "command": "triumph.detectConfig" },
         { "command": "triumph.runCourt" },
         { "command": "triumph.generateReport" },
-        { "command": "triumph.openReport" }
+        { "command": "triumph.openReport" },
+        { "command": "triumph.dashboardRun" }
       ]
     },
     "configuration": {
@@ -78,7 +79,10 @@
   "scripts": {
     "setup": "node bin/triumph-setup.js",
     "report": "node bin/triumph-report.js",
-    "test": "node tests/run.js && node tests/properties.js && node tests/wall-strength.js && node tests/extension.js && node tests/dashboard.js"
+    "stage:dashboard": "node bin/stage-dashboard.js",
+    "test": "node tests/run.js && node tests/properties.js && node tests/hosts-safety.js && node tests/wall-strength.js && node tests/extension.js && node tests/dashboard.js && node tests/dashboard-integration.js && node tests/mcp-client.js",
+    "test:live": "node tests/properties-live.js",
+    "test:packaged:bob": "node ../scripts/verify-packaged-bob.mjs"
   },
   "devDependencies": {
     "@types/vscode": "^1.101.0"

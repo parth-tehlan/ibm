@@ -73,19 +73,16 @@ export function createApp({ history = createHistory(), bridge = createBridge({ h
     if (!uuid.safeParse(req.params.id).success) return bad(res);
     const parsed = courts.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'Expected distinct redline, splitbrain, warpath courts' });
-    const request = await bridge.requestRun({ projectId: req.params.id, courts: parsed.data.courts });
-    try {
-      const project = bridge.connectedProjects().find((item) => item.id === req.params.id.toLowerCase());
-      if (!project) throw Object.assign(new Error('Project disconnected'), { code: 'NOT_CONNECTED' });
+    const request = await bridge.requestRun({ projectId: req.params.id, courts: parsed.data.courts, prepare: async (pending, project) => {
       const report = {
-        schemaVersion: 2, project, runId: request.runId, createdAt: request.createdAt, updatedAt: request.createdAt,
+        schemaVersion: 2, project, runId: pending.runId, createdAt: pending.createdAt, updatedAt: pending.createdAt,
         revision: 0, state: 'running', checkedOutCommit: null, branch: null, workingTreeDirty: null,
         producer: { name: 'triumph-extension-request', version: '1' },
         ...Object.fromEntries(['redline', 'splitbrain', 'warpath'].map((court) => [court, empty(parsed.data.courts.includes(court) ? 'running' : 'not_run')])),
       };
       await history.save(report);
-      res.status(202).json({ runId: request.runId, requestId: request.requestId });
-    } catch (error) { bridge.cancelRequest({ projectId: req.params.id, requestId: request.requestId }); throw error; }
+    } });
+    res.status(202).json({ runId: request.runId, requestId: request.requestId });
   }));
   app.get('/api/runs/:id/export', route(async (req, res) => {
     if (!uuid.safeParse(req.params.id).success) return bad(res);
