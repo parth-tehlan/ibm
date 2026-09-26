@@ -16,54 +16,57 @@
 # and instructed never to open it." The engine enforces the read wall for
 # REDLINE tooling.
 
-- slug: witness
-  name: REDLINE Witness
-  roleDefinition: Spec-witness. Authors tests from the spec contract alone; never reads the implementation.
-  groups:
-    - read
-    - - edit
-      - fileRegex: "^(?!.*\\.\\.)tests/(clause-|policy-|redline-)|^evidence/"
-    - mcp
-  customInstructions: .bob/rules-witness/00-never-src.md
+# Bob/Roo custom modes schema: top-level OBJECT with a `customModes` array.
+# (A bare top-level array is rejected: "expected object, received array".)
+customModes:
+  - slug: witness
+    name: REDLINE Witness
+    roleDefinition: Spec-witness. Authors tests from the spec contract alone; never reads the implementation.
+    groups:
+      - read
+      - - edit
+        - fileRegex: "^(?!.*\\.\\.)tests/(clause-|policy-|redline-)|^evidence/"
+      - mcp
+    customInstructions: .bob/rules-witness/00-never-src.md
 
-- slug: isolate
-  name: SPLITBRAIN Isolate
-  roleDefinition: Honesty auditor. Scores the test suite via mutation kill-rate; never reads the implementation.
-  groups:
-    - read
-    - - edit
-      - fileRegex: "^(?!.*\\.\\.)trustgap/"
-    - mcp
-  customInstructions: .bob/rules-isolate/00-never-src.md
+  - slug: isolate
+    name: SPLITBRAIN Isolate
+    roleDefinition: Honesty auditor. Scores the test suite via mutation kill-rate; never reads the implementation.
+    groups:
+      - read
+      - - edit
+        - fileRegex: "^(?!.*\\.\\.)trustgap/"
+      - mcp
+    customInstructions: .bob/rules-isolate/00-never-src.md
 
-- slug: surgeon
-  name: WARPATH Surgeon
-  roleDefinition: Applies the minimal fix to the root-cause seam, guarded by rollback.
-  groups:
-    - read
-    - - edit
-      - fileRegex: "^(?!.*\\.\\.)(src/|tests/)"
-    - execute
-    - mcp
-  customInstructions: .bob/rules-surgeon/00-minimal-fixes.md
+  - slug: surgeon
+    name: WARPATH Surgeon
+    roleDefinition: Applies the minimal fix to the root-cause seam, guarded by rollback.
+    groups:
+      - read
+      - - edit
+        - fileRegex: "^(?!.*\\.\\.)(src/|tests/)"
+      - execute
+      - mcp
+    customInstructions: .bob/rules-surgeon/00-minimal-fixes.md
 
-- slug: incident-commander
-  name: WARPATH Incident Commander
-  roleDefinition: Opens/closes the war room; writes the postmortem from triage + forensics evidence.
-  groups:
-    - read
-    - - edit
-      - fileRegex: "^(?!.*\\.\\.)incident/"
-    - mcp
-  customInstructions: .bob/rules-control-agent/00-no-wall.md
+  - slug: incident-commander
+    name: WARPATH Incident Commander
+    roleDefinition: Opens/closes the war room; writes the postmortem from triage + forensics evidence.
+    groups:
+      - read
+      - - edit
+        - fileRegex: "^(?!.*\\.\\.)incident/"
+      - mcp
+    customInstructions: .bob/rules-control-agent/00-no-wall.md
 
-- slug: control-agent
-  name: Control Agent (no wall)
-  roleDefinition: Control group with full read access, to demonstrate that code access blesses planted bugs.
-  groups:
-    - read
-    - - edit
-      - fileRegex: "^(?!.*\\.\\.)tests/control-"
-    - execute
-    - mcp
-  customInstructions: .bob/rules-control-agent/00-no-wall.md
+  - slug: control-agent
+    name: Control Agent (no wall)
+    roleDefinition: Control group with full read access, to demonstrate that code access blesses planted bugs.
+    groups:
+      - read
+      - - edit
+        - fileRegex: "^(?!.*\\.\\.)tests/control-"
+      - execute
+      - mcp
+    customInstructions: .bob/rules-control-agent/00-no-wall.md

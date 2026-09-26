@@ -153,6 +153,10 @@ t('hosts: bob installs the full structure (agents + skills + rules + modes + mcp
   for (const f of need) assert.ok(fs.existsSync(path.join(dir, f)), 'missing ' + f);
   const modes = fs.readFileSync(path.join(dir, '.bob', 'custom_modes.yaml'), 'utf8');
   assert.ok(modes.includes('slug: witness') && modes.includes('slug: surgeon'), 'custom_modes incomplete');
+  // Bob/Roo schema: top-level OBJECT with a customModes array, NOT a bare array
+  // (a bare array is rejected by the importer: "expected object, received array").
+  assert.ok(/^customModes:/m.test(modes), 'custom_modes.yaml must be a top-level object with customModes: key');
+  assert.ok(!/^- slug:/m.test(modes), 'custom_modes.yaml must NOT be a bare top-level array');
 });
 
 t('detect: empty repo (no package.json) does not crash', () => {
