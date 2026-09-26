@@ -32,5 +32,5 @@ takes the whole payments path down. Root cause ≠ trigger.
 - Rollback point: Bob task-scoped snapshot (hover the patch message → rollback).
 
 ## MTTR
-`PLACEHOLDER` — to be read from `incident/metrics.json` (computed by the `Stop`
-hook) after the real gold-session run.
+`PLACEHOLDER` — to be read from `incident/metrics.json` (computed by `node scripts/mttr.mjs stop`)
+after the real gold-session run.

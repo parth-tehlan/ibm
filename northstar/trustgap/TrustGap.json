@@ -1,43 +1,96 @@
 {
   "schemaVersion": 1,
-  "generated": "2026-09-26T00:05:00Z",
+  "generated": "2026-09-26T09:45:06.986Z",
   "itLedger": [
     {
-      "itId": "discount-single-best-nonstack",
-      "specRef": "PRICING_POLICY.md#single-best",
+      "itId": "discount-tautology-bundle-codes",
+      "specRef": "PRICING_POLICY.md#tautology",
+      "file": "tests/discounts.test.ts",
+      "killed": 0,
+      "survived": 2,
+      "timeout": 0,
+      "noCoverage": 0,
+      "honest": false
+    },
+    {
+      "itId": "discount-tautology-trivial-band",
+      "specRef": "PRICING_POLICY.md#tautology",
+      "file": "tests/discounts.test.ts",
+      "killed": 0,
+      "survived": 1,
+      "timeout": 0,
+      "noCoverage": 0,
+      "honest": false
+    },
+    {
+      "itId": "discount-min-order-below-threshold",
+      "specRef": "PRICING_POLICY.md#min-order",
       "file": "tests/policy-discounts.test.ts",
-      "killed": 18,
-      "survived": 9,
+      "killed": 2,
+      "survived": 0,
       "timeout": 0,
       "noCoverage": 0,
       "honest": true
     },
     {
-      "itId": "discount-min-order",
+      "itId": "discount-min-order-boundary-500",
       "specRef": "PRICING_POLICY.md#min-order",
       "file": "tests/policy-discounts.test.ts",
-      "killed": 2,
+      "killed": 3,
+      "survived": 0,
+      "timeout": 0,
+      "noCoverage": 0,
+      "honest": true
+    },
+    {
+      "itId": "discount-single-best-flat-five-alone",
+      "specRef": "PRICING_POLICY.md#single-best",
+      "file": "tests/policy-discounts.test.ts",
+      "killed": 0,
+      "survived": 0,
+      "timeout": 0,
+      "noCoverage": 0,
+      "honest": true
+    },
+    {
+      "itId": "discount-single-best-no-flat-plus-percent",
+      "specRef": "PRICING_POLICY.md#single-best",
+      "file": "tests/policy-discounts.test.ts",
+      "killed": 0,
       "survived": 1,
       "timeout": 0,
       "noCoverage": 0,
       "honest": true
     },
     {
-      "itId": "discount-tautology",
-      "specRef": "PRICING_POLICY.md#tautology",
-      "file": "tests/discounts.test.ts",
-      "killed": 0,
-      "survived": 9,
+      "itId": "discount-single-best-nonstack-save10-save20",
+      "specRef": "PRICING_POLICY.md#single-best",
+      "file": "tests/policy-discounts.test.ts",
+      "killed": 12,
+      "survived": 2,
       "timeout": 0,
       "noCoverage": 0,
-      "honest": false
+      "honest": true
     }
   ],
   "dishonestTests": [
-    "discount-tautology"
+    "discount-tautology-bundle-codes",
+    "discount-tautology-trivial-band"
   ],
-  "honestMutationScore": 0.5128205128205128,
-  "claimedCoverage": "PLACEHOLDER",
-  "trustGap": "PLACEHOLDER",
-  "summary": "Stryker on .bob/scratch/src/discounts.ts (clean reference): 20 killed / 9 survived / 0 timeout / 0 no-coverage. Honest tests kill 20; dishonest tautology kills 0 (suite-wide score 0.513 incl. dishonest survivors) => trust gap PLACEHOLDER until line coverage measured."
+  "honestMutationScore": 0.8947368421052632,
+  "claimedCoverage": 0.9166,
+  "trustGap": 0.021863157894736807,
+  "summary": "Stryker mutated src/discounts.ts: 17 killed / 2 survived / 0 timeout / 1 no-coverage of 20 mutants (suite mutation score 85.00%). Honest policy-discounts.test.ts it-blocks account for 17 of the 17 kills attributed in the per-test ledger; the dishonest tautology in discounts.test.ts (discount-tautology-bundle-codes, discount-tautology-trivial-band) kills 0 mutants and only accumulates survived counts. honestMutationScore (unique mutants killed by honest tests / killed+survived) = 17/19 = 0.8947. Jest's self-reported line coverage of src/discounts.ts is 91.66%, giving trustGap = claimedCoverage - honestMutationScore = 0.0219. Cross-check notes: ledger survived total (6) != Stryker suite-level survived (2) because a Survived mutant covered by multiple tests is blamed on each covering it-block (per-test attribution), while Stryker's summary counts each surviving mutant once. ledger noCoverage total (0) != Stryker suite-level noCoverage (1) because a NoCoverage mutant has an empty coveredBy by definition, so no it-block can be blamed for it; it only shows up in the suite-level total.",
+  "_sourceCommands": {
+    "mutation": "npx stryker run  (stryker.conf.json + stryker.jest.config.js, mutating src/discounts.ts only)",
+    "coverage": "npx jest --coverage --coverageReporters=json-summary --testPathPattern discounts --collectCoverageFrom=src/discounts.ts"
+  },
+  "_suiteLevelTotals": {
+    "killed": 17,
+    "survived": 2,
+    "timeout": 0,
+    "noCoverage": 1,
+    "totalMutants": 20,
+    "mutationScore": 0.85
+  }
 }

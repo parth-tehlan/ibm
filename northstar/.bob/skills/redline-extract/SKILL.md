@@ -11,9 +11,9 @@ lane (and later SPLITBRAIN trust-gap) hangs off of. You are a **clause miner**:
 you read only the *document*, never the implementation. Isolation-as-correctness
 applies to every REDLINE step.
 
-> **WITNESS RULE** — You are physically forbidden from reading anything under
-> `src/`. Never `@`-mention a source path. If you are tempted to open the code,
-> stop: the clause wall exists precisely because you did not read it.
+> **WITNESS RULE** — You must never read anything under `src/`. Never
+> `@`-mention a source path. If you are tempted to open the code, stop: the
+> clause wall exists precisely because you did not read it.
 
 ## Goal / Definition of done
 

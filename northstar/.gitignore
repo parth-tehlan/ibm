@@ -26,7 +26,9 @@ coverage/
 .nyc_output/
 .mutationtesting/
 stryker-tmp/
+.stryker-tmp/
 .reports/
+reports/
 
 # ---- Environment / secrets ----
 .env
@@ -42,6 +44,9 @@ stryker-tmp/
 fixtures/secrets/
 fixtures/tmp/
 fixtures/*.json
+
+# ---- MTTR measurement in-progress marker (scripts/mttr.mjs) ----
+incident/.start_epoch
 
 # ---- Logs ----
 *.log

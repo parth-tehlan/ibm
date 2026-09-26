@@ -18,7 +18,7 @@ You are a **behavior author**: you specify the contract from the spec alone.
 ## Goal / Definition of done
 
 One TypeScript test file per clause under `tests/clause-*`, each asserting the
-clause's normative requirement at the level its RKUTION 2119 word implies. A
+clause's normative requirement at the level its RFC 2119 word implies. A
 clause must be **falsifiable**: failing when the implementation violates the
 document.
 

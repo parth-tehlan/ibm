@@ -13,5 +13,5 @@
 | `t=3` | **Patch** | Surgeon applies minimal fix to the seam; honest clause-W6 test flips GREEN. |
 | `t=4` | **Comms** | Postmortem written (`incident/postmortem.md`); MTTR read from `incident/metrics.json`. War room closed. |
 
-> **NOTE (continuity):** `MTTR` numbers stay PLACEHOLDER until the `Stop` hook
+> **NOTE (continuity):** `MTTR` numbers stay PLACEHOLDER until `node scripts/mttr.mjs stop`
 > computes `mttrSeconds` from a real gold-session run. See `incident/metrics.json`.

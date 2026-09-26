@@ -7,8 +7,8 @@
 export interface RetryPolicy {
   /** Number of prior attempts already made (0 = first try). */
   attempt: number;
-  /** Round-trip delay chosen before the next attempt, in ms. */
-  delayMs: number;
+  /** Delay (ms) that was applied before the previous attempt; 0 when no retry has happened yet. */
+  previousDelayMs: number;
 }
 
 /**

@@ -6,7 +6,9 @@
   "scripts": {
     "test": "jest",
     "build": "tsc",
-    "start": "node dist/pay/create-intent.js"
+    "start": "node dist/pay/create-intent.js",
+    "mutation": "stryker run",
+    "trustgap": "npm run mutation && jest --coverage --coverageReporters=json-summary --testPathPattern discounts --collectCoverageFrom=src/discounts.ts && node scripts/build-trustgap.mjs"
   },
   "dependencies": {
     "express": "^4.19.2"

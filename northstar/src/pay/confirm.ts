@@ -1,9 +1,7 @@
 /**
  * Payment confirmation — Northstar.
  *
- * Drives the create->confirm lifecycle for a payment intent. This module is
- * part of the build scaffold;. It exposes real
- * logic only.
+ * Drives the create->confirm lifecycle for a payment intent.
  */
 
 export type ConfirmResult = "confirmed" | "already_confirmed" | "unknown_intent";

@@ -16,8 +16,8 @@
 export interface RetryPolicy {
   /** Number of prior attempts already made (0 = first try). */
   attempt: number;
-  /** Round-trip delay chosen before the next attempt, in ms. */
-  delayMs: number;
+  /** Delay (ms) that was applied before the previous attempt; 0 when no retry has happened yet. */
+  previousDelayMs: number;
 }
 
 /** Shared circuit breaker state as the runbook defines it. */
@@ -45,8 +45,8 @@ describe('W6 — Retry & circuit-breaker discipline (SHALL)', () => {
     async () => {
       // docs/api-spec.md#W6.1: "Outbound calls receiving a 429 or a 5xx status
       // SHALL retry with exponential backoff plus jitter."
-      const first = nextRetryDelay({ attempt: 0, delayMs: 0 });
-      const second = nextRetryDelay({ attempt: 1, delayMs: 100 });
+      const first = nextRetryDelay({ attempt: 0, previousDelayMs: 0 });
+      const second = nextRetryDelay({ attempt: 1, previousDelayMs: 100 });
       // Delay grows (exponentially) across attempts, and is never zero.
       expect(first).toBeGreaterThan(0);
       expect(second).toBeGreaterThan(first);

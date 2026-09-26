@@ -1,14 +1,9 @@
 /**
- * Jest config (REDLINE wiring).
+ * Jest config.
  *
- * Runs `.bob/scratch/bind-seams.cjs` as a setup file BEFORE any test module, so
- * the witness-facing contract seams declared in tests/clause-W*.test.ts are
- * bound to the real (planted) src/ implementations. This is the surgeon-side
- * binding that closes the wiring gap without letting the witness read src/.
- *
- * Author: the Surgeon. Requires the devDeps (jest, ts-jest, typescript) which
- * are NOT installed on this build host (see WORK_STATE NEEDS DECISION) but are
- * present in the committed Bob IDE gold runtime.
+ * Runs `harness/bind-seams.cjs` as a setup file before any test module, so the
+ * contract seams declared in tests/clause-W*.test.ts (and the discount/key
+ * tests) are bound to the real src/ implementations before the tests execute.
  */
 module.exports = {
   testEnvironment: 'node',
@@ -17,6 +12,6 @@ module.exports = {
   transform: {
     '^.+\\.ts$': ['ts-jest', { tsconfig: 'tsconfig.json' }],
   },
-  setupFiles: ['./.bob/scratch/bind-seams.cjs'],
+  setupFiles: ['./harness/bind-seams.cjs'],
   collectCoverageFrom: ['src/**/*.ts'],
 };

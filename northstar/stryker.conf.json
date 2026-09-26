@@ -1,0 +1,19 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "testRunner": "jest",
+  "plugins": ["@stryker-mutator/jest-runner"],
+  "mutate": ["src/discounts.ts"],
+  "coverageAnalysis": "perTest",
+  "reporters": ["clear-text", "json", "progress"],
+  "tempDirName": ".stryker-tmp",
+  "cleanTempDir": true,
+  "disableTypeChecks": true,
+  "concurrency": 1,
+  "jsonReporter": {
+    "fileName": "reports/mutation/mutation.json"
+  },
+  "jest": {
+    "configFile": "./stryker.jest.config.js",
+    "enableFindRelatedTests": false
+  }
+}

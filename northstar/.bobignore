@@ -1,10 +1,11 @@
 # .bobignore — DEFENSE-IN-DEPTH only. NOT the isolation wall.
-# It is workspace-global (not per-mode), @-mentions bypass it, and
-# insert_content/search_and_replace can bypass it on save.
-# The real wall = custom-mode fileRegex + the PreToolUse hook (exit-2).
+# It is one workspace-global file: it applies to every mode the same way, so it
+# cannot express "witness is walled from src/ but surgeon is not".
+# The real wall is declarative Bob configuration in .bob/custom_modes.yaml:
+# per-mode tool groups + a fileRegex on each mode's `edit` group, backed by the
+# mode-scoped rules in .bob/rules-<slug>/. See the header of custom_modes.yaml.
 #
-# Here we still hide src/ from the read tool + listings as a first layer for the
-# roles that must never see code (witness, isolate, compliance-officer, incident-commander).
+# So this file only lists paths that NO mode should ever read or write.
 
 # Build artifacts / deps
 node_modules/
@@ -20,13 +21,14 @@ fixtures/secrets/
 *.key
 *.pem
 
-# Scratch suggests it is not project source
-.bob/scratch/*
-
 # Large / temp
 *.tmp
 *.log
 .cache/
 
-# NOTE: we deliberately do NOT ignore src/ globally, because surgeon and
-# control-agent MUST read it. Per-role hiding is the hook's job, not .bobignore's.
+# NOTE: we deliberately do NOT ignore src/ here, because surgeon and
+# control-agent MUST read it. Keeping witness/isolate off src/ is the job of
+# their mode definitions (no edit access to src/, no shell) and their
+# .bob/rules-<slug>/ instructions — not this file.
+# NOTE: .bob/scratch/ is NOT ignored: mutineer writes its mutation report there
+# and isolate must read it.

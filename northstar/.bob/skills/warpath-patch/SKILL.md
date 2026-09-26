@@ -24,7 +24,8 @@ code safe to roll back. Fast but correct — this is the "repair" half of MTTR.
   honest test that was failing now **passes**.
 - The change is minimal (one seam), and the proof is the honest test turning
   green — never a weakened assertion.
-- `incident/rcac.md` notes the patched state + rollback point.
+- The incident commander records the patched state + rollback point in
+  `incident/rcac.md` (you report it; your fence does not include `incident/`).
 
 ## Inputs
 
@@ -43,12 +44,15 @@ code safe to roll back. Fast but correct — this is the "repair" half of MTTR.
 4. **Drive green.** Re-run the honest test; confirm it now PASSES and there is no
    regression elsewhere (`tests/clause-W*.test.ts` intended failures stay, the
    honest one flips).
-5. **Record + hand off.** Note the patched seam + proof in `incident/rcac.md`,
-   then hand the resolved timeline to `warpath-postmortem`.
+5. **Report + hand off.** Report the patched seam, the proof, and the rollback
+   point to the incident commander. The commander records them in
+   `incident/rcac.md`, runs `node scripts/mttr.mjs stop` (resolution), and hands
+   off to `warpath-postmortem`.
 
 ## Constraints
 
-- Write ONLY under `src/` (your custom-mode `fileRegex` fence). Never touch
-  `incident/`, `evidence/`, `docs/`, or weaken any test.
+- Write ONLY under `src/` for the fix (your custom-mode `fileRegex` fence is
+  `src/` + `tests/`). Never touch `incident/`, `evidence/`, `docs/`, or weaken
+  any test.
 - Rehearse locally and cheaply; reserve the gold-session account for the final
   recorded run. All MTTR numbers stay PLACEHOLDER until the pipeline computes them.

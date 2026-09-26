@@ -16,13 +16,13 @@ narrowly-scoped suspicion that tells the Surgeon exactly which `src/` seam to fi
 and which honest test proves it fixed.
 
 > **WARPATH RULE** — Read-only. You build the case; the Surgeon holds the
-> scalpel. You never write to `src/`, `tests/`, or `incident/` (except appending
-> findings is done by the commander/comms officer, not you).
+> scalpel. You never write to `src/`, `tests/`, or `incident/`. The commander
+> records your findings. Your mode has no edit group and no shell.
 
 ## Goal / Definition of done
 
-A **confirmed** Root Cause written into `incident/rcac.md`'s conclusion, backed
-by evidence, that:
+A **confirmed** Root Cause, reported to the incident commander (who writes it
+into `incident/rcac.md`'s conclusion), backed by evidence, that:
 
 - names the failing code path and the exact violation (anchor to the runbook or
   spec, e.g. `docs/runbook-payments.md` / `docs/api-spec.md#W6`),
@@ -32,22 +32,24 @@ by evidence, that:
 
 ## Inputs
 
-- `@/docs/runbook-payments.md`, `@/docs/api-spec.md`, `@/evidence/manifest.json`.
+- `@/docs/runbook-payments.md`, `@/docs/api-spec.md`.
 - `@/fixtures/metrics.json`, `@/fixtures/logs.json` (synthetic signal feeds).
 - The candidate apex from the intake header (`incident/timeline.md`).
 
 ## Steps
 
-1. **Read the signal feeds.** Load fixture metrics/logs and the runbook. Correlate
-   the symptom window (e.g. error spikes) with the flaky-dependency timeline.
+1. **Read the signal feeds.** Load metrics/logs/deploys (the gauntlet-signals
+   MCP tools `get_metrics`, `get_logs`, `get_recent_deploys`) and the runbook.
+   Correlate the symptom window (e.g. error spikes) with the flaky-dependency timeline.
 2. **Trace the call path.** Confirm which shared seam sits between the flaky
    dependency and the symptom. For the demo this is the shared circuit breaker
    (`src/circuit.ts`, `breakerState`) that trips on the first failure — but you
    confirm this from the runbook's "do-not-trip-breaker" rule, never from reading
    `src/` yourself as a witness would. (Forensics may inspect `src/` in the model;
    the *witness* is the one walled from it — keep the isolation story intact.)
-3. **Write the RCAC conclusion** into `incident/rcac.md`: Trigger vs Root Cause,
-   evidence links, the ONE seam to patch, and the honest test that must turn red.
+3. **Report the RCAC conclusion** to the incident commander, who records it in
+   `incident/rcac.md`: Trigger vs Root Cause, evidence links, the ONE seam to
+   patch, and the honest test that must turn red.
 4. **Hand off to patch.** Recommend `warpath-patch` with the confirmed scope.
 
 ## Constraints

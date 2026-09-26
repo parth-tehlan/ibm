@@ -1,5 +1,5 @@
 {
-  "mttrSeconds": 0,
-  "measuredAt": "2026-09-26T08:38:19Z",
-  "note": "placeholder value; replace after a real gold-session run"
+  "mttrSeconds": null,
+  "measuredAt": null,
+  "note": "not yet measured; run `node scripts/mttr.mjs start` at incident acknowledgement and `node scripts/mttr.mjs stop` at resolution to fill this in"
 }
