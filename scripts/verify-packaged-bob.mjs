@@ -88,3 +88,7 @@ try {
 } finally {
   rmSync(sandbox, { recursive: true, force: true });
 }
+// Explicit exit: this runtime's node prints to stdout then SIGABRTs at
+// teardown (exit 134), which would read as failure under `set -e` deploy
+// scripting. The try/finally above completed when this line is reached.
+process.exit(0);
