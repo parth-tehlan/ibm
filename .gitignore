@@ -1,3 +1,8 @@
 
 .cptr/
 IBM-BobUserSetup-x64-1.126.0+bob2.2.0.exe
+
+# Internal agent-runtime scaffolding (bug-map tooling) — never tracked
+northstar/.bob/scratch/
+northstar/evidence/clause-wall.json
+northstar/evidence/manifest.json
