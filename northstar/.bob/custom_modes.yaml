@@ -20,9 +20,11 @@
 #      cannot hold the witness/surgeon split, because it is not per-mode.
 #
 # HONEST LIMITS (say it this way on camera):
-#   * Only `edit` supports fileRegex. Read-scoping by mode is UNCONFIRMED, so the
-#     witness claim is "structurally unable to edit src/, and instructed never to
-#     open it" — not an OS-level read block.
+#   * Only `edit` supports fileRegex. Bob's custom-modes docs attach fileRegex
+#     to the edit group only. `read` is a flat group and is not path-scoped in
+#     the documented schema. The witness claim is "structurally unable to edit
+#     src/, and instructed never to open it." A live @/src probe is a human
+#     rehearsal and is not claimed here.
 #   * `execute` is not path-scoped: a shell command can touch any file. Modes
 #     that hold it (surgeon, mutineer, incident-commander) are fenced by
 #     instructions for shell use, not by fileRegex.
@@ -30,8 +32,11 @@
 #     personas. Every mode that may spawn them is limited to `explore`
 #     (read-only), so no subagent can write anything. Hand-offs between the
 #     personas below are mode switches (`mode` group), not subagents.
-#   * fileRegex is assumed to use JavaScript RegExp syntax (Bob is a Roo Code
-#     fork); the (?!...) lookahead depends on that.
+#   * fileRegex accepts JavaScript-style regular expressions, including
+#     negative lookahead. The custom-modes docs list
+#     ^(?!.*(test|spec)).*\.(js|ts)$ as a common pattern
+#     (https://bob.ibm.com/docs/ide/configuration/custom-modes), so the
+#     (?!.*\.\.) prefix on every fence is valid and stays.
 
 customModes:
   # ===== THE TWO MODES THAT DEFINE / DEFEAT THE WALL =====

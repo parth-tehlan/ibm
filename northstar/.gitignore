@@ -44,6 +44,10 @@ reports/
 fixtures/secrets/
 fixtures/tmp/
 fixtures/*.json
+!fixtures/logs.json
+!fixtures/metrics.json
+!fixtures/deploy.json
+!fixtures/mutants.json
 
 # ---- MTTR measurement in-progress marker (scripts/mttr.mjs) ----
 incident/.start_epoch
