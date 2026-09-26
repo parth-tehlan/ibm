@@ -75,11 +75,11 @@ describe('W6 — Retry & circuit-breaker discipline (SHALL)', () => {
       // docs/api-spec.md#W6.3: "Once open, the breaker SHALL serve the runbook
       // fail-fast behavior and SHALL NOT be half-open earlier than the runbook's
       // settle window."
+      //
+      // While consecutive failures are still accumulating (above threshold),
+      // the breaker MUST remain 'open' — NOT 'half-open'. The old disjunction
+      // (open || half-open) accepted 'half-open' here, defeating the assertion.
       const open = breakerState({ consecutiveFailures: 6, openThreshold: 5 });
-      expect(open === 'open' || open === 'half-open').toBe(true);
-      // Half-open is only reached after the settle window (represented by a
-      // fresh inspection); the open state must persist while failures are
-      // still accumulating.
-      expect(breakerState({ consecutiveFailures: 6, openThreshold: 5 })).toBe('open');
+      expect(open).toBe('open'); // MUST NOT be half-open while failures accumulate
     });
 });

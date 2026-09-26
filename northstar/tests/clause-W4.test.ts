@@ -40,11 +40,16 @@ describe('W4 — Ledger available-vs-pending (REQUIRED)', () => {
     async () => {
       // docs/api-spec.md#W4.2: "Authorization-hold funds MUST be reported under
       // pending and MUST NOT be included in available."
-      const heldBefore = (await getBalances('merchant-1')).pending;
-      const availableWithHold = (await getBalances('merchant-1')).available;
-      // A hold strictly grows pending and never inflates available.
-      expect(heldBefore).toBeGreaterThanOrEqual(0);
-      expect(availableWithHold).toBeGreaterThanOrEqual(0);
+      //
+      // merchant-1 fixture: credits=10000, debits=2000, holds=500.
+      // If hold funds leaked into available, available would equal
+      // credits-debits (8000) instead of the correct credits-debits-holds (7500).
+      // This assertion is falsified by any implementation that adds hold funds
+      // to available rather than placing them exclusively in pending.
+      const b = await getBalances('merchant-1');
+      expect(b.pending).toBe(5_00);                       // hold lands in pending
+      expect(b.available).not.toBe(100_00 - 20_00);       // MUST NOT include the hold
+      expect(b.available).toBe(100_00 - 20_00 - 5_00);   // hold excluded from available
     });
 
   it('available equals settled credits minus settled debits minus pending holds',
