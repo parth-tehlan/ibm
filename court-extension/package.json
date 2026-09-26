@@ -1,0 +1,81 @@
+{
+  "name": "triumph-courts",
+  "displayName": "TRIUMPH 3-Court Dev Tool",
+  "description": "REDLINE / SPLITBRAIN / WARPATH courts for any repo and any model — spec-witness tests, honest coverage, incident forensics. Path-1: installs court subagents into the agent hosts you already have; never calls a model itself.",
+  "version": "0.2.0",
+  "publisher": "triumph",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/your-org/triumph-courts.git"
+  },
+  "license": "MIT",
+  "engines": { "vscode": "^1.101.0" },
+  "categories": ["Testing", "Chat", "Machine Learning", "Other"],
+  "keywords": ["mcp", "testing", "mutation-testing", "spec", "postmortem", "agents"],
+  "main": "./src/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "triumph.installCourts",
+        "title": "TRIUMPH: Install courts for this repo",
+        "category": "TRIUMPH"
+      },
+      {
+        "command": "triumph.detectConfig",
+        "title": "TRIUMPH: Auto-detect .triumph.yml",
+        "category": "TRIUMPH"
+      },
+      {
+        "command": "triumph.runCourt",
+        "title": "TRIUMPH: Run a court (REDLINE/SPLITBRAIN/WARPATH)",
+        "category": "TRIUMPH"
+      },
+      {
+        "command": "triumph.generateReport",
+        "title": "TRIUMPH: Generate 3-court report (HTML + MD)",
+        "category": "TRIUMPH"
+      },
+      {
+        "command": "triumph.openReport",
+        "title": "TRIUMPH: Open last report",
+        "category": "TRIUMPH"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        { "command": "triumph.installCourts" },
+        { "command": "triumph.detectConfig" },
+        { "command": "triumph.runCourt" },
+        { "command": "triumph.generateReport" },
+        { "command": "triumph.openReport" }
+      ]
+    },
+    "configuration": {
+      "title": "TRIUMPH 3-Court",
+      "properties": {
+        "triumph.defaultHost": {
+          "type": "string",
+          "enum": ["vscode", "claude", "bob", "codex", "generic", "all"],
+          "default": "all",
+          "description": "Agent host(s) the 'Install courts' command targets."
+        },
+        "triumph.enginePath": {
+          "type": "string",
+          "default": "",
+          "description": "Override path to court.js (defaults to the bundled engine)."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "setup": "node bin/triumph-setup.js",
+    "report": "node bin/triumph-report.js",
+    "test": "node tests/run.js && node tests/properties.js && node tests/wall-strength.js && node tests/extension.js"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.101.0"
+  }
+}

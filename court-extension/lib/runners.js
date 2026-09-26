@@ -1,0 +1,194 @@
+#!/usr/bin/env node
+/**
+ * lib/runners.js — pluggable test-runners for the REDLINE court.
+ *
+ * A runner turns a test-file selector into the engine's normalized verdict
+ * shape. Jest gets a first-class JSON runner; everything else can be wired
+ * with a one-line custom command per repo.
+ *
+ * Normalized result:
+ *   { suites: [ { name, assertions: [ { title, status, failureMessages: [] } ],
+ *                 file } ],
+ *     raw: <framework-native payload, when available> }
+ */
+
+'use strict';
+
+const { spawn, execSync } = require('child_process');
+const fs = require('fs');
+const path = require('path');
+
+function spawnCollect(cmd, args, opts) {
+  return new Promise((resolve) => {
+    const child = spawn(cmd, args, { cwd: opts.cwd, env: process.env, shell: !!opts.shell });
+    let out = '';
+    let err = '';
+    const timer = setTimeout(() => {
+      child.kill('SIGKILL');
+      resolve({ ok: false, error: 'timeout', stdout: out, stderr: err, code: null });
+    }, opts.timeoutMs || 120_000);
+    child.stdout.on('data', (d) => (out += d));
+    child.stderr.on('data', (d) => (err += d));
+    child.on('error', (e) => {
+      clearTimeout(timer);
+      resolve({ ok: false, error: 'spawn-failed: ' + e.message, stdout: out, stderr: err, code: null });
+    });
+    child.on('close', (code) => {
+      clearTimeout(timer);
+      resolve({ ok: code === 0, code, stdout: out, stderr: err });
+    });
+  });
+}
+
+/** Extract the outermost JSON object from a noisy stdout stream. */
+function extractJson(out) {
+  const start = out.indexOf('{');
+  const end = out.lastIndexOf('}');
+  if (start < 0 || end <= start) return null;
+  try { return JSON.parse(out.slice(start, end + 1)); } catch { return null; }
+}
+
+/** Build a regex that matches exactly one clause test file. */
+function clauseFileRegex(cfg, clauseId) {
+  const rel = path.relative(cfg.repoRoot, path.join(
+    cfg.tests.absDir, cfg.tests.clauseTestPattern.replace('{{clause}}', clauseId)
+  ));
+  return rel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** Regex matching every clause test file. */
+function allClauseFilesRegex(cfg) {
+  const rel = path.relative(cfg.repoRoot, path.join(cfg.tests.absDir, cfg.tests.clauseTestPattern));
+  const escaped = rel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return escaped.replace('\\{\\{clause\\}\\}', `(${cfg.spec.clauseIdPattern.replace(/^\^|\$$/g, '')})`);
+}
+
+/** True when a test-file path is a clause witness file (vs a regular test). */
+function isClauseTestFile(cfg, relOrAbsPath) {
+  const r = path.isAbsolute(relOrAbsPath) ? path.relative(cfg.repoRoot, relOrAbsPath) : relOrAbsPath;
+  return new RegExp(allClauseFilesRegex(cfg)).test(r.split(path.sep).join('/'));
+}
+
+// ---------------------------------------------------------------------------
+// jest
+// ---------------------------------------------------------------------------
+async function runJest(cfg, clauseId /* null = all clause suites */) {
+  const pattern = clauseId ? clauseFileRegex(cfg, clauseId) : allClauseFilesRegex(cfg);
+  // Flag compatibility: jest 29's plural --testPathPatterns is regex-loose
+  // (matches unrelated suites); jest 30 removed the singular form. Try
+  // singular first (works in 29 + most 30.x), fall back to plural on the
+  // "replaced/unknown option" error.
+  let r = await spawnCollect('npx', ['jest', '--json', '--testPathPattern=' + pattern], {
+    cwd: cfg.repoRoot,
+    timeoutMs: 120_000,
+  });
+  if (!extractJson(r.stdout) && /testPathPattern/.test(r.stderr || '') && /replaced|Unrecognized|not.*available|unknown option/i.test(r.stderr || '')) {
+    r = await spawnCollect('npx', ['jest', '--json', '--testPathPatterns=' + pattern], {
+      cwd: cfg.repoRoot,
+      timeoutMs: 120_000,
+    });
+  }
+  const parsed = r.parsed !== undefined ? r.parsed : extractJson(r.stdout);
+  if (!parsed) {
+    return { suites: null, raw: null, error: r.error || 'no-parse', stderr: (r.stderr || '').split('\n').slice(-10) };
+  }
+  const suites = (parsed.testResults || []).map((tr) => ({
+    name: tr.name,
+    file: tr.name,
+    assertions: (tr.assertionResults || []).map((a) => ({
+      title: a.title,
+      status: a.status,
+      failureMessages: a.failureMessages || [],
+    })),
+  }));
+  return { suites, raw: { numPassedTests: parsed.numPassedTests, numFailedTests: parsed.numFailedTests, numTotalTests: parsed.numTotalTests } };
+}
+
+// ---------------------------------------------------------------------------
+// pytest (unit6: json-report plugin when present, else -q parse fallback)
+// ---------------------------------------------------------------------------
+async function runPytest(cfg, clauseId) {
+  // clauseTestPattern for pytest carries the real suffix (e.g.
+  // test_clause_{{clause}}.py); no extension munging.
+  const target = clauseId
+    ? path.relative(cfg.repoRoot, path.join(cfg.tests.absDir, cfg.tests.clauseTestPattern.replace('{{clause}}', clauseId)))
+    : path.relative(cfg.repoRoot, cfg.tests.absDir);
+  // pytest-json-report writes to a file path ('-' is a literal filename, not
+  // stdout); use a temp file and read it back. Honor an optional python bin.
+  const os = require('os');
+  const tmpReport = path.join(os.tmpdir(), 'triumph-pytest-' + Date.now() + '.json');
+  const python = (cfg.tests && cfg.tests.python) || 'python3';
+  const r = await spawnCollect(python, ['-m', 'pytest', '--json-report', '--json-report-file=' + tmpReport, target], {
+    cwd: cfg.repoRoot,
+    timeoutMs: 120_000,
+  });
+  let parsed = extractJson(r.stdout);
+  if (!parsed && fs.existsSync(tmpReport)) {
+    try { parsed = JSON.parse(fs.readFileSync(tmpReport, 'utf8')); } catch { /* fall through */ }
+    try { fs.unlinkSync(tmpReport); } catch { /* noop */ }
+  }
+  if (parsed && parsed.tests) {
+    const byFile = new Map();
+    for (const t of parsed.tests) {
+      const file = (t.nodeid || '').split('::')[0];
+      if (!byFile.has(file)) byFile.set(file, []);
+      byFile.get(file).push({
+        title: t.nodeid,
+        status: t.outcome === 'passed' ? 'passed' : t.outcome === 'failed' ? 'failed' : 'pending',
+        failureMessages: t.call && t.call.longrepr ? [t.call.longrepr] : [],
+      });
+    }
+    return { suites: [...byFile.entries()].map(([file, assertions]) => ({ name: file, file, assertions })), raw: { summary: parsed.summary } };
+  }
+  // Fallback: exit-code only, one synthetic suite.
+  const r2 = r.error ? r : await spawnCollect(python, ['-m', 'pytest', '-q', target], { cwd: cfg.repoRoot, timeoutMs: 120_000 });
+  const failed = !r2.ok;
+  return {
+    suites: [{
+      name: target,
+      file: target,
+      assertions: [{
+        title: 'pytest ' + target,
+        status: failed ? 'failed' : 'passed',
+        failureMessages: failed ? [(r2.stdout + '\n' + r2.stderr).split('\n').slice(-30).join('\n')] : [],
+      }],
+    }],
+    raw: { exitCode: r2.code },
+    note: 'pytest-json-report not installed; verdict from exit code only',
+  };
+}
+
+// ---------------------------------------------------------------------------
+// custom — cfg.tests.runClause / runAll with {clause} / {file} placeholders;
+// the command MUST print the normalized JSON shape to stdout.
+// ---------------------------------------------------------------------------
+async function runCustom(cfg, clauseId) {
+  const file = clauseId
+    ? path.join(cfg.tests.absDir, cfg.tests.clauseTestPattern.replace('{{clause}}', clauseId))
+    : null;
+  const tpl = clauseId ? cfg.tests.runClause : (cfg.tests.runAll || cfg.tests.runClause);
+  if (!tpl) throw new Error('custom framework requires tests.runAll or tests.runClause in .triumph.yml');
+  const cmd = tpl.replace(/\{clause\}/g, clauseId || '').replace(/\{file\}/g, file || '');
+  const r = await spawnCollect(cmd, [], { cwd: cfg.repoRoot, timeoutMs: 180_000, shell: true });
+  const parsed = extractJson(r.stdout);
+  if (!parsed || !Array.isArray(parsed.suites)) {
+    return { suites: null, error: 'custom runner did not print normalized JSON ({suites:[...]})', stderr: (r.stderr || '').split('\n').slice(-10) };
+  }
+  return { suites: parsed.suites, raw: parsed };
+}
+
+async function runTests(cfg, clauseId) {
+  switch (cfg.tests.framework) {
+    case 'jest': return runJest(cfg, clauseId);
+    case 'vitest': // vitest run --json shares jest's JSON reporter shape closely enough
+    case 'mocha':
+      // Both can be driven through the custom path; give a clear steer.
+      if (cfg.tests.runClause || cfg.tests.runAll) return runCustom(cfg, clauseId);
+      throw new Error(`${cfg.tests.framework}: set tests.runClause (with {clause}/{file} placeholders) printing normalized JSON, or switch tests.framework to jest`);
+    case 'pytest': return runPytest(cfg, clauseId);
+    case 'custom': return runCustom(cfg, clauseId);
+    default: throw new Error('unsupported framework ' + cfg.tests.framework);
+  }
+}
+
+module.exports = { runTests, spawnCollect, extractJson, clauseFileRegex, allClauseFilesRegex, isClauseTestFile, execSync };

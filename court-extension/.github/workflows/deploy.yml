@@ -1,0 +1,123 @@
+# =============================================================================
+# TRIUMPH 3-Court — Deploy workflow (GitHub Actions)
+#
+# Triggers:
+#   - push tags v*
+#       → runs tests, packages .vsix, drafts a GitHub Release with the artifact
+#   - workflow_dispatch
+#       → run tests + package, then (optionally) deploy to a remote code-server
+#         over SSH using the repo's bin/deploy.sh entry point.
+#
+# The .vsix produced here is identical to what bin/deploy.sh builds locally.
+# =============================================================================
+name: Deploy
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      deploy_target:
+        description: 'Optional SSH target for live deploy (user@host). Requires SSH_DEPLOY_KEY + DEPLOY_HOST secrets.'
+        required: false
+        default: ''
+
+jobs:
+  build:
+    name: Test + package .vsix
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: court-extension/package-lock.json
+
+      - name: Install build tools (vsce)
+        working-directory: court-extension
+        run: |
+          npm install --no-audit --no-fund
+          # vsce is a packaging-time only dep; pull it on demand so extension stays zero-dependency
+          echo "using $(npx --yes @vscode/vsce --version)"
+
+      - name: Run test suite
+        working-directory: court-extension
+        run: npm test
+
+      - name: Package .vsix
+        working-directory: court-extension
+        run: |
+          npx --yes @vscode/vsce package --no-dependencies --out triumph-courts.vsix
+          echo "built $(du -h triumph-courts.vsix | cut -f1)"
+
+      - name: Upload .vsix artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: triumph-courts-vsix
+          path: court-extension/triumph-courts.vsix
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release (tags only)
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download packaged .vsix
+        uses: actions/download-artifact@v4
+        with:
+          name: triumph-courts-vsix
+          path: ./dist
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/triumph-courts.vsix
+          generate_release_notes: true
+          draft: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  deploy-remote:
+    name: Deploy to remote code-server (manual / workflow_dispatch)
+    needs: build
+    if: github.event_name == 'workflow_dispatch' && inputs.deploy_target != ''
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      SSH_DEPLOY_KEY: ${{ secrets.SSH_DEPLOY_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download packaged .vsix
+        uses: actions/download-artifact@v4
+        with:
+          name: triumph-courts-vsix
+          path: ./dist
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_DEPLOY_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Deploy .vsix to remote code-server
+        run: |
+          TARGET="${{ inputs.deploy_target }}"
+          # Input may be just a host; qualify into user@host if needed.
+          if [[ "$TARGET" != *"@"* ]]; then TARGET="root@${TARGET}"; fi
+          scp ./dist/triumph-courts.vsix "$TARGET:/tmp/triumph-courts.vsix"
+          ssh "$TARGET" "code-server --install-extension /tmp/triumph-courts.vsix --force"
+          echo "Installed:"
+          ssh "$TARGET" "code-server --list-extensions --show-versions | grep -i triumph"
+
+      - name: Notify status
+        run: echo "Deployed to ${{ inputs.deploy_target }}"

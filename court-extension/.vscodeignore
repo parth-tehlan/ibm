@@ -1,0 +1,11 @@
+# Ship the engine, libs, agents, schemas, extension host, and CLIs.
+# Exclude dev/test + CI surface.
+tests/
+node_modules/
+**/node_modules/**
+.github/
+*.vsix
+*.map
+.gitignore
+package-lock.json
+

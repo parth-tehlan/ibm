@@ -1,0 +1,128 @@
+#!/usr/bin/env bash
+# =============================================================================
+# TRIUMPH 3-Court — Deploy workflow
+#
+# Packages the court-extension into a .vsix and installs it into a running
+# code-server (VS Code Server). Re-runnable: safe to run repeatedly, upgrade
+# in place, verify, and self-report. Designed to be the single entry point for
+# both local deploys and remote/CI deploys.
+#
+#   Usage:
+#     bin/deploy.sh                        # package + install into local code-server
+#     bin/deploy.sh --port 3000            # with explicit code-server port (check only)
+#     bin/deploy.sh --no-install           # just build/test the .vsix, don't install
+#     bin/deploy.sh --server <host>:<port> # target a remote code-server over ssh
+#     bin/deploy.sh --restart              # restart code-server after install
+#
+# Requires: node, npm, npx (for @vscode/vsce), and code-server on PATH.
+# =============================================================================
+set -euo pipefail
+
+# --- config -----------------------------------------------------------------
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PKG_JSON="$ROOT/package.json"
+VSIX_OUT="$ROOT/triumph-courts.vsix"
+EXT_ID="triumph.triumph-courts"
+
+INSTALL=1
+RESTART=0
+SERVER=""
+
+usage() {
+  sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'
+  exit "${1:-0}"
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --no-install)  INSTALL=0;  shift ;;
+    --restart)     RESTART=1;  shift ;;
+    --server)      SERVER="$2"; shift 2 ;;
+    -h|--help)     usage 0 ;;
+    *) usage 1 ;;
+  esac
+done
+
+cd "$ROOT"
+
+log()  { printf '\e[1;34m[deploy]\e[0m %s\n' "$*"; }
+die()  { printf '\e[1;31m[deploy] ERROR:\e[0m %s\n' "$*" >&2; exit 1; }
+pass() { printf '\e[1;32m[deploy] OK:\e[0m %s\n' "$*"; }
+
+# Require only tooling we actually need.
+command -v node >/dev/null 2>&1  || die "node is required"
+command -v npm  >/dev/null 2>&1  || die "npm is required"
+command -v npx  >/dev/null 2>&1  || die "npx is required"
+[[ -f "$PKG_JSON" ]] || die "package.json not found in $ROOT"
+
+# Read a field from package.json. Uses `node -e` with an explicit process.exit(0)
+# because `node -p` on this runtime prints the value then SIGABRTs (exit 134),
+# which trips `set -e`. Reading+exiting(0) avoids that entirely.
+pkg_field() {
+  node -e "process.stdout.write(String(require('$PKG_JSON')['$1'])); process.exit(0)"
+}
+VERSION="$(pkg_field version)"
+NAME="$(pkg_field name)"
+PUB="$(pkg_field publisher)"
+EXT_ID="${PUB}.${NAME}"
+
+# --- 1. Test -----------------------------------------------------------------
+log "Running extension test suite…"
+npm test
+
+# --- 2. Package ----------------------------------------------------------------
+log "Packaging $EXT_ID@$VERSION → $(basename "$VSIX_OUT")…"
+if [[ "$INSTALL" -ne 0 ]] && command -v code-server >/dev/null 2>&1; then
+  # code-server already installed => use its vendored @microsoft/vscode-vsce if present,
+  # else fall back to npx. Both produce the same .vsix.
+  npx --yes @vscode/vsce package --no-dependencies --out "$VSIX_OUT"
+else
+  npx --yes @vscode/vsce package --no-dependencies --out "$VSIX_OUT"
+fi
+[[ -s "$VSIX_OUT" ]] || die "packaging failed: $VSIX_OUT missing/empty"
+pass "built $(du -h "$VSIX_OUT" | cut -f1) → $(basename "$VSIX_OUT")"
+
+if [[ "$INSTALL" -ne 0 ]]; then
+  # --- 3. Install (local, or remote via --server) ------------------------------
+  if [[ -n "$SERVER" ]]; then
+    # Remote: the local box only builds; ssh to the target to install+restart.
+    log "Deploying to remote code-server at $SERVER…"
+    ssh "$SERVER" "code-server --install-extension '$VSIX_OUT' --force" || \
+      die "remote install failed (is code-server on PATH on $SERVER?)"
+    log "Transfer vsix via: scp $(basename "$VSIX_OUT") $SERVER: && ssh $SERVER code-server --install-extension $(basename "$VSIX_OUT") --force"
+    pass "installed on remote $SERVER"
+
+  else
+    command -v code-server >/dev/null 2>&1 || die "code-server not on PATH; give --server or add code-server to PATH"
+
+    log "Installing $EXT_ID@$VERSION into code-server…"
+    code-server --install-extension "$VSIX_OUT" --force
+
+    pass "installed $EXT_ID@$VERSION"
+    code-server --list-extensions --show-versions | grep -F "$EXT_ID" || die "install not reflected by --list-extensions"
+
+    if [[ "$RESTART" -eq 1 ]]; then
+      if command -v systemctl >/dev/null 2>&1 && systemctl is-active code-server@* >/dev/null 2>&1; then
+        log "Restarting code-server (systemd)…"
+        sudo systemctl restart code-server@\* 
+      elif command -v pkill >/dev/null 2>&1; then
+        # Launched ad-hoc: restart the bound instance on $CODE_PORT or 3000.
+        pkill -f 'code-server.*:3000' || true
+        nohup code-server --bind-addr 0.0.0.0:3000 >/tmp/code-server.log 2>&1 &
+        log "code-server restarted (see /tmp/code-server.log)"
+      else
+        log "Cannot auto-restart; code-server will pick up the extension on next launch."
+      fi
+    else
+      log "Extension activated on the next code-server window reload/startup."
+    fi
+  fi
+else
+  log "--no-install: skipping install. Artifact ready: $(basename "$VSIX_OUT")"
+fi
+
+# --- 4. Report ------------------------------------------------------------------
+log "Deploy complete for $EXT_ID@$VERSION"
+echo "  Artifact : $VSIX_OUT"
+echo "  Installed: $([ "$INSTALL" -eq 1 ] && echo yes || echo 'no (--no-install)')"
+echo "  Server   : ${SERVER:-localhost:3000 (default)}"
