@@ -6,8 +6,9 @@ await history.migrateLegacy(); // Non-destructive: keep old Northstar JSON in .d
 await history.recoverInterrupted();
 const port = Number(process.env.PORT || 4317);
 if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error('Invalid PORT');
+const host = process.env.TRIUMPH_HOST || '127.0.0.1';
 const app = createApp({ history });
-const server = app.listen(port, '0.0.0.0', () => {
+const server = app.listen(port, host, () => {
   const address = server.address();
   const url = `http://127.0.0.1:${address.port}`;
   console.log(`TRIUMPH dashboard listening on ${url}`);

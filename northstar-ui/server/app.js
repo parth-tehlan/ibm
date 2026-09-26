@@ -26,7 +26,7 @@ function handleError(error, req, res, next) {
 /** Browser surface only. Extension registration is deliberately NOT an HTTP route:
  * trusted editor-host code calls app.locals.bridge.registerProject() in-process.
  */
-export function createApp({ history = createHistory(), bridge = createBridge({ history }), devOrigins = ['http://127.0.0.1:5173', 'http://localhost:5173'], allowedHosts = (process.env.TRIUMPH_ALLOWED_HOSTS || '').split(',').map((value) => value.trim().toLowerCase()).filter(Boolean) } = {}) {
+export function createApp({ history = createHistory(), bridge = createBridge({ history }), allowedHosts = (process.env.TRIUMPH_ALLOWED_HOSTS || '').split(',').map((value) => value.trim().toLowerCase()).filter(Boolean), devOrigins = ['http://127.0.0.1:5173', 'http://localhost:5173', ...allowedHosts.map((hostname) => `http://${hostname}:5173`)] } = {}) {
   const app = express();
   const trustedHostnames = new Set(['127.0.0.1', 'localhost', ...allowedHosts]);
   app.locals.history = history;

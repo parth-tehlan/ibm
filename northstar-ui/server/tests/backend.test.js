@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { newSnapshot, store, load, collectCourt, requestSchema } from '../snapshot.js';
+const engine = fileURLToPath(new URL('./fixtures/read-only-court.cjs', import.meta.url));
 import { exportSnapshot } from '../export.js';
 import { withCourtClient } from '../mcp.js';
 
@@ -46,16 +48,25 @@ test('missing fixture paths mark warpath unavailable without MCP call', async ()
     assert.equal(called, false);
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
-test('MCP handshake and allowlist against real engine', async () => {
+test('MCP handshake and legacy collector preserve fixture evidence without a live repository', async () => {
   const about = await withCourtClient(async (call) => {
     await assert.rejects(call('warpath_postmortem'), /not allowed/);
-    return await call('splitbrain_trustgap');
-  }, { timeoutMs: 12000 });
+    return call('splitbrain_trustgap');
+  }, { engine, timeoutMs: 5000 });
   assert.equal(about.court, 'SPLITBRAIN');
-  const split = await collectCourt('splitbrain');
-  assert.equal(split.state, 'complete');
-  assert.ok(split.payload.itLedger.length);
-  assert.match(split.payload.warnings[0], /no Stryker run/);
+  assert.equal(about.trustGap, 0.42);
+  const dir = await temp();
+  try {
+    await mkdir(path.join(dir, 'fixtures'));
+    for (const name of ['deploy.json', 'metrics.json', 'logs.json']) await writeFile(path.join(dir, 'fixtures', name), '{}');
+    const result = await collectCourt('warpath', {
+      fixtureRoot: dir,
+      client: (work) => withCourtClient(work, { engine, timeoutMs: 5000 }),
+    });
+    assert.equal(result.state, 'complete');
+    assert.equal(result.payload.context.deploys[0].id, 'D1');
+    assert.equal(result.payload.triage.evidence[0].message, 'breaker OPEN');
+  } finally { await rm(dir, { recursive: true, force: true }); }
 });
 test('MCP timeout kills hung process', async () => {
   const dir = await temp();

@@ -30,14 +30,20 @@ function waitMessage(child, type, requestId) {
 
 test('editor-launched dashboard registers over private IPC; HTTP never grants credentials', async (t) => {
   const data = await mkdtemp(path.join(os.tmpdir(), 'triumph-ipc-'));
-  const child = fork(fileURLToPath(new URL('../index.js', import.meta.url)), [], {
-    execArgv: [], env: { ...process.env, PORT: '0', XDG_DATA_HOME: data }, stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
+  const entry = process.env.TRIUMPH_RUNTIME_DIR
+    ? path.resolve(process.env.TRIUMPH_RUNTIME_DIR, 'server/index.js')
+    : fileURLToPath(new URL('../index.js', import.meta.url));
+  const child = fork(entry, [], {
+    execArgv: [], env: { ...process.env, PORT: '0', TRIUMPH_HOST: '127.0.0.1', XDG_DATA_HOME: data }, stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
   });
   t.after(async () => {
     child.kill(); await new Promise((resolve) => child.once('exit', resolve));
     await rm(data, { recursive: true, force: true });
   });
   const { url } = await waitMessage(child, 'triumph.ready');
+  const page = await fetch(url);
+  assert.equal(page.status, 200);
+  assert.match(await page.text(), /TRIUMPH/);
   const project = { id: randomUUID(), name: 'Any repository' };
   const publicReply = await fetch(`${url}/api/extension/${project.id}/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project }) });
   assert.equal(publicReply.status, 404);
