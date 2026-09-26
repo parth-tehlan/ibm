@@ -1,7 +1,6 @@
 /**
- * Real unit test for src/auth/key.ts (scaffold module — NOT a planted bug).
- * Bound via the same surgeon-side seam as the clause tests so it resolves
- * against the real module. These are honest, passing tests of real logic.
+ * Unit test for src/auth/key.ts. Resolves against the real module via the
+ * same binding seam as the clause tests.
  */
 import type { KeyLike } from "crypto";
 

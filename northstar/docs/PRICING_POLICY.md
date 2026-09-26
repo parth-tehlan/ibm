@@ -1,8 +1,7 @@
 # Northstar Pricing Policy
 
 Authoritative, normative discount and tax policy for the Northstar payments
-codebase. SPLITBRAIN witnesses author honest policy tests from THIS document
-only — never from `src/`.
+codebase. Policy tests are authored from THIS document only — never from `src/`.
 
 Keywords: MUST, MUST NOT, SHALL, SHALL NOT (RFC 2119). Any sentence using these
 keywords states a policy requirement; violations are defects.
@@ -34,6 +33,6 @@ would produce a higher figure.
 
 ## #tautology — policy self-consistency (process note)
 
-(Anchor for the SPLITBRAIN honesty audit. Any test that asserts only that a
-function returns something equal to its own output — and that could never fail
-regardless of implementation — is a tautology and is NOT an honest policy test.)
+(A policy test that asserts only that a function returns something equal to its
+own output — and that could never fail regardless of implementation — is a
+tautology and is NOT an honest policy test.)

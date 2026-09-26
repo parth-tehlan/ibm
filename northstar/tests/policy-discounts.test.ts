@@ -1,28 +1,25 @@
 /**
- * SPLITBRAIN honest policy test — discounts never stack; single best applies.
+ * Pricing-policy test — discounts never stack; single best applies.
  *
- * Author: the Witness (splitbrain-witness skill).
  * Source of truth: @/docs/PRICING_POLICY.md ONLY. This test asserts ONLY what
- * the policy document says. It MUST NOT read or import anything under src/.
- * The discount seam is declared as a contract and supplied by the harness in
- * rehearsal; the witness never opens the source directory.
+ * the policy document says. The discount seam is declared as a contract and
+ * supplied by the harness in rehearsal.
  *
- * Falsifiability: if the implementation stacks discounts (the planted bug), the
- * #single-best assertion fails; if it ignores the 500-cent minimum, the
- * #min-order assertion fails.
+ * Falsifiability: if the implementation stacks discounts, the #single-best
+ * assertion fails; if it ignores the 500-cent minimum, the #min-order
+ * assertion fails.
  */
 
 /**
- * The charge of the witness is to declare the CONTRACT, not to know the impl.
- * docs/PRICING_POLICY.md names the reduction surface as applying discount codes
- * to a pre-tax amount (cents).
+ * docs/PRICING_POLICY.md names the reduction surface as applying discount
+ * codes to a pre-tax amount (cents).
  */
 declare function applyDiscount(
   amountCents: number,
   discountCodes: string[],
 ): Promise<number>;
 
-describe('SPLITBRAIN — Pricing policy: single-best discount (never stacks)', () => {
+describe('Pricing policy: single-best discount (never stacks)', () => {
   it('applies the single best discount and does not stack SAVE10 + SAVE20',
     async () => {
       // docs/PRICING_POLICY.md#single-best: "Given an order with SAVE10 (10%
@@ -49,5 +46,28 @@ describe('SPLITBRAIN — Pricing policy: single-best discount (never stacks)', (
       const reduced = await applyDiscount(10000, ['SAVE20', 'FIVE']);
       // Single best = SAVE20 -> $80.00. Stacking adds $5 flat on top -> $75.00.
       expect(reduced).toBe(8000);
+    });
+
+  it('applies the flat $5 at the exact 500-cent min-order boundary',
+    async () => {
+      // docs/PRICING_POLICY.md#min-order: a 500-cent pre-tax amount SHALL qualify
+      // ("at least 500 cents") — this pins the operator so a `<= 500` mutant on
+      // the boundary branch is caught (the mutation run let `< 500` flip to
+      // `<= 500` survive because no test fed exactly 500 cents).
+      const reduced = await applyDiscount(500, ['FIVE']);
+      // $5.00 - flat $5 = $0.00. If the guard wrongly excludes 500 (i.e. returns
+      // 500 unchanged), this assertion catches that regression.
+      expect(reduced).toBe(0);
+    });
+
+  it('applies the flat $5 alone when it is the single best',
+    async () => {
+      // docs/PRICING_POLICY.md#single-best + FIVE definition: the flat $5 code
+      // must reduce the amount by exactly $5 when it is the only / best code.
+      // This isolates the FIVE branch so the flat-dollar reduction is asserted
+      // on its own rather than alongside a percentage code.
+      const reduced = await applyDiscount(10000, ['FIVE']);
+      // $100.00 - flat $5 = $95.00. A deleted FIVE branch would return 10000.
+      expect(reduced).toBe(9500);
     });
 });

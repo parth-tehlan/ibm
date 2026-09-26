@@ -1,15 +1,13 @@
 /**
  * REDLINE spec-legal test — W5 Token type interchange.
  *
- * Author: the Witness (redline-test skill).
  * Source of truth: docs/api-spec.md#W5 (RFC 2119 REQUIRED). This test asserts
- * ONLY what that clause text says. It MUST NOT read or import anything under
- * src/. The public seam is the token validation surface the spec names; the
- * validator is injected as a dependency so the witness never touches source.
+ * ONLY what that clause text says. The public seam is the token validation
+ * surface the spec names; the validator is declared as a contract and supplied
+ * by the harness.
  *
  * Falsifiability: if the implementation accepts a JWT at an API-key endpoint
- * or an API key at a JWT-protected endpoint (the planted W5 violation), these
- * assertions fail.
+ * or an API key at a JWT-protected endpoint, these assertions fail.
  */
 
 /** Public seam as defined by docs/api-spec.md#W5. */
@@ -25,9 +23,8 @@ export interface TokenValidationContext {
 export type ValidationVerdict = 'ok' | 'reject';
 
 /**
- * The charge of the witness is to declare the CONTRACT, not to know the impl.
- * This type declares the seam the token validation must satisfy; a harness (in
- * rehearsal) supplies a real validator. The body below is pure spec assertion.
+ * The seam the token validation must satisfy; the harness supplies a real
+ * validator. The body below is pure spec assertion.
  */
 declare function validateToken(
   ctx: TokenValidationContext,

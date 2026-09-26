@@ -1,16 +1,13 @@
 /**
  * REDLINE spec-legal test — W8 Async worker resilience / no null-deref outage.
  *
- * Author: the Witness (redline-test skill).
  * Source of truth: docs/api-spec.md#W8 (RFC 2119 REQUIRED). This test asserts
- * ONLY what that clause text says. It MUST NOT read or import anything under
- * src/. The public seam is the async billing processor's per-item handling the
- * spec names; the processor is injected as a dependency so the witness never
- * touches the source directory.
+ * ONLY what that clause text says. The public seam is the async billing
+ * processor's per-item handling the spec names; the processor is declared as a
+ * contract and supplied by the harness.
  *
  * Falsifiability: if the implementation nil-derefs a missing Stripe customer
- * record and crashes/500s the whole batch (the planted W8 violation), these
- * assertions fail.
+ * record and crashes/500s the whole batch, these assertions fail.
  */
 
 /** Public seam as defined by docs/api-spec.md#W8. */

@@ -1,15 +1,13 @@
 /**
  * REDLINE spec-legal test — W2 Webhook signature verification.
  *
- * Author: the Witness (redline-test skill).
  * Source of truth: docs/api-spec.md#W2 (RFC 2119 REQUIRED). This test asserts
- * ONLY what that clause text says. It MUST NOT read or import anything under
- * src/. The public seam is the inbound Stripe webhook HTTP surface that the
- * spec names; the verify function is injected as a dependency so the witness
- * never touches the source directory.
+ * ONLY what that clause text says. The public seam is the inbound Stripe
+ * webhook HTTP surface that the spec names; the verify function is declared
+ * as a contract and supplied by the harness.
  *
  * Falsifiability: if the implementation processes a payload with an
- * unchecked/bad signature (the planted W2 violation), these assertions fail.
+ * unchecked/bad signature, these assertions fail.
  */
 import type { Request, Response } from 'express';
 
@@ -26,10 +24,8 @@ export interface StripeWebhookPayload {
 export type WebhookVerdict = 'ok' | 'reject-400';
 
 /**
- * The charge of the witness is to declare the CONTRACT, not to know the impl.
- * This type declares the seam the spec requires the webhook endpoint to
- * satisfy; a harness (in rehearsal) supplies a real verifier. The body below
- * is pure spec assertion.
+ * The seam the spec requires the webhook endpoint to satisfy; the harness
+ * supplies a real verifier. The body below is pure spec assertion.
  */
 declare function verifyWebhookSignature(
   payload: StripeWebhookPayload,

@@ -1,15 +1,11 @@
 /**
- * SPLITBRAIN "coverage-shaped" dishonest test — the tautology.
+ * Coverage-shaped test.
  *
- * Author: the Mutineer-labelled "tester" (a dishonest twin the SPLITBRAIN
- * court is meant to expose). This test does NOT assert any policy rule. It
- * asserts only that a function returns something equal to its own output, so
- * it can NEVER fail regardless of how the implementation behaves. The isolate
- * mode grades it `honest:false` after Stryker survives every mutated line it
- * touches (docs/PRICING_POLICY.md#tautology).
+ * This test does NOT assert any policy rule. It asserts only that a function
+ * returns something equal to its own output, so it can never fail regardless
+ * of how the implementation behaves.
  *
- * This is the exact failure mode the Court demonstrates: passing green-vs-bug
- * is NOT evidence that the discount engine is correct.
+ * Passing green-vs-bug is NOT evidence that the discount engine is correct.
  */
 
 declare function applyDiscount(

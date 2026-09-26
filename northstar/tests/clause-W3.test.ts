@@ -1,14 +1,13 @@
 /**
  * REDLINE spec-legal test — W3 Refund cap.
  *
- * Author: the Witness (redline-test skill).
  * Source of truth: docs/api-spec.md#W3 (RFC 2119 REQUIRED). This test asserts
- * ONLY what that clause text says. It MUST NOT read or import anything under
- * src/. The public seam is the refund HTTP surface the spec names; the refund
- * function is injected as a dependency so the witness never touches source.
+ * ONLY what that clause text says. The public seam is the refund HTTP surface
+ * the spec names; the refund function is declared as a contract and supplied
+ * by the harness.
  *
- * Falsifiability: if the implementation allows an over-refund (the planted W3
- * violation), these assertions fail.
+ * Falsifiability: if the implementation allows an over-refund, these
+ * assertions fail.
  */
 import type { Request, Response } from 'express';
 
@@ -27,10 +26,8 @@ export interface RefundOutcome {
 }
 
 /**
- * The charge of the witness is to declare the CONTRACT, not to know the impl.
- * This type declares the seam the refund endpoint must satisfy; a harness (in
- * rehearsal) supplies a real refund client. The body below is pure spec
- * assertion.
+ * The seam the refund endpoint must satisfy; the harness supplies a real
+ * refund client. The body below is pure spec assertion.
  */
 declare function refund(
   req: RefundRequest,

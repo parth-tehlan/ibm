@@ -2,8 +2,7 @@
  * API key utilities — Northstar.
  *
  * Provides a key-generation helper and an idempotency-safe key registry used by
- * the payments domain. This module is part of the build scaffold; it is NOT a
- * planted-bug subject. It exposes real logic only.
+ * the payments domain. It exposes real logic only.
  */
 
 /** A newly generated API key. The prefix survives logging; the secret does not. */

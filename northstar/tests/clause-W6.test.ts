@@ -1,16 +1,15 @@
 /**
  * REDLINE spec-legal test — W6 Retry & circuit-breaker discipline.
  *
- * Author: the Witness (redline-test skill).
  * Source of truth: docs/api-spec.md#W6 (RFC 2119 SHALL). This test asserts
- * ONLY what that clause text says. It MUST NOT read or import anything under
- * src/. The public seams are the outbound retry/backoff policy and the shared
- * circuit breaker the spec + runbook name; the policy and breaker are injected
- * as dependencies so the witness never touches the source directory.
+ * ONLY what that clause text says. The public seams are the outbound
+ * retry/backoff policy and the shared circuit breaker the spec + runbook name;
+ * the policy and breaker are declared as contracts and supplied by the
+ * harness.
  *
  * Falsifiability: if the implementation retries without exponential backoff +
- * jitter, or trips the breaker on the first transient error (the planted W6
- * violations), these assertions fail.
+ * jitter, or trips the breaker on the first transient error, these assertions
+ * fail.
  */
 
 /** Public seam as defined by docs/api-spec.md#W6. */
@@ -35,10 +34,8 @@ export interface BreakerTransition {
 }
 
 /**
- * The charge of the witness is to declare the CONTRACT, not to know the impl.
- * These types declare the seams the retry policy and breaker must satisfy; a
- * harness (in rehearsal) supplies real policy/breaker objects. The bodies
- * below are pure spec assertion.
+ * The seams the retry policy and breaker must satisfy; the harness supplies
+ * real policy/breaker objects. The bodies below are pure spec assertion.
  */
 declare function nextRetryDelay(p: RetryPolicy): number;
 declare function breakerState(t: BreakerTransition): BreakerState;
@@ -81,8 +78,8 @@ describe('W6 — Retry & circuit-breaker discipline (SHALL)', () => {
       const open = breakerState({ consecutiveFailures: 6, openThreshold: 5 });
       expect(open === 'open' || open === 'half-open').toBe(true);
       // Half-open is only reached after the settle window (represented by a
-      // fresh inspection); the witness asserts no early half-open by requiring
-      // the open state to persist while failures are still accumulating.
+      // fresh inspection); the open state must persist while failures are
+      // still accumulating.
       expect(breakerState({ consecutiveFailures: 6, openThreshold: 5 })).toBe('open');
     });
 });

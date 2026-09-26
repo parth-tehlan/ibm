@@ -28,8 +28,6 @@ used across the clause wall, REDLINE test suite, and trust-gap evidence.
 4. Idempotency lookup **MUST** be atomic under concurrent duplicate requests, so
    that two racing requests with the same key still yield one intent.
 
-> Bug site: `src/pay/create-intent.ts`(intended violation: duplicate intent on retry).
-
 ## W2 — Webhook signature verification (REQUIRED)
 
 1. Every inbound Stripe webhook **MUST** be verified against the
@@ -40,8 +38,6 @@ used across the clause wall, REDLINE test suite, and trust-gap evidence.
 3. Missing or malformed signature headers **MUST** be treated as verification
    failure, not silently ignored.
 
-> Bug site: `src/webhooks/stripe.ts`(intended violation: payload processed with bad/unchecked signature).
-
 ## W3 — Refund cap (REQUIRED)
 
 1. A refund **MUST NOT** exceed the total captured amount of the original
@@ -50,8 +46,6 @@ used across the clause wall, REDLINE test suite, and trust-gap evidence.
    amount; each refund **MUST** be checked against the running refunded total.
 3. A refund attempt that would exceed the cap **MUST** be rejected and
    **MUST NOT** create a negative or over-refunded balance.
-
-> Bug site: `src/refunds/cancel.ts`(intended violation: over-refund allowed).
 
 ## W4 — Ledger available-vs-pending (REQUIRED)
 
@@ -62,8 +56,6 @@ used across the clause wall, REDLINE test suite, and trust-gap evidence.
 3. `available` **MUST** equal settled credits minus settled debits minus pending
    holds; funds under `pending` **MUST NOT** be spendable.
 
-> Bug site: `src/ledger/balance.ts`(intended violation: pending treated as available).
-
 ## W5 — Token type interchange (REQUIRED)
 
 1. The implementation **MUST** distinguish JSON Web Token (JWT) access tokens
@@ -71,8 +63,6 @@ used across the clause wall, REDLINE test suite, and trust-gap evidence.
 2. A JWT presented to an API-key endpoint, and an API key presented to a
    JWT-protected endpoint, **MUST** both be rejected.
 3. Validation **MUST NOT** fall back to treating either token kind as the other.
-
-> Bug site: `src/auth/token.ts`(intended violation: JWT/API-key interchange accepted).
 
 ## W6 — Retry & circuit-breaker discipline (SHALL)
 
@@ -84,8 +74,6 @@ used across the clause wall, REDLINE test suite, and trust-gap evidence.
 3. Once open, the breaker **SHALL** serve the runbook fail-fast behavior and
    **SHALL NOT** be half-open earlier than the runbook's settle window.
 
-> Bug site: `src/retry.ts` + `src/circuit.ts`(intended violation: no backoff, panic retry storm, breaker trips wrongly).
-
 ## W7 — Monetary precision in integer cents (REQUIRED)
 
 1. All currency arithmetic **MUST** be performed in **integer cents**; floats
@@ -95,8 +83,6 @@ used across the clause wall, REDLINE test suite, and trust-gap evidence.
 3. Decimal-string inputs (e.g. `"12.34"`) **MUST** be parsed to integer cents
    exactly (round-half-even) and stored as integers.
 
-> Bug site: `src/money.ts`(intended violation: float coercion of currency).
-
 ## W8 — Async worker resilience / no null-deref outage (REQUIRED)
 
 1. The async billing processor **MUST** nil-guard the Stripe customer record
@@ -105,8 +91,6 @@ used across the clause wall, REDLINE test suite, and trust-gap evidence.
    **MUST NOT** crash or 500 the whole worker / webhook batch.
 3. A per-item failure **MUST** be recorded and the remaining items in the batch
    **MUST** still process.
-
-> Bug site: `src/billing/async.ts` + `src/webhooks/stripe.ts`(intended violation: NPE aborts batch).
 
 ---
 

@@ -2,7 +2,7 @@
  * Payment confirmation — Northstar.
  *
  * Drives the create->confirm lifecycle for a payment intent. This module is
- * part of the build scaffold; it is NOT a planted-bug subject. It exposes real
+ * part of the build scaffold;. It exposes real
  * logic only.
  */
 

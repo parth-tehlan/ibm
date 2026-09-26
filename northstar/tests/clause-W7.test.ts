@@ -1,16 +1,13 @@
 /**
  * REDLINE spec-legal test — W7 Monetary precision in integer cents.
  *
- * Author: the Witness (redline-test skill).
  * Source of truth: docs/api-spec.md#W7 (RFC 2119 REQUIRED). This test asserts
- * ONLY what that clause text says. It MUST NOT read or import anything under
- * src/. The public seam is the money parse/arith surface the spec names; the
- * convert function is injected as a dependency so the witness never touches
- * the source directory.
+ * ONLY what that clause text says. The public seam is the money parse/arith
+ * surface the spec names; the convert function is declared as a contract and
+ * supplied by the harness.
  *
- * Falsifiability: if the implementation coerces currency to float (the planted
- * W7 violation), or fails to parse decimal strings to exact integer cents,
- * these assertions fail.
+ * Falsifiability: if the implementation coerces currency to float, or fails to
+ * parse decimal strings to exact integer cents, these assertions fail.
  */
 
 /** Public seam as defined by docs/api-spec.md#W7. */
@@ -24,9 +21,8 @@ export interface MoneySurface {
 }
 
 /**
- * The charge of the witness is to declare the CONTRACT, not to know the impl.
- * This type declares the seam the money module must satisfy; a harness (in
- * rehearsal) supplies a real converter. The body below is pure spec assertion.
+ * The seam the money module must satisfy; the harness supplies a real
+ * converter. The body below is pure spec assertion.
  */
 declare function parseMoneyToCents(
   decimal: string,

@@ -1,9 +1,8 @@
 /**
  * Ledger journal entry — Northstar.
  *
- * A minimal journal entry type and a debits-equal-credits guard. This module is
- * part of the build scaffold; it is NOT the planted-bug subject (see
- * src/ledger/balance.ts for the planted W4 bug). It exposes real logic only.
+ * A minimal journal entry type and a debits-equal-credits guard. It exposes
+ * real logic only.
  */
 
 export interface JournalLine {

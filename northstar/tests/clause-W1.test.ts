@@ -1,15 +1,13 @@
 /**
  * REDLINE exemplar test — W1 Payment intent idempotency.
  *
- * Author: the Witness (redline-test skill).
  * Source of truth: docs/api-spec.md#W1 (RFC 2119 REQUIRED). This test asserts
- * ONLY what that clause text says. It MUST NOT read or import anything under
- * src/. The implementation seam is a public HTTP surface, `POST
- * /v1/payment_intents`, which the spec itself names; the function under test is
- * injected as a dependency so the witness never touches the source directory.
+ * ONLY what that clause text says. The implementation seam is the public HTTP
+ * surface `POST /v1/payment_intents`, which the spec itself names; the function
+ * under test is declared as a contract and supplied by the harness.
  *
  * Falsifiability: if the implementation creates a SECOND intent on a repeated
- * idempotency key (the planted W1 violation), these assertions fail.
+ * idempotency key, these assertions fail.
  */
 import type { Request } from 'express';
 
@@ -32,9 +30,8 @@ export interface PaymentIntentResource {
 }
 
 /**
- * The charge of the witness is to declare the CONTRACT, not to know the impl.
- * This type declares the seam the spec requires the API to satisfy; a harness
- * (in rehearsal) supplies a real client. The body below is pure spec assertion.
+ * The seam the spec requires the API to satisfy; the harness supplies a real
+ * client. The body below is pure spec assertion.
  */
 type CreateIntent = (
   req: CreateIntentRequest,
