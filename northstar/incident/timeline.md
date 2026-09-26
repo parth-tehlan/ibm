@@ -1,9 +1,9 @@
 # Incident Timeline — SEV1 (WARPATH war-room scaffold)
 
 > **Scaffold.** This is the seeded template `warpath-intake` fills during a gold
-> session. Every entry is `timestamp | actor | action`. For the demo the planted
-> incident is the shared circuit breaker tripping too early while a flaky upstream
-> dependency causes consecutive failures → briefly taking the payments path down.
+> session. Every entry is `timestamp | actor | action`. The incident is the shared
+> circuit breaker tripping too early while a flaky upstream dependency causes
+> consecutive failures → briefly taking the payments path down.
 
 | t | actor | action |
 |---|-------|--------|

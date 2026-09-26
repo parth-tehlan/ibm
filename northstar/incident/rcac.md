@@ -11,7 +11,7 @@ error-rate spike + the shared circuit breaker reported OPEN.
 An upstream dependency intermittently fails, producing a short burst of
 consecutive failures.
 
-## Root Cause (the planted defect)
+## Root Cause
 The shared circuit breaker (`src/circuit.ts`, `breakerState`) trips OPEN on the
 **first** consecutive failure rather than honoring the configured
 `openThreshold`. Per `docs/api-spec.md#W6` / `docs/runbook-payments.md`, the
@@ -20,7 +20,7 @@ takes the whole payments path down. Root cause ≠ trigger.
 
 ## Evidence
 - `docs/api-spec.md#W6` — do-not-trip-below-threshold rule.
-- `tests/clause-W6.test.ts` — the honest test is RED against the planted impl
+- `tests/clause-W6.test.ts` — the honest test is red
   (`breakerState` returns `open` below threshold).
 - `fixtures/metrics.json` / `fixtures/logs.json` — the flaky-window correlation
   (synthetic signal feeds).
