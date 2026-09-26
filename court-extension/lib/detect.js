@@ -66,13 +66,12 @@ function detectClausePattern(specAbs) {
 
 function detectTestFramework(root, pkg) {
   const dev = { ...(pkg && pkg.devDependencies), ...(pkg && pkg.dependencies) };
-  if (dev) {
-    if (dev.jest || (pkg.scripts && JSON.stringify(pkg.scripts).includes('jest'))) {
-      return { framework: 'jest', confidence: 'high' };
-    }
-    if (dev.vitest) return { framework: 'vitest', confidence: 'high' };
-    if (dev.mocha) return { framework: 'mocha', confidence: 'medium' };
+  const scripts = pkg && pkg.scripts ? JSON.stringify(pkg.scripts) : '';
+  if (dev.jest || scripts.includes('jest')) {
+    return { framework: 'jest', confidence: 'high' };
   }
+  if (dev.vitest) return { framework: 'vitest', confidence: 'high' };
+  if (dev.mocha) return { framework: 'mocha', confidence: 'medium' };
   if (exists(root, 'pytest.ini') || exists(root, 'pyproject.toml') || exists(root, 'setup.cfg')) {
     return { framework: 'pytest', confidence: 'medium' };
   }

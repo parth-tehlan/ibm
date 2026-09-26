@@ -93,7 +93,8 @@ function renderMarkdown(input) {
     } else {
       L.push(`- **Incident window:** ${warpath.incidentWindow || '(none)'}`);
       if (warpath.suspect) {
-        L.push(`- **Suspect deploy:** \`${warpath.suspect.id}\` (${warpath.suspect.commit}) at ${warpath.suspect.deployedAt} — ${warpath.suspect.reason}`);
+        const commit = warpath.suspect.commit ? ` (${warpath.suspect.commit})` : '';
+        L.push(`- **Suspect deploy:** \`${warpath.suspect.id}\`${commit} at ${warpath.suspect.deployedAt} — ${warpath.suspect.reason}`);
       }
       const b = warpath.breakerSnapshot || {};
       if (b.state) L.push(`- **Breaker:** ${b.state} at consecutiveFailures=${b.consecutiveFailures} (openThreshold=${b.openThreshold})`);
@@ -230,7 +231,7 @@ function renderHtml(input) {
   <h2>WARPATH — incident forensics</h2>
   ${warpath && warpath.suspect ? `
     <div class="gauges">
-      <div class="gauge"><div class="num mono" style="font-size:18px">${esc(warpath.suspect.id)}</div><div class="lbl">suspect deploy (${esc(warpath.suspect.commit)})</div></div>
+      <div class="gauge"><div class="num mono" style="font-size:18px">${esc(warpath.suspect.id)}</div><div class="lbl">suspect deploy${warpath.suspect.commit ? ' (' + esc(warpath.suspect.commit) + ')' : ''}</div></div>
       <div class="gauge"><div class="num mono" style="font-size:13px;padding-top:8px">${esc(warpath.incidentWindow)}</div><div class="lbl">incident window</div></div>
       <div class="gauge bad"><div class="num">${esc(warpath.breakerSnapshot && warpath.breakerSnapshot.state || '?')}</div><div class="lbl">breaker @ failures=${esc(warpath.breakerSnapshot && warpath.breakerSnapshot.consecutiveFailures)} / threshold=${esc(warpath.breakerSnapshot && warpath.breakerSnapshot.openThreshold)}</div></div>
     </div>

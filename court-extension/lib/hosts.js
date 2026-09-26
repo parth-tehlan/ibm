@@ -67,6 +67,24 @@ function copyAgents(destDir, transform) {
   return written;
 }
 
+/** Recursively copy a directory tree, returning every written file. */
+function copyTree(srcDir, destDir) {
+  const written = [];
+  if (!fs.existsSync(srcDir)) return written;
+  for (const entry of fs.readdirSync(srcDir, { withFileTypes: true })) {
+    const s = path.join(srcDir, entry.name);
+    const d = path.join(destDir, entry.name);
+    if (entry.isDirectory()) {
+      written.push(...copyTree(s, d));
+    } else {
+      fs.mkdirSync(path.dirname(d), { recursive: true });
+      fs.copyFileSync(s, d);
+      written.push(d);
+    }
+  }
+  return written;
+}
+
 const HOSTS = {
   claude: {
     name: 'Claude Code',
@@ -84,13 +102,20 @@ const HOSTS = {
   bob: {
     name: 'IBM Bob',
     install(repoRoot) {
-      const agents = copyAgents(path.join(repoRoot, '.bob', 'agents'));
-      writeJsonMerged(path.join(repoRoot, '.bob', 'mcp.json'), (j) => {
+      const bobDir = path.join(repoRoot, '.bob');
+      // Subagent prompts (the four court personas).
+      const agents = copyAgents(path.join(bobDir, 'agents'));
+      // Skills, rule packs, and custom modes — the full Bob-native structure.
+      const skills = copyTree(path.join(EXT_DIR, 'agents', 'skills'), path.join(bobDir, 'skills'));
+      const rules = copyTree(path.join(EXT_DIR, 'agents', 'bob'), bobDir); // rules-*/ + custom_modes.yaml land at .bob/
+      const files = [...agents, ...skills, ...rules];
+      writeJsonMerged(path.join(bobDir, 'mcp.json'), (j) => {
         j.mcpServers = j.mcpServers || {};
         j.mcpServers['triumph-courts'] = engineMcpEntry(repoRoot);
         return j;
       });
-      return { files: [...agents, path.join(repoRoot, '.bob', 'mcp.json')] };
+      files.push(path.join(bobDir, 'mcp.json'));
+      return { files };
     },
   },
 

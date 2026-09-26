@@ -1,0 +1,69 @@
+# TRIUMPH — Custom Modes (org chart / personas)
+# Three courts (REDLINE / SPLITBRAIN / WARPATH). Each mode's tool groups and
+# edit fence enforce the wall declaratively — no scripts.
+#
+# HOW THE WALL IS ENFORCED (declarative Bob configuration):
+#   1. Tool groups. A mode can only use the tool groups listed for it. Witness
+#      and isolate get NO `execute` group (no shell to route around the wall).
+#   2. `fileRegex` on the `edit` group. Witness and isolate writes are fenced to
+#      tests/clause-* + evidence/ and trustgap/ respectively. Only the surgeon
+#      can write src/. Every fence starts with (?!.*\.\.) so a tests/../src/x.ts
+#      path cannot slip through.
+#   3. Mode-scoped rules in .bob/rules-<slug>/ restate each mode's boundaries.
+#
+# HONEST LIMITS: `read` is a flat group and is not path-scoped in Bob's
+# documented schema; the witness claim is "structurally unable to EDIT src/,
+# and instructed never to open it." The engine enforces the read wall for
+# REDLINE tooling.
+
+- slug: witness
+  name: REDLINE Witness
+  roleDefinition: Spec-witness. Authors tests from the spec contract alone; never reads the implementation.
+  groups:
+    - read
+    - - edit
+      - fileRegex: "^(?!.*\\.\\.)tests/(clause-|policy-|redline-)|^evidence/"
+    - mcp
+  customInstructions: .bob/rules-witness/00-never-src.md
+
+- slug: isolate
+  name: SPLITBRAIN Isolate
+  roleDefinition: Honesty auditor. Scores the test suite via mutation kill-rate; never reads the implementation.
+  groups:
+    - read
+    - - edit
+      - fileRegex: "^(?!.*\\.\\.)trustgap/"
+    - mcp
+  customInstructions: .bob/rules-isolate/00-never-src.md
+
+- slug: surgeon
+  name: WARPATH Surgeon
+  roleDefinition: Applies the minimal fix to the root-cause seam, guarded by rollback.
+  groups:
+    - read
+    - - edit
+      - fileRegex: "^(?!.*\\.\\.)(src/|tests/)"
+    - execute
+    - mcp
+  customInstructions: .bob/rules-surgeon/00-minimal-fixes.md
+
+- slug: incident-commander
+  name: WARPATH Incident Commander
+  roleDefinition: Opens/closes the war room; writes the postmortem from triage + forensics evidence.
+  groups:
+    - read
+    - - edit
+      - fileRegex: "^(?!.*\\.\\.)incident/"
+    - mcp
+  customInstructions: .bob/rules-control-agent/00-no-wall.md
+
+- slug: control-agent
+  name: Control Agent (no wall)
+  roleDefinition: Control group with full read access, to demonstrate that code access blesses planted bugs.
+  groups:
+    - read
+    - - edit
+      - fileRegex: "^(?!.*\\.\\.)tests/control-"
+    - execute
+    - mcp
+  customInstructions: .bob/rules-control-agent/00-no-wall.md
