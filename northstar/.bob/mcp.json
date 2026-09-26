@@ -1,5 +1,22 @@
 {
   "mcpServers": {
+    "triumph-acp": {
+      "command": "node",
+      "args": ["../acp-server/court.js"],
+      "cwd": ".",
+      "env": {},
+      "alwaysAllow": [
+        "redline_verdict_all",
+        "redline_clause",
+        "splitbrain_trustgap",
+        "splitbrain_mutants",
+        "warpath_context",
+        "warpath_triage",
+        "warpath_postmortem",
+        "courts_about"
+      ],
+      "disabled": false
+    },
     "gauntlet-signals": {
       "command": "node",
       "args": [".bob/mcp/gauntlet.js"],
@@ -9,13 +26,11 @@
         "list_clauses",
         "get_test_status",
         "submit_waiver",
-        "run_stryker",
-        "run_suite",
         "get_trust_gap",
-        "get_stack_trace",
         "get_logs",
         "get_metrics",
-        "get_recent_deploys"
+        "get_recent_deploys",
+        "get_mutants"
       ],
       "disabled": false
     }
