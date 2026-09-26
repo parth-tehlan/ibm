@@ -1,0 +1,5 @@
+{
+  "mttrSeconds": "PLACEHOLDER",
+  "measuredAt": "PLACEHOLDER",
+  "note": "Computed by the Stop hook (stop-write-metrics.sh) from incident/.start_epoch on a real gold-session run. Until then MTTR stays PLACEHOLDER."
+}

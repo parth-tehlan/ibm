@@ -1,0 +1,65 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://triumph.local/trustgap/TrustGap.schema.json",
+  "title": "Splitbrain TrustGap",
+  "description": "Honest-vs-claimed coverage trust gap. schemaVersion 1.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "generated",
+    "itLedger",
+    "dishonestTests",
+    "honestMutationScore",
+    "claimedCoverage",
+    "trustGap",
+    "summary"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "schemaVersion": { "const": 1, "type": "integer" },
+    "generated": { "type": "string", "format": "date-time" },
+    "itLedger": {
+      "type": "array",
+      "description": "Per spec-assertion `it` block: mutation outcome counts from Stryker.",
+      "items": {
+        "type": "object",
+        "required": ["itId", "specRef", "file", "killed", "survived", "timeout", "noCoverage", "honest"],
+        "properties": {
+          "itId": { "type": "string", "description": "Stable id of the it-block (e.g. discount-single-best-nonstack)." },
+          "specRef": { "type": "string", "description": "Anchored policy sentence, e.g. PRICING_POLICY.md#3-single-best." },
+          "file": { "type": "string", "description": "Test file the block lives in." },
+          "killed": { "type": "integer", "minimum": 0 },
+          "survived": { "type": "integer", "minimum": 0 },
+          "timeout": { "type": "integer", "minimum": 0 },
+          "noCoverage": { "type": "integer", "minimum": 0 },
+          "honest": { "type": "boolean", "description": "false if this is a flagged tautology / bless-the-bug dishonest test." }
+        },
+        "additionalProperties": true
+      }
+    },
+    "dishonestTests": {
+      "type": "array",
+      "description": "Ids of it-blocks flagged as dishonest (zero-kill shapes).",
+      "items": { "type": "string" }
+    },
+    "honestMutationScore": {
+      "type": "number",
+      "description": "Sigma killed / Sigma (killed + survived). In [0,1].",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "claimedCoverage": {
+      "type": ["number", "null", "string"],
+      "description": "Suite's self-reported coverage %. PLACEHOLDER until Stryker measures it.",
+      "default": "PLACEHOLDER"
+    },
+    "trustGap": {
+      "oneOf": [
+        { "type": "number" },
+        { "type": "string", "enum": ["PLACEHOLDER"] }
+      ],
+      "description": "claimedCoverage - honestMutationScore (as fraction or %. PLACEHOLDER until measured)."
+    },
+    "summary": { "type": "string", "description": "One-line human verdict." }
+  }
+}

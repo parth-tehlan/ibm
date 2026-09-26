@@ -1,0 +1,36 @@
+{
+  "permissions": {
+    "deny": [
+      "Write(.bob/**)",
+      "Edit(.bob/**)",
+      "Write(clause-wall/**)",
+      "Edit(clause-wall/**)",
+      "Write(fixtures/**)",
+      "Edit(fixtures/**)",
+      "Write(docs/**)",
+      "Edit(docs/**)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [{ "type": "command", "command": "sh .bob/hooks/inject-evidence.sh", "timeout": 5 }]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "^(read_file|list_files|write_file|apply_diff|insert_content|search_and_replace|execute_command)$",
+        "hooks": [{ "type": "command", "command": "sh .bob/hooks/block-witness-src.sh", "timeout": 5 }]
+      },
+      {
+        "matcher": "^(write_file|apply_diff|insert_content|search_and_replace)$",
+        "hooks": [{ "type": "command", "command": "sh .bob/hooks/block-out-of-scope-writes.sh", "timeout": 5 }]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [{ "type": "command", "command": "sh .bob/hooks/stop-write-metrics.sh", "timeout": 5 }]
+      }
+    ]
+  }
+}

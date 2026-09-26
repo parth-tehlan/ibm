@@ -1,0 +1,32 @@
+# .bobignore — DEFENSE-IN-DEPTH only. NOT the isolation wall.
+# It is workspace-global (not per-mode), @-mentions bypass it, and
+# insert_content/search_and_replace can bypass it on save.
+# The real wall = custom-mode fileRegex + the PreToolUse hook (exit-2).
+#
+# Here we still hide src/ from the read tool + listings as a first layer for the
+# roles that must never see code (witness, isolate, compliance-officer, incident-commander).
+
+# Build artifacts / deps
+node_modules/
+dist/
+build/
+
+# Sensitive config
+.env
+.env.*
+
+# Secrets / local state fixtures we don't want read broadly
+fixtures/secrets/
+*.key
+*.pem
+
+# Scratch suggests it is not project source
+.bob/scratch/*
+
+# Large / temp
+*.tmp
+*.log
+.cache/
+
+# NOTE: we deliberately do NOT ignore src/ globally, because surgeon and
+# control-agent MUST read it. Per-role hiding is the hook's job, not .bobignore's.

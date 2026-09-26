@@ -1,0 +1,23 @@
+{
+  "mcpServers": {
+    "gauntlet-signals": {
+      "command": "node",
+      "args": [".bob/mcp/gauntlet.js"],
+      "cwd": ".",
+      "env": {},
+      "alwaysAllow": [
+        "list_clauses",
+        "get_test_status",
+        "submit_waiver",
+        "run_stryker",
+        "run_suite",
+        "get_trust_gap",
+        "get_stack_trace",
+        "get_logs",
+        "get_metrics",
+        "get_recent_deploys"
+      ],
+      "disabled": false
+    }
+  }
+}

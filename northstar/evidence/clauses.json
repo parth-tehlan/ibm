@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "source": "docs/api-spec.md",
+  "extractedBy": "redline-extract",
+  "clauses": [
+    {
+      "id": "W1",
+      "level": "REQUIRED",
+      "title": "Payment intent idempotency",
+      "sourceDoc": "docs/api-spec.md#W1",
+      "summary": "POST /v1/payment_intents MUST accept an Idempotency-Key header; duplicate keys MUST NOT create a second intent and MUST return the original intent resource."
+    },
+    {
+      "id": "W2",
+      "level": "REQUIRED",
+      "title": "Webhook signature verification",
+      "sourceDoc": "docs/api-spec.md#W2",
+      "summary": "Every inbound Stripe webhook MUST be verified against the Stripe-Signature header (HMAC-SHA256, timestamp tolerance) before any business logic; failed/missing signatures MUST be rejected with HTTP 400 and MUST NOT trigger payment side effects."
+    },
+    {
+      "id": "W3",
+      "level": "REQUIRED",
+      "title": "Refund cap",
+      "sourceDoc": "docs/api-spec.md#W3",
+      "summary": "A refund MUST NOT exceed the total captured amount; cumulative refunds against one payment MUST NOT exceed captured; over-cap attempts MUST be rejected and MUST NOT create a negative or over-refunded balance."
+    },
+    {
+      "id": "W4",
+      "level": "REQUIRED",
+      "title": "Ledger available-vs-pending",
+      "sourceDoc": "docs/api-spec.md#W4",
+      "summary": "GET /v1/ledger/balances MUST report distinct 'available' and 'pending' figures; held funds MUST be reported under pending and MUST NOT be included in available or be spendable."
+    },
+    {
+      "id": "W5",
+      "level": "REQUIRED",
+      "title": "Token type interchange",
+      "sourceDoc": "docs/api-spec.md#W5",
+      "summary": "The implementation MUST distinguish JWT access tokens from raw API keys at validation time; a JWT to an API-key endpoint and an API key to a JWT endpoint MUST both be rejected, with no fallback treating either as the other."
+    },
+    {
+      "id": "W6",
+      "level": "SHALL",
+      "title": "Retry & circuit-breaker discipline",
+      "sourceDoc": "docs/api-spec.md#W6",
+      "summary": "Outbound calls receiving 429 or 5xx SHALL retry with exponential backoff plus jitter; the circuit breaker SHALL NOT trip on the first transient error, SHALL require the consecutive-failure threshold, and SHALL NOT open half-open earlier than the runbook settle window."
+    },
+    {
+      "id": "W7",
+      "level": "REQUIRED",
+      "title": "Monetary precision in integer cents",
+      "sourceDoc": "docs/api-spec.md#W7",
+      "summary": "All currency arithmetic MUST be performed in integer cents; floats MUST NOT be used for money; decimal-string inputs MUST be parsed to exact integer cents (round-half-even) and stored as integers."
+    },
+    {
+      "id": "W8",
+      "level": "REQUIRED",
+      "title": "Async worker resilience / no null-deref outage",
+      "sourceDoc": "docs/api-spec.md#W8",
+      "summary": "The async billing processor MUST nil-guard the Stripe customer record before dereference; a missing/unparseable record MUST be isolated to that item (not crash the whole batch); per-item failures MUST be recorded while remaining items still process."
+    }
+  ]
+}

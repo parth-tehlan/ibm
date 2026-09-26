@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "generated": "2026-09-26T00:05:00Z",
+  "itLedger": [
+    {
+      "itId": "discount-single-best-nonstack",
+      "specRef": "PRICING_POLICY.md#single-best",
+      "file": "tests/policy-discounts.test.ts",
+      "killed": 18,
+      "survived": 9,
+      "timeout": 0,
+      "noCoverage": 0,
+      "honest": true
+    },
+    {
+      "itId": "discount-min-order",
+      "specRef": "PRICING_POLICY.md#min-order",
+      "file": "tests/policy-discounts.test.ts",
+      "killed": 2,
+      "survived": 1,
+      "timeout": 0,
+      "noCoverage": 0,
+      "honest": true
+    },
+    {
+      "itId": "discount-tautology",
+      "specRef": "PRICING_POLICY.md#tautology",
+      "file": "tests/discounts.test.ts",
+      "killed": 0,
+      "survived": 9,
+      "timeout": 0,
+      "noCoverage": 0,
+      "honest": false
+    }
+  ],
+  "dishonestTests": [
+    "discount-tautology"
+  ],
+  "honestMutationScore": 0.5128205128205128,
+  "claimedCoverage": "PLACEHOLDER",
+  "trustGap": "PLACEHOLDER",
+  "summary": "Stryker on .bob/scratch/src/discounts.ts (clean reference): 20 killed / 9 survived / 0 timeout / 0 no-coverage. Honest tests kill 20; dishonest tautology kills 0 (suite-wide score 0.513 incl. dishonest survivors) => trust gap PLACEHOLDER until line coverage measured."
+}

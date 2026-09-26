@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "generated": "2026-09-26",
+  "note": "Full REDLINE spectrum authored by redline-test: all 8 clauses W1-W8 now have a spec-legal test, each derived solely from docs/api-spec.md#W<n>. This drives redline-audit to report 8/8 covered (0 gaps).",
+  "coverage": [
+    { "clauseId": "W1", "testFiles": ["tests/clause-W1.test.ts"] },
+    { "clauseId": "W2", "testFiles": ["tests/clause-W2.test.ts"] },
+    { "clauseId": "W3", "testFiles": ["tests/clause-W3.test.ts"] },
+    { "clauseId": "W4", "testFiles": ["tests/clause-W4.test.ts"] },
+    { "clauseId": "W5", "testFiles": ["tests/clause-W5.test.ts"] },
+    { "clauseId": "W6", "testFiles": ["tests/clause-W6.test.ts"] },
+    { "clauseId": "W7", "testFiles": ["tests/clause-W7.test.ts"] },
+    { "clauseId": "W8", "testFiles": ["tests/clause-W8.test.ts"] }
+  ]
+}
