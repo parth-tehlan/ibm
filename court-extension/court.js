@@ -228,7 +228,7 @@ function sweepJobs() {
   }
 }
 
-async function runMutationJob(cfg, jobId) {
+async function runMutationJob(cfg, jobId, claimedOverride) {
   const job = JOBS.get(jobId);
   try {
     if (!cfg.mutation.command) throw new Error('mutation.command is not set in .triumph.yml');
@@ -244,7 +244,7 @@ async function runMutationJob(cfg, jobId) {
         (r.stderr ? '\nstderr tail: ' + r.stderr.split('\n').slice(-8).join('\n') : '')
       );
     }
-    job.result = await buildTrustGap(cfg, null);
+    job.result = await buildTrustGap(cfg, claimedOverride);
     job.status = 'done';
   } catch (e) {
     job.status = 'error';
@@ -444,15 +444,17 @@ async function courtSplitMutate(args) {
       note: 'mutation.command is not set in .triumph.yml — SPLITBRAIN cannot run the mutator. Set it, or precompute mutation.report and call splitbrain_trustgap.',
     };
   }
+  const claimed = args && typeof args.claimed_coverage === 'number' ? args.claimed_coverage : null;
   const jobId = 'mut-' + crypto.randomBytes(4).toString('hex');
-  JOBS.set(jobId, { status: 'running', startedAt: Date.now(), finishedAt: null, error: null, result: null, command: c.mutation.command });
+  JOBS.set(jobId, { status: 'running', startedAt: Date.now(), finishedAt: null, error: null, result: null, command: c.mutation.command, claimedCoverage: claimed });
   // Fire and forget; chat polls splitbrain_status.
-  runMutationJob(c, jobId);
+  runMutationJob(c, jobId, claimed);
   return {
     court: 'SPLITBRAIN',
     status: 'started',
     job_id: jobId,
     command: c.mutation.command,
+    claimed_coverage: claimed,
     poll: { tool: 'splitbrain_status', arguments: { job_id: jobId } },
   };
 }
@@ -653,7 +655,7 @@ const TOOLS = [
   // SPLITBRAIN
   { name: 'splitbrain_trustgap', description: 'SPLITBRAIN: claimed coverage vs honest mutation kill-rate, derived from the mutation report. Falsifiable — every tautology is named.', inputSchema: { type: 'object', properties: { claimed_coverage: { type: 'number', description: 'optional explicit claimed line-coverage % override' } } } },
   { name: 'splitbrain_mutants', description: 'SPLITBRAIN: list mutants from the latest report (optionally filtered by status, e.g. Survived).', inputSchema: { type: 'object', properties: { status: { type: 'string' } } } },
-  { name: 'splitbrain_mutate', description: 'SPLITBRAIN: start the mutation run in the background (async — returns a job_id immediately so chat never blocks). Poll with splitbrain_status.', inputSchema: { type: 'object', properties: {} } },
+  { name: 'splitbrain_mutate', description: 'SPLITBRAIN: start the mutation run in the background (async — returns a job_id immediately so chat never blocks). Poll with splitbrain_status. Pass claimed_coverage to have the completed job carry the trust gap.', inputSchema: { type: 'object', properties: { claimed_coverage: { type: 'number', description: 'optional explicit claimed line-coverage % override' } } } },
   { name: 'splitbrain_status', description: 'SPLITBRAIN: poll a mutation job (job_id) or list all jobs.', inputSchema: { type: 'object', properties: { job_id: { type: 'string' } } } },
   // WARPATH
   { name: 'warpath_context', description: 'WARPATH: pull the deploy/metrics/logs incident context.', inputSchema: { type: 'object', properties: {} } },

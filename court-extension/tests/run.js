@@ -140,6 +140,28 @@ t('hosts: every host id installs', () => {
   }
 });
 
+t('hosts: bob installs the full structure (agents + skills + rules + modes + mcp)', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'triumph-bobfull-'));
+  installHost('bob', dir);
+  const need = [
+    '.bob/agents/spec-witness.md', '.bob/agents/war-room.md',
+    '.bob/skills/redline-extract/SKILL.md', '.bob/skills/splitbrain-witness/SKILL.md',
+    '.bob/skills/warpath-postmortem/SKILL.md',
+    '.bob/rules-witness/00-never-src.md', '.bob/rules-surgeon/00-minimal-fixes.md',
+    '.bob/custom_modes.yaml', '.bob/mcp.json',
+  ];
+  for (const f of need) assert.ok(fs.existsSync(path.join(dir, f)), 'missing ' + f);
+  const modes = fs.readFileSync(path.join(dir, '.bob', 'custom_modes.yaml'), 'utf8');
+  assert.ok(modes.includes('slug: witness') && modes.includes('slug: surgeon'), 'custom_modes incomplete');
+});
+
+t('detect: empty repo (no package.json) does not crash', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'triumph-empty-'));
+  const { config, notes } = detect(dir);
+  assert.strictEqual(config.tests.framework, 'custom');
+  assert.ok(notes.some((n) => /spec: none found/.test(n)));
+});
+
 // --- wall -----------------------------------------------------------------
 t('engine: wall refuses src reads (unit-level glob check)', () => {
   const re = globToRegExp('src/**');

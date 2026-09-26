@@ -51,6 +51,27 @@ function withEngine(repo, calls) {
   });
 }
 
+/** Persistent engine session for multi-round interactions (async polling). */
+function engineSession(repo) {
+  const child = spawn('node', [ENGINE, '--repo', repo]);
+  const rl = readline.createInterface({ input: child.stdout });
+  const pending = new Map();
+  rl.on('line', (line) => {
+    let msg; try { msg = JSON.parse(line); } catch { return; }
+    if (pending.has(msg.id)) { pending.get(msg.id)(msg); pending.delete(msg.id); }
+  });
+  let id = 0;
+  const call = (name, args) => new Promise((resolve, reject) => {
+    const rid = ++id;
+    pending.set(rid, (msg) => {
+      if (msg.error) return reject(new Error(msg.error.message));
+      try { resolve(JSON.parse(msg.result.content[0].text)); } catch (e) { reject(e); }
+    });
+    child.stdin.write(JSON.stringify({ jsonrpc: '2.0', id: rid, method: 'tools/call', params: { name, arguments: args || {} } }) + '\n');
+  });
+  return { call, close: () => child.stdin.end(), kill: () => child.kill('SIGKILL') };
+}
+
 (async () => {
   console.log('TRIUMPH mandatory-property checks\n');
 
@@ -159,22 +180,30 @@ function withEngine(repo, calls) {
     assert.strictEqual(triage.suspect.id, 'd1');
   });
 
-  // 7. INCREMENTAL FOR CHAT — splitbrain_mutate returns immediately, status polls.
-  await t('Incremental: splitbrain_mutate is non-blocking; status polls', async () => {
-    const started = Date.now();
-    const { results } = await withEngine(NORTHSTAR, [
-      { name: 'splitbrain_mutate', arguments: {} },
-      { name: 'splitbrain_status', arguments: {} },
-    ]);
-    const elapsed = Date.now() - started;
-    const start = JSON.parse(results[0].result.content[0].text);
-    assert.ok(start.status === 'started' || start.status === 'unconfigured', 'unexpected ' + start.status);
-    if (start.status === 'started') {
+  // 7. INCREMENTAL FOR CHAT — splitbrain_mutate returns immediately, status
+  //    polls, and a completed job (with claimed_coverage) carries the gap.
+  await t('Incremental: splitbrain_mutate non-blocking; completed job carries trust gap', async () => {
+    const sess = engineSession(NORTHSTAR);
+    try {
+      const t0 = Date.now();
+      const start = await sess.call('splitbrain_mutate', { claimed_coverage: 91.66 });
+      const elapsed = Date.now() - t0;
+      assert.ok(start.status === 'started', 'expected started, got ' + start.status);
       assert.ok(start.job_id, 'no job_id');
       assert.ok(elapsed < 5000, 'mutate blocked for ' + elapsed + 'ms');
+      // Poll on the SAME session (jobs are in-memory per process).
+      let st, tries = 0;
+      do {
+        await new Promise((r) => setTimeout(r, 1500));
+        st = await sess.call('splitbrain_status', { job_id: start.job_id });
+        tries++;
+      } while (st.status === 'running' && tries < 90);
+      assert.strictEqual(st.status, 'done', 'job did not finish: ' + JSON.stringify(st).slice(0, 200));
+      assert.ok(st.result && typeof st.result.trustGap === 'number', 'completed job missing trustGap: ' + JSON.stringify(st.result).slice(0, 200));
+      assert.ok(st.result.trustGap > 0, 'expected a positive trust gap on northstar (planted tautology), got ' + st.result.trustGap);
+    } finally {
+      sess.kill();
     }
-    const status = JSON.parse(results[1].result.content[0].text);
-    assert.ok(Array.isArray(status.jobs) || status.status, 'status malformed');
   });
 
   // 7b. WARPATH on the canonical challenge schema (no metrics.window; uses
