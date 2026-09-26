@@ -53,20 +53,20 @@ function clauseFileRegex(cfg, clauseId) {
   const rel = path.relative(cfg.repoRoot, path.join(
     cfg.tests.absDir, cfg.tests.clauseTestPattern.replace('{{clause}}', clauseId)
   ));
-  return rel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return '^' + path.join(cfg.repoRoot, rel).split(path.sep).join('/').replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$';
 }
 
 /** Regex matching every clause test file. */
 function allClauseFilesRegex(cfg) {
-  const rel = path.relative(cfg.repoRoot, path.join(cfg.tests.absDir, cfg.tests.clauseTestPattern));
-  const escaped = rel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return escaped.replace('\\{\\{clause\\}\\}', `(${cfg.spec.clauseIdPattern.replace(/^\^|\$$/g, '')})`);
+  const absolute = path.join(cfg.tests.absDir, cfg.tests.clauseTestPattern).split(path.sep).join('/');
+  const escaped = absolute.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return '^' + escaped.replace('\\{\\{clause\\}\\}', `(${cfg.spec.clauseIdPattern.replace(/^\^|\$$/g, '')})`) + '$';
 }
 
 /** True when a test-file path is a clause witness file (vs a regular test). */
 function isClauseTestFile(cfg, relOrAbsPath) {
-  const r = path.isAbsolute(relOrAbsPath) ? path.relative(cfg.repoRoot, relOrAbsPath) : relOrAbsPath;
-  return new RegExp(allClauseFilesRegex(cfg)).test(r.split(path.sep).join('/'));
+  const absolute = path.resolve(cfg.repoRoot, relOrAbsPath).split(path.sep).join('/');
+  return new RegExp(allClauseFilesRegex(cfg)).test(absolute);
 }
 
 // ---------------------------------------------------------------------------
@@ -92,16 +92,53 @@ async function runJest(cfg, clauseId /* null = all clause suites */) {
   if (!parsed) {
     return { suites: null, raw: null, error: r.error || 'no-parse', stderr: (r.stderr || '').split('\n').slice(-10) };
   }
-  const suites = (parsed.testResults || []).map((tr) => ({
+  // A failed suite can still yield valid Jest JSON with zero assertions. Never
+  // turn a pre-assertion crash into a yellow (or green) court verdict.
+  const selected = (parsed.testResults || []).filter((tr) =>
+    typeof tr.name === 'string' && new RegExp(pattern).test(tr.name.split(path.sep).join('/')));
+  const empty = selected.filter((tr) => !Array.isArray(tr.assertionResults) || tr.assertionResults.length === 0);
+  const names = selected.map((tr) => tr.name.split(path.sep).join('/'));
+  const duplicate = names.find((name, i) => names.indexOf(name) !== i);
+  const recordedFailures = selected.some((tr) => tr.assertionResults?.some((a) => a.status === 'failed'));
+  // Jest can exit nonzero for setup/runner errors even when its JSON contains
+  // passing assertions. Such a run cannot support a green verdict.
+  const unexplainedExit = !r.ok && !recordedFailures;
+  const unaccountedSuiteFailure = selected.some((tr) => tr.status === 'failed' && !tr.assertionResults?.some((a) => a.status === 'failed'));
+  if (!selected.length || empty.length || duplicate || unexplainedExit || unaccountedSuiteFailure) {
+    const error = !selected.length ? 'no matching clause suites'
+      : empty.length ? 'clause suite executed zero assertions'
+      : duplicate ? `duplicate clause suite: ${duplicate}`
+      : unaccountedSuiteFailure ? 'clause suite failed without a failed assertion'
+      : `Jest exited ${r.code ?? r.error ?? 'without a code'} without recorded assertion failures`;
+    return {
+      suites: null, raw: null, error,
+      stderr: [
+        ...empty.map((tr) => `${tr.name}: ${String(tr.message || 'no Jest suite error supplied').slice(0, 2000)}`),
+        ...(r.stderr || '').split('\n').slice(-8),
+      ].slice(-20),
+    };
+  }
+  // An extra, non-clause suite failure must not be hidden by filtering it out.
+  if ((parsed.testResults || []).some((tr) => tr.status === 'failed' && !selected.includes(tr))) {
+    return { suites: null, raw: null, error: 'unexpected non-clause suite failed', stderr: (r.stderr || '').split('\n').slice(-10) };
+  }
+  if (clauseId && selected.length !== 1) {
+    return { suites: null, raw: null, error: `expected one suite for ${clauseId}, received ${selected.length}`, stderr: (r.stderr || '').split('\n').slice(-10) };
+  }
+  const ids = selected.map((tr) => path.basename(tr.name));
+  if (new Set(ids).size !== ids.length) {
+    return { suites: null, raw: null, error: 'duplicate clause files in Jest results', stderr: (r.stderr || '').split('\n').slice(-10) };
+  }
+  const suites = selected.map((tr) => ({
     name: tr.name,
     file: tr.name,
-    assertions: (tr.assertionResults || []).map((a) => ({
+    assertions: tr.assertionResults.map((a) => ({
       title: a.title,
       status: a.status,
       failureMessages: a.failureMessages || [],
     })),
   }));
-  return { suites, raw: { numPassedTests: parsed.numPassedTests, numFailedTests: parsed.numFailedTests, numTotalTests: parsed.numTotalTests } };
+  return { suites, raw: { numPassedTests: parsed.numPassedTests, numFailedTests: parsed.numFailedTests, numTotalTests: parsed.numTotalTests, exitCode: r.code } };
 }
 
 // ---------------------------------------------------------------------------

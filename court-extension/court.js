@@ -183,7 +183,7 @@ async function courtRedlineClause(args) {
   const failed = assertions.filter((a) => a.status === 'failed').length;
   return {
     clause: clauseId,
-    status: failed > 0 ? 'red' : 'green',
+    status: failed > 0 ? 'red' : assertions.length > 0 && passed === assertions.length ? 'green' : 'unknown',
     passed,
     failed,
     total: assertions.length,
@@ -237,17 +237,33 @@ async function runMutationJob(cfg, jobId, claimedOverride) {
   const job = JOBS.get(jobId);
   try {
     if (!cfg.mutation.command) throw new Error('mutation.command is not set in .triumph.yml');
+    const before = cfg.mutation.absReport && fs.existsSync(cfg.mutation.absReport)
+      ? fs.statSync(cfg.mutation.absReport) : null;
+    const startedAt = Date.now();
     const r = await runners.spawnCollect(cfg.mutation.command, [], {
       cwd: cfg.repoRoot,
       timeoutMs: (cfg.mutation.timeoutSeconds || 900) * 1000,
       shell: true,
     });
-    if (!cfg.mutation.absReport || !fs.existsSync(cfg.mutation.absReport)) {
-      throw new Error(
-        `mutation.command finished (exit ${r.code}) but report ${cfg.mutation.report} was not produced. ` +
-        'Point mutation.report at the JSON your tool writes.' +
-        (r.stderr ? '\nstderr tail: ' + r.stderr.split('\n').slice(-8).join('\n') : '')
-      );
+    const after = cfg.mutation.absReport && fs.existsSync(cfg.mutation.absReport)
+      ? fs.statSync(cfg.mutation.absReport) : null;
+    const diagnostic = [
+      r.error && `runner: ${r.error}`,
+      r.stdout && `stdout tail: ${r.stdout.slice(-4000)}`,
+      r.stderr && `stderr tail: ${r.stderr.slice(-4000)}`,
+    ].filter(Boolean).join('\n');
+    // A previous JSON artifact is not evidence of this run. Failed commands
+    // cannot certify coverage even if they touched the report file.
+    job.commandResult = {
+      exitCode: r.code, runnerError: r.error || null,
+      stdoutTail: (r.stdout || '').slice(-4000), stderrTail: (r.stderr || '').slice(-4000),
+      reportProduced: !!after && (!before || after.mtimeMs !== before.mtimeMs || after.ctimeMs !== before.ctimeMs) && after.mtimeMs >= startedAt - 2000,
+    };
+    const reason = !r.ok ? `mutation command failed (exit ${r.code ?? 'none'}${r.error ? `; ${r.error}` : ''})`
+      : !job.commandResult.reportProduced ? 'mutation command exited successfully but produced no fresh report' : null;
+    if (reason) {
+      throw new Error(`${reason}; expected ${cfg.mutation.report || '(unset)'}.` +
+        (diagnostic ? `\n${diagnostic}` : ''));
     }
     job.result = await buildTrustGap(cfg, claimedOverride);
     job.status = 'done';
@@ -449,6 +465,10 @@ async function courtSplitMutate(args) {
       note: 'mutation.command is not set in .triumph.yml — SPLITBRAIN cannot run the mutator. Set it, or precompute mutation.report and call splitbrain_trustgap.',
     };
   }
+  // Two jobs in the same engine would race over Stryker's temp directory and
+  // report path. Refuse the second rather than presenting its result as fresh.
+  const running = [...JOBS.entries()].find(([, job]) => job.status === 'running');
+  if (running) return { court: 'SPLITBRAIN', status: 'busy', error: `mutation job ${running[0]} is already running`, job_id: running[0] };
   const claimed = args && typeof args.claimed_coverage === 'number' ? args.claimed_coverage : null;
   const jobId = 'mut-' + crypto.randomBytes(4).toString('hex');
   JOBS.set(jobId, { status: 'running', startedAt: Date.now(), finishedAt: null, error: null, result: null, command: c.mutation.command, claimedCoverage: claimed });
@@ -482,6 +502,7 @@ async function courtSplitStatus(args) {
     elapsedSeconds: Math.round(((job.finishedAt || Date.now()) - job.startedAt) / 1000),
   };
   if (job.error) out.error = job.error;
+  if (job.commandResult) out.commandResult = job.commandResult;
   if (job.result) out.result = job.result;
   return out;
 }

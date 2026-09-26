@@ -120,7 +120,7 @@ const full = (r, s, w) => ({ redline: r, splitbrain: s, warpath: w });
 
   await t('git provenance: real repo yields commit/branch/dirty; non-repo is null', async () => {
     const { gitProvenance } = require('../src/dashboard');
-    const real = await gitProvenance('/home/ubuntu/ibm-bob/northstar');
+    const real = await gitProvenance(path.resolve(__dirname, '../../northstar'));
     assert.match(real.checkedOutCommit, /^[0-9a-f]{40}$/, 'commit should be a full SHA');
     assert.strictEqual(typeof real.branch, 'string');
     assert.strictEqual(typeof real.workingTreeDirty, 'boolean');

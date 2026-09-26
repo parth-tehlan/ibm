@@ -2,7 +2,7 @@
   "name": "triumph-courts",
   "displayName": "TRIUMPH 3-Court Dev Tool",
   "description": "REDLINE / SPLITBRAIN / WARPATH courts for any repo and any model — spec-witness tests, honest coverage, incident forensics. Path-1: installs court subagents into the agent hosts you already have; never calls a model itself.",
-  "version": "0.2.0",
+  "version": "0.2.2",
   "publisher": "triumph",
   "repository": {
     "type": "git",
@@ -80,7 +80,7 @@
     "setup": "node bin/triumph-setup.js",
     "report": "node bin/triumph-report.js",
     "stage:dashboard": "node bin/stage-dashboard.js",
-    "test": "node tests/run.js && node tests/properties.js && node tests/hosts-safety.js && node tests/wall-strength.js && node tests/extension.js && node tests/dashboard.js && node tests/dashboard-integration.js && node tests/mcp-client.js",
+    "test": "node tests/runners-safety.js && node tests/mutation-safety.js && node tests/run.js && node tests/properties.js && node tests/hosts-safety.js && node tests/wall-strength.js && node tests/extension.js && node tests/dashboard.js && node tests/dashboard-integration.js && node tests/mcp-client.js",
     "test:live": "node tests/properties-live.js",
     "test:packaged:bob": "node ../scripts/verify-packaged-bob.mjs"
   },

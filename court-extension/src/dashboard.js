@@ -51,7 +51,8 @@ function projectFor(_vscode, root) {
  *  A clean tree is a real answer: workingTreeDirty=false, not null. */
 function gitProvenance(root) {
   const run = (args) => new Promise((res) => {
-    execFile('git', args, { cwd: root }, (e, out) => res(e ? null : String(out).trim()));
+    execFile('git', args, { cwd: root, timeout: 3000, stdio: ['ignore', 'pipe', 'ignore'] },
+      (e, out) => res(e ? null : String(out).trim()));
   });
   return (async () => {
     const [commit, branch, status] = await Promise.all([

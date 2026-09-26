@@ -8,7 +8,9 @@
 module.exports = {
   testEnvironment: 'node',
   rootDir: __dirname,
-  testMatch: ['**/tests/**/*.test.ts'],
+  // Stryker keeps copies of tests under .stryker-tmp; only discover source suites.
+  testMatch: ['<rootDir>/tests/**/*.test.ts'],
+  testPathIgnorePatterns: ['<rootDir>/.stryker-tmp/'],
   transform: {
     '^.+\\.ts$': ['ts-jest', { tsconfig: 'tsconfig.json' }],
   },
