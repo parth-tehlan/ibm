@@ -183,7 +183,7 @@ async function courtRedlineClause(args) {
   const failed = assertions.filter((a) => a.status === 'failed').length;
   return {
     clause: clauseId,
-    status: failed > 0 ? 'red' : 'green',
+    status: failed > 0 ? 'red' : assertions.length > 0 && passed === assertions.length ? 'green' : 'unknown',
     passed,
     failed,
     total: assertions.length,
@@ -237,17 +237,26 @@ async function runMutationJob(cfg, jobId, claimedOverride) {
   const job = JOBS.get(jobId);
   try {
     if (!cfg.mutation.command) throw new Error('mutation.command is not set in .triumph.yml');
+    const before = cfg.mutation.absReport && fs.existsSync(cfg.mutation.absReport)
+      ? fs.statSync(cfg.mutation.absReport) : null;
+    const startedAt = Date.now();
     const r = await runners.spawnCollect(cfg.mutation.command, [], {
       cwd: cfg.repoRoot,
       timeoutMs: (cfg.mutation.timeoutSeconds || 900) * 1000,
       shell: true,
     });
-    if (!cfg.mutation.absReport || !fs.existsSync(cfg.mutation.absReport)) {
-      throw new Error(
-        `mutation.command finished (exit ${r.code}) but report ${cfg.mutation.report} was not produced. ` +
-        'Point mutation.report at the JSON your tool writes.' +
-        (r.stderr ? '\nstderr tail: ' + r.stderr.split('\n').slice(-8).join('\n') : '')
-      );
+    const after = cfg.mutation.absReport && fs.existsSync(cfg.mutation.absReport)
+      ? fs.statSync(cfg.mutation.absReport) : null;
+    const diagnostic = [
+      r.error && `runner: ${r.error}`,
+      r.stdout && `stdout tail: ${r.stdout.slice(-4000)}`,
+      r.stderr && `stderr tail: ${r.stderr.slice(-4000)}`,
+    ].filter(Boolean).join('\n');
+    // A previous JSON artifact is not evidence of this run. Failed commands
+    // cannot certify coverage even if they touched the report file.
+    if (!r.ok || !after || (before && after.mtimeMs === before.mtimeMs && after.ctimeMs === before.ctimeMs) || after.mtimeMs < startedAt - 2000) {
+      throw new Error(`mutation.command failed or produced no fresh report (exit ${r.code}; report ${cfg.mutation.report}).` +
+        (diagnostic ? `\n${diagnostic}` : ''));
     }
     job.result = await buildTrustGap(cfg, claimedOverride);
     job.status = 'done';

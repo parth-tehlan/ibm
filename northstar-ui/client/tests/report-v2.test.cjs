@@ -25,6 +25,16 @@ test('validates generic v2 report and rejects broken report metadata or mismatch
   report.redline.payload.summary.total = 2;
   assert.equal(isV2Snapshot(report), false);
 });
+test('accepts zero-assertion yellow REDLINE evidence without inventing a pass', () => {
+  const report = base();
+  report.redline = { ...empty(), state: 'complete', payload: { court: 'REDLINE', summary: { green: 0, red: 0, yellow: 1, total: 1 }, results: [{ clause: 'W1', status: 'yellow', passed: 0, failed: 0, total: 0, spec_anchor: 'spec#W1', failures: [] }] } };
+  assert.equal(isV2Snapshot(report), true);
+  report.redline.payload.results[0].status = 'green';
+  assert.equal(isV2Snapshot(report), false, 'zero tests cannot be reported green');
+  report.redline.payload.results[0].status = 'red';
+  assert.equal(isV2Snapshot(report), false, 'zero failures cannot be reported red');
+});
+
 test('opaque extension evidence is accepted for any project, without falsely accepting broken recognized verdicts', () => {
   const report = base();
   report.redline = { ...empty(), state: 'complete', payload: { assertions: [{ requirementId: 'Z-1', evidence: 'independent' }] } };
