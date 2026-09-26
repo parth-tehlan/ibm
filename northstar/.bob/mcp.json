@@ -2,7 +2,9 @@
   "mcpServers": {
     "triumph-acp": {
       "command": "node",
-      "args": ["../acp-server/court.js"],
+      "args": [
+        "../acp-server/court.js"
+      ],
       "cwd": ".",
       "env": {},
       "alwaysAllow": [
@@ -19,7 +21,9 @@
     },
     "gauntlet-signals": {
       "command": "node",
-      "args": [".bob/mcp/gauntlet.js"],
+      "args": [
+        ".bob/mcp/gauntlet.js"
+      ],
       "cwd": ".",
       "env": {},
       "alwaysAllow": [
@@ -31,6 +35,28 @@
         "get_metrics",
         "get_recent_deploys",
         "get_mutants"
+      ],
+      "disabled": false
+    },
+    "triumph-courts": {
+      "command": "node",
+      "args": [
+        "/home/ubuntu/ibm-bob/court-extension/court.js",
+        "--repo",
+        "/home/ubuntu/ibm-bob/northstar"
+      ],
+      "alwaysAllow": [
+        "redline_clauses",
+        "redline_verdict_all",
+        "redline_clause",
+        "splitbrain_trustgap",
+        "splitbrain_mutants",
+        "splitbrain_mutate",
+        "splitbrain_status",
+        "warpath_context",
+        "warpath_triage",
+        "warpath_postmortem",
+        "courts_about"
       ],
       "disabled": false
     }

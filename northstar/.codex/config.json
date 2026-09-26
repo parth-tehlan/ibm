@@ -1,0 +1,12 @@
+{
+  "mcp_servers": {
+    "triumph-courts": {
+      "command": "node",
+      "args": [
+        "/home/ubuntu/ibm-bob/court-extension/court.js",
+        "--repo",
+        "/home/ubuntu/ibm-bob/northstar"
+      ]
+    }
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "mcpServers": {
+    "triumph-courts": {
+      "command": "node",
+      "args": [
+        "/home/ubuntu/ibm-bob/court-extension/court.js",
+        "--repo",
+        "/home/ubuntu/ibm-bob/northstar"
+      ],
+      "alwaysAllow": [
+        "redline_clauses",
+        "redline_verdict_all",
+        "redline_clause",
+        "splitbrain_trustgap",
+        "splitbrain_mutants",
+        "splitbrain_mutate",
+        "splitbrain_status",
+        "warpath_context",
+        "warpath_triage",
+        "warpath_postmortem",
+        "courts_about"
+      ],
+      "disabled": false
+    }
+  }
+}

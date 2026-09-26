@@ -1,0 +1,33 @@
+# TRIUMPH 3-court adapter for the northstar payments repo.
+# Schema: court-extension/schemas/triumph-config.schema.json
+version: 1
+repo:
+  name: northstar
+spec:
+  path: docs/api-spec.md
+  clausePattern: '^## (W\d+)'
+  clauseIdPattern: '^W\d+$'
+tests:
+  framework: jest
+  dir: tests
+  clauseTestPattern: clause-{{clause}}.test.ts
+mutation:
+  tool: stryker
+  report: reports/mutation/mutation.json
+  claimedCoverageFrom: coverage/coverage-summary.json
+  command: npm run mutation
+  timeoutSeconds: 900
+  strykerJestConfig: stryker.jest.config.js
+fixtures:
+  deploys: fixtures/deploy.json
+  metrics: fixtures/metrics.json
+  logs: fixtures/logs.json
+evidence:
+  dir: evidence
+  trustgap: trustgap/TrustGap.json
+  incidentDir: incident
+  reportsDir: reports/triumph
+wall:
+  denyGlobs:
+    - src/**
+waivers: evidence/waivers.json
