@@ -48,34 +48,34 @@ Safe to run repeatedly — `--force` upgrades in place and re-verifies. Reload t
 code-server window (`Cmd/Ctrl+Shift+P` → *Developer: Reload Window*) to activate
 a new build.
 
-## Bob desktop upgrade (0.2.1)
+## Bob desktop upgrade (0.2.2)
 
 On the computer running Bob (not the build server), in the `ibm` checkout:
 
 ```bash
 git pull --ff-only origin main
 cp court-extension/triumph-courts.vsix "$HOME/Desktop/triumph-courts.vsix"
-shasum -a 256 "$HOME/Desktop/triumph-courts.vsix"  # compare with the published checksum
+sha256sum "$HOME/Desktop/triumph-courts.vsix"  # compare with the checksum for this build
 ```
 
 In Bob: **Extensions → ⋯ → Install from VSIX…**, select the copied file, then
 **Developer: Reload Window**. Check that `triumph.triumph-courts` shows version
-`0.2.1`. Open the previous run in the dashboard (refresh if it was already open):
+`0.2.2`. Open the previous run in the dashboard (refresh if it was already open):
 its saved evidence remains unchanged. Then, with Northstar dependencies installed
 (`cd northstar && npm ci`), use **TRIUMPH: Run courts and publish to dashboard**
-to create a *new* run. Do not overwrite the previous report. The new REDLINE
-result should list source clause files only; failed suites now show an error
-rather than a misleading zero-assertion verdict. SPLITBRAIN records command
-output when the mutation job fails and refuses a stale report. The underlying
-cause of an earlier failed mutation run cannot be reconstructed from an old
-report that omitted stdout. For investigation, run `npm run mutation` in the
+to create a *new* run. Do not overwrite the previous report. The new REDLINE result should list source clause files only; zero-assertion suites,
+duplicate suites and unexplained Jest exits are errors rather than passes. The
+Northstar sample currently has failing clause assertions, so a new run shows red
+entries, not green. SPLITBRAIN records the exit code and command output when
+the mutation job fails, refuses a stale report, and rejects a second concurrent
+job in the same engine. An isolated mutation run succeeded, but the cause of
+the earlier failed run cannot be reconstructed from an old report without stdout. For investigation, run `npm run mutation` in the
 project terminal when no other Stryker job is active, and inspect its output.
 No mutation result is certified unless the new job completes and produces fresh
 JSON. Deliberately failing sample clauses are not repaired by this update.
 
-The published VSIX is a local Git artifact, not a marketplace release and not
-an automatic editor update. Pulling Git alone does not replace an installed
-extension. The disposable checks do not touch any real Bob configuration.
+The VSIX is a local Git artifact, not a marketplace release and not an automatic
+editor update. Pulling Git alone does not replace an installed extension. The disposable checks do not touch any real Bob configuration.
 
 ## Safe workspace setup and rollback
 Run `node bin/triumph-setup.js --repo /path/to/project --host bob` to prepare a project (or choose **TRIUMPH: Install Courts** inside the editor). Existing Bob modes are merged by slug; existing agent, rule and skill files are left alone. MCP entries keep user settings such as `disabled`, `alwaysAllow`, and `env`. Malformed config or unsafe targets fail before the host install writes anything; if an install fails midway, it restores changed files. When an existing config is changed successfully, setup retains a permission-preserving hidden `*.triumph-backup-*` file beside it. The CLI prints backup paths; the editor's **Show files and backups** lists them. To roll back a successful install, copy the relevant backup over its corresponding config file after checking that no newer user edits need preserving. Newly created files have no prior version to restore and can be removed manually if desired.

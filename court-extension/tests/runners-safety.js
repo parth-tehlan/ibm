@@ -17,7 +17,7 @@ const runners = require('../lib/runners');
     assert.equal(new RegExp(runners.allClauseFilesRegex(cfg)).test(sandbox), false);
     assert.equal(new RegExp(runners.clauseFileRegex(cfg, 'W1')).test(source), true);
     const fake = path.join(tmp, 'npx');
-    fs.writeFileSync(fake, '#!/bin/sh\ncat "$TRIUMPH_FAKE_JEST_JSON"\nexit 1\n', { mode: 0o700 });
+    fs.writeFileSync(fake, '#!/bin/sh\ncat "$TRIUMPH_FAKE_JEST_JSON"\nexit "${TRIUMPH_FAKE_JEST_EXIT:-1}"\n', { mode: 0o700 });
     const fixture = path.join(tmp, 'jest.json');
     process.env.PATH = tmp + path.delimiter + oldPath;
     process.env.TRIUMPH_FAKE_JEST_JSON = fixture;
@@ -37,10 +37,25 @@ const runners = require('../lib/runners');
     assert.equal(failed.suites.length, 1);
     assert.equal(failed.suites[0].assertions[0].status, 'failed');
     assert.equal(failed.raw.exitCode, 1);
-    console.log('runner safety: sandbox excluded, zero assertions reported, real failures retained');
+    fs.writeFileSync(fixture, JSON.stringify({ testResults: [
+      { name: source, status: 'passed', assertionResults: [{ title: 'looks green', status: 'passed' }] },
+    ] }));
+    const crashed = await runners.runTests(cfg, 'W1');
+    assert.equal(crashed.suites, null);
+    assert.match(crashed.error, /exited 1 without recorded assertion failures/);
+    process.env.TRIUMPH_FAKE_JEST_EXIT = '0';
+    fs.writeFileSync(fixture, JSON.stringify({ testResults: [
+      { name: source, status: 'passed', assertionResults: [{ title: 'pass', status: 'passed' }] },
+      { name: source, status: 'passed', assertionResults: [{ title: 'pass', status: 'passed' }] },
+    ] }));
+    const duplicated = await runners.runTests(cfg, null);
+    assert.equal(duplicated.suites, null);
+    assert.match(duplicated.error, /duplicate clause suite/);
+    console.log('runner safety: sandbox excluded, zero assertions and crashes reported, duplicate suites rejected, real failures retained');
   } finally {
     process.env.PATH = oldPath;
     delete process.env.TRIUMPH_FAKE_JEST_JSON;
+    delete process.env.TRIUMPH_FAKE_JEST_EXIT;
     fs.rmSync(tmp, { recursive: true, force: true });
   }
 })().catch((error) => { console.error(error); process.exitCode = 1; });

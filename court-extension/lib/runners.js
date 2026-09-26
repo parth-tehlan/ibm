@@ -97,14 +97,37 @@ async function runJest(cfg, clauseId /* null = all clause suites */) {
   const selected = (parsed.testResults || []).filter((tr) =>
     typeof tr.name === 'string' && new RegExp(pattern).test(tr.name.split(path.sep).join('/')));
   const empty = selected.filter((tr) => !Array.isArray(tr.assertionResults) || tr.assertionResults.length === 0);
-  if (!selected.length || empty.length) {
+  const names = selected.map((tr) => tr.name.split(path.sep).join('/'));
+  const duplicate = names.find((name, i) => names.indexOf(name) !== i);
+  const recordedFailures = selected.some((tr) => tr.assertionResults?.some((a) => a.status === 'failed'));
+  // Jest can exit nonzero for setup/runner errors even when its JSON contains
+  // passing assertions. Such a run cannot support a green verdict.
+  const unexplainedExit = !r.ok && !recordedFailures;
+  const unaccountedSuiteFailure = selected.some((tr) => tr.status === 'failed' && !tr.assertionResults?.some((a) => a.status === 'failed'));
+  if (!selected.length || empty.length || duplicate || unexplainedExit || unaccountedSuiteFailure) {
+    const error = !selected.length ? 'no matching clause suites'
+      : empty.length ? 'clause suite executed zero assertions'
+      : duplicate ? `duplicate clause suite: ${duplicate}`
+      : unaccountedSuiteFailure ? 'clause suite failed without a failed assertion'
+      : `Jest exited ${r.code ?? r.error ?? 'without a code'} without recorded assertion failures`;
     return {
-      suites: null, raw: null, error: !selected.length ? 'no matching clause suites' : 'clause suite executed zero assertions',
+      suites: null, raw: null, error,
       stderr: [
         ...empty.map((tr) => `${tr.name}: ${String(tr.message || 'no Jest suite error supplied').slice(0, 2000)}`),
         ...(r.stderr || '').split('\n').slice(-8),
       ].slice(-20),
     };
+  }
+  // An extra, non-clause suite failure must not be hidden by filtering it out.
+  if ((parsed.testResults || []).some((tr) => tr.status === 'failed' && !selected.includes(tr))) {
+    return { suites: null, raw: null, error: 'unexpected non-clause suite failed', stderr: (r.stderr || '').split('\n').slice(-10) };
+  }
+  if (clauseId && selected.length !== 1) {
+    return { suites: null, raw: null, error: `expected one suite for ${clauseId}, received ${selected.length}`, stderr: (r.stderr || '').split('\n').slice(-10) };
+  }
+  const ids = selected.map((tr) => path.basename(tr.name));
+  if (new Set(ids).size !== ids.length) {
+    return { suites: null, raw: null, error: 'duplicate clause files in Jest results', stderr: (r.stderr || '').split('\n').slice(-10) };
   }
   const suites = selected.map((tr) => ({
     name: tr.name,

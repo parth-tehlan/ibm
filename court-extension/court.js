@@ -254,8 +254,15 @@ async function runMutationJob(cfg, jobId, claimedOverride) {
     ].filter(Boolean).join('\n');
     // A previous JSON artifact is not evidence of this run. Failed commands
     // cannot certify coverage even if they touched the report file.
-    if (!r.ok || !after || (before && after.mtimeMs === before.mtimeMs && after.ctimeMs === before.ctimeMs) || after.mtimeMs < startedAt - 2000) {
-      throw new Error(`mutation.command failed or produced no fresh report (exit ${r.code}; report ${cfg.mutation.report}).` +
+    job.commandResult = {
+      exitCode: r.code, runnerError: r.error || null,
+      stdoutTail: (r.stdout || '').slice(-4000), stderrTail: (r.stderr || '').slice(-4000),
+      reportProduced: !!after && (!before || after.mtimeMs !== before.mtimeMs || after.ctimeMs !== before.ctimeMs) && after.mtimeMs >= startedAt - 2000,
+    };
+    const reason = !r.ok ? `mutation command failed (exit ${r.code ?? 'none'}${r.error ? `; ${r.error}` : ''})`
+      : !job.commandResult.reportProduced ? 'mutation command exited successfully but produced no fresh report' : null;
+    if (reason) {
+      throw new Error(`${reason}; expected ${cfg.mutation.report || '(unset)'}.` +
         (diagnostic ? `\n${diagnostic}` : ''));
     }
     job.result = await buildTrustGap(cfg, claimedOverride);
@@ -458,6 +465,10 @@ async function courtSplitMutate(args) {
       note: 'mutation.command is not set in .triumph.yml — SPLITBRAIN cannot run the mutator. Set it, or precompute mutation.report and call splitbrain_trustgap.',
     };
   }
+  // Two jobs in the same engine would race over Stryker's temp directory and
+  // report path. Refuse the second rather than presenting its result as fresh.
+  const running = [...JOBS.entries()].find(([, job]) => job.status === 'running');
+  if (running) return { court: 'SPLITBRAIN', status: 'busy', error: `mutation job ${running[0]} is already running`, job_id: running[0] };
   const claimed = args && typeof args.claimed_coverage === 'number' ? args.claimed_coverage : null;
   const jobId = 'mut-' + crypto.randomBytes(4).toString('hex');
   JOBS.set(jobId, { status: 'running', startedAt: Date.now(), finishedAt: null, error: null, result: null, command: c.mutation.command, claimedCoverage: claimed });
@@ -491,6 +502,7 @@ async function courtSplitStatus(args) {
     elapsedSeconds: Math.round(((job.finishedAt || Date.now()) - job.startedAt) / 1000),
   };
   if (job.error) out.error = job.error;
+  if (job.commandResult) out.commandResult = job.commandResult;
   if (job.result) out.result = job.result;
   return out;
 }
