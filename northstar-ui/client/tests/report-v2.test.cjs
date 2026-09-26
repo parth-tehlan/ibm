@@ -63,6 +63,22 @@ test('branded engine evidence stays opaque; recognized fractional verdicts still
   assert.equal(isV2Snapshot(report), false, 'null coverage in known fractional shape is not a valid structured verdict');
 });
 
+test('accepts server-valid long court errors without hiding saved runs', async () => {
+  const { snapshotSchema } = await import('../../contracts/report.js');
+  const report = base();
+  report.state = 'complete';
+  report.revision = 1;
+  report.splitbrain = { ...empty(), state: 'error', errors: ['mutation command failed; stdout tail: ' + 'x'.repeat(4050)] };
+  assert.equal(snapshotSchema.safeParse(report).success, true);
+  assert.equal(isV2Snapshot(report), true, 'long command output must not invalidate the entire run');
+  report.splitbrain.errors = ['x'.repeat(100001)];
+  assert.equal(snapshotSchema.safeParse(report).success, true);
+  assert.equal(isV2Snapshot(report), true, 'error strings have no length cap in the server contract');
+  report.splitbrain.errors = ['valid', 42];
+  assert.equal(snapshotSchema.safeParse(report).success, false);
+  assert.equal(isV2Snapshot(report), false, 'non-string errors must still be rejected');
+});
+
 test('browser and server derive the same legacy identity and provenance', async () => {
   const { normalizeReport } = await import('../../contracts/report.js');
   const old = { schemaVersion: 1, repository: 'another-project', runId: id, createdAt: time, state: 'complete', checkedOutCommit: null, workingTreeDirty: null, redline: empty(), splitbrain: empty(), warpath: empty() };

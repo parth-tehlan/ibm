@@ -48,7 +48,7 @@ Safe to run repeatedly — `--force` upgrades in place and re-verifies. Reload t
 code-server window (`Cmd/Ctrl+Shift+P` → *Developer: Reload Window*) to activate
 a new build.
 
-## Bob desktop upgrade (0.2.2)
+## Bob desktop upgrade (0.2.3)
 
 On the computer running Bob (not the build server), in the `ibm` checkout:
 
@@ -60,8 +60,10 @@ sha256sum "$HOME/Desktop/triumph-courts.vsix"  # compare with the checksum for t
 
 In Bob: **Extensions → ⋯ → Install from VSIX…**, select the copied file, then
 **Developer: Reload Window**. Check that `triumph.triumph-courts` shows version
-`0.2.2`. Open the previous run in the dashboard (refresh if it was already open):
-its saved evidence remains unchanged. Then, with Northstar dependencies installed
+`0.2.3`. Open the previous run in the dashboard (refresh if it was already open):
+its saved evidence remains unchanged, and server-valid long SPLITBRAIN error messages
+no longer invalidate the whole report. The failed mutation still appears as an
+error, not a passing result. Then, with Northstar dependencies installed
 (`cd northstar && npm ci`), use **TRIUMPH: Run courts and publish to dashboard**
 to create a *new* run. Do not overwrite the previous report. The new REDLINE result should list source clause files only; zero-assertion suites,
 duplicate suites and unexplained Jest exits are errors rather than passes. The

@@ -16,6 +16,9 @@ export const isUuid = (v: unknown): v is string => typeof v === 'string' && /^[0
 const record = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const string = (v: unknown): v is string => typeof v === 'string' && v.length <= 100000;
 const smallString = (v: unknown): v is string => string(v) && v.length <= 2000;
+// Court error strings are unbounded in the server contract. A failed command can
+// carry its stdout/stderr tail here; rejecting it would hide the whole saved run.
+const errors = (v: unknown): v is string[] => Array.isArray(v) && v.every((entry) => typeof entry === 'string');
 const number = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 const count = (v: unknown): v is number => number(v) && Number.isSafeInteger(v) && v >= 0;
 const fraction = (v: unknown): v is number => number(v) && v >= 0 && v <= 1;
@@ -54,7 +57,7 @@ const recognizedSplitbrain = (p: Record<string, unknown>): boolean =>
   p.court === 'SPLITBRAIN' && p.status === 'ok' && 'claimedCoverage' in p && 'honestMutationScore' in p && 'trustGap' in p && arr(p.dishonestTests, smallString) && Array.isArray(p.mutants);
 function result<T>(v: unknown, guard: (v: unknown) => v is T, recognized: (v: Record<string, unknown>) => boolean, generic = false): v is CourtResult<T> {
   if (!record(v)) return false;
-  return ['not_run', 'running', 'complete', 'error', 'unavailable'].includes(String(v.state)) && nullableDate(v.collectedAt) && nullableDate(v.sourceGeneratedAt) && arr(v.errors, smallString) && (v.state === 'complete' ? (generic && record(v.payload) && !recognized(v.payload) ? true : guard(v.payload)) : v.payload === null || record(v.payload));
+  return ['not_run', 'running', 'complete', 'error', 'unavailable'].includes(String(v.state)) && nullableDate(v.collectedAt) && nullableDate(v.sourceGeneratedAt) && errors(v.errors) && (v.state === 'complete' ? (generic && record(v.payload) && !recognized(v.payload) ? true : guard(v.payload)) : v.payload === null || record(v.payload));
 }
 const courts = (v: Record<string, unknown>, generic = false): boolean => result(v.redline, redline, (p) => 'summary' in p || 'results' in p, generic) && result(v.splitbrain, splitbrain, recognizedSplitbrain, generic) && result(v.warpath, warpath, (p) => 'context' in p || 'triage' in p, generic);
 export function isLegacySnapshot(v: unknown): v is LegacySnapshot {

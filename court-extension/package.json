@@ -2,7 +2,7 @@
   "name": "triumph-courts",
   "displayName": "TRIUMPH 3-Court Dev Tool",
   "description": "REDLINE / SPLITBRAIN / WARPATH courts for any repo and any model — spec-witness tests, honest coverage, incident forensics. Path-1: installs court subagents into the agent hosts you already have; never calls a model itself.",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "publisher": "triumph",
   "repository": {
     "type": "git",
