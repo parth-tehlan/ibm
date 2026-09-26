@@ -1,0 +1,38 @@
+{
+  "subject": "src/discounts.ts",
+  "source": "trustgap/TrustGap.json",
+  "measuredBy": "npm run trustgap",
+  "totals": {
+    "killed": 17,
+    "survived": 2,
+    "timeout": 0,
+    "noCoverage": 1,
+    "total": 20
+  },
+  "mutants": [
+    {
+      "id": "3",
+      "file": "src/discounts.ts",
+      "line": 19,
+      "mutator": "ConditionalExpression",
+      "status": "Survived",
+      "location": "SAVE10 case guard"
+    },
+    {
+      "id": "4",
+      "file": "src/discounts.ts",
+      "line": 19,
+      "mutator": "StringLiteral",
+      "status": "Survived",
+      "location": "SAVE10 case guard"
+    },
+    {
+      "id": "9",
+      "file": "src/discounts.ts",
+      "line": 23,
+      "mutator": "ConditionalExpression",
+      "status": "NoCoverage",
+      "location": "default unknown-code branch"
+    }
+  ]
+}
