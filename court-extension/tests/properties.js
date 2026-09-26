@@ -177,6 +177,26 @@ function withEngine(repo, calls) {
     assert.ok(Array.isArray(status.jobs) || status.status, 'status malformed');
   });
 
+  // 7b. WARPATH on the canonical challenge schema (no metrics.window; uses
+  //     errorRate.windowStart + breaker.consecutiveFailuresAtOpen).
+  await t('Repo-agnostic: WARPATH handles canonical fixture schema (no explicit window)', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'triumph-canon-'));
+    for (const d of ['docs', 'tests', 'fixtures', 'evidence']) fs.mkdirSync(path.join(dir, d));
+    fs.writeFileSync(path.join(dir, 'docs', 's.md'), '# S\n\n## W6 — breaker\n\n1. SHALL NOT trip below openThreshold\n');
+    fs.writeFileSync(path.join(dir, 'tests', 'clause-W6.test.js'), 'test("x",()=>expect(1).toBe(1));');
+    fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ devDependencies: { jest: '^29' } }));
+    fs.writeFileSync(path.join(dir, 'jest.config.js'), 'module.exports={testEnvironment:"node",testMatch:["**/tests/**/*.test.js"]}');
+    fs.writeFileSync(path.join(dir, 'fixtures', 'metrics.json'), JSON.stringify({ metrics: { errorRate: { windowStart: '2026-09-26T09:14:01Z' }, breaker: { state: 'open', consecutiveFailuresAtOpen: 1, openThreshold: 5 } } }));
+    fs.writeFileSync(path.join(dir, 'fixtures', 'deploy.json'), JSON.stringify({ deploys: [{ id: 'd0', at: '2026-09-26T08:40:00Z', service: 'payments-api' }] }));
+    fs.writeFileSync(path.join(dir, 'fixtures', 'logs.json'), JSON.stringify({ log: [{ t: '2026-09-26T09:14:02Z', level: 'error', message: 'breaker open', spec: 'docs/api-spec.md#W6', runbook: 'docs/runbook.md' }] }));
+    fs.writeFileSync(path.join(dir, '.triumph.yml'), 'version: 1\nspec: { path: docs/s.md, clausePattern: \'^## (W\\d+)\', clauseIdPattern: \'^W\\d+$\' }\ntests: { framework: jest, dir: tests, clauseTestPattern: \'clause-{{clause}}.test.js\' }\nmutation: { tool: custom, report: null, command: null }\nwall: { denyGlobs: [\'src/**\'] }\n');
+    const { results } = await withEngine(dir, [{ name: 'warpath_triage', arguments: {} }]);
+    const t2 = JSON.parse(results[0].result.content[0].text);
+    assert.strictEqual(t2.suspect && t2.suspect.id, 'd0');
+    assert.strictEqual(t2.breakerSnapshot.openThreshold, 5);
+    assert.ok(/#W6/.test(t2.rule), 'rule should cite spec anchor from evidence: ' + t2.rule);
+  });
+
   // 8. REPORT — both artifacts render deterministically from engine JSON.
   await t('Reports: render is deterministic (same input → byte-identical)', () => {
     const { renderMarkdown, renderHtml } = require('../lib/render');
