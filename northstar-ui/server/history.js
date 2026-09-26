@@ -1,8 +1,10 @@
 import { randomUUID } from 'node:crypto';
+import { execFile } from 'node:child_process';
 import { constants } from 'node:fs';
 import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { normalizeReport, snapshotSchema } from '../contracts/report.js';
 
@@ -17,6 +19,26 @@ function validId(id) { if (!uuid(id)) throw new TypeError('Expected UUID'); retu
 function validRevision(n) { return Number.isSafeInteger(n) && n >= 0; }
 function conflict(message) { const error = new Error(message); error.code = 'CONFLICT'; return error; }
 function missing(error) { if (error.code === 'ENOENT') return true; throw error; }
+const execFileAsync = promisify(execFile);
+
+/** Stable process identity across Linux (/proc), macOS/BSD (ps), and Windows. */
+export async function processStart(pid, platform = process.platform) {
+  if (!Number.isSafeInteger(pid) || pid <= 0) return null;
+  if (platform === 'linux') {
+    try {
+      const stat = await fs.readFile(`/proc/${pid}/stat`, 'utf8');
+      return stat.slice(stat.lastIndexOf(')') + 2).split(' ')[19] || null; // field 22
+    } catch { return null; }
+  }
+  try {
+    const command = platform === 'win32' ? 'powershell.exe' : 'ps';
+    const args = platform === 'win32'
+      ? ['-NoProfile', '-NonInteractive', '-Command', `(Get-Process -Id ${pid} -ErrorAction Stop).StartTime.ToUniversalTime().Ticks`]
+      : ['-p', String(pid), '-o', 'lstart='];
+    const { stdout } = await execFileAsync(command, args, { timeout: 2000, windowsHide: true });
+    return stdout.trim() || null;
+  } catch { return null; }
+}
 async function directory(dir) {
   await fs.mkdir(dir, { recursive: true, mode: 0o700 });
   const stat = await fs.lstat(dir);
@@ -71,7 +93,7 @@ function legacyV2(old, project) {
  * connection or a writable project run. No automatic trust is granted by history.
  * Revisions are immutable files: readers choose the highest committed revision.
  */
-export function createHistory({ dir = defaultHistoryDir(), legacyDir = fileURLToPath(new URL('../.data/', import.meta.url)) } = {}) {
+export function createHistory({ dir = defaultHistoryDir(), legacyDir = fileURLToPath(new URL('../.data/', import.meta.url)), processPlatform = process.platform } = {}) {
   const root = path.resolve(dir);
   const projectsDir = path.join(root, 'projects');
   const importsDir = path.join(root, 'imports');
@@ -79,20 +101,14 @@ export function createHistory({ dir = defaultHistoryDir(), legacyDir = fileURLTo
   const ownerToken = randomUUID();
   const leaseMs = 45_000;
   const ownerFile = (projectId, runId) => path.join(runDir(projectId, runId), '.owner.json');
-  async function processStart(pid) {
-    try {
-      const stat = await fs.readFile(`/proc/${pid}/stat`, 'utf8');
-      return stat.slice(stat.lastIndexOf(')') + 2).split(' ')[19]; // field 22, pid reuse guard
-    } catch { return null; }
-  }
-  const started = processStart(process.pid);
+  const started = processStart(process.pid, processPlatform);
   async function ownerAlive(owner, file) {
     if (!owner || !uuid(owner.token) || !Number.isSafeInteger(owner.pid) || typeof owner.start !== 'string') return false;
     const info = await fs.lstat(file);
     if (!info.isFile() || info.isSymbolicLink()) throw new Error('Unsafe history owner');
     if (Date.now() - info.mtimeMs > leaseMs) return false;
-    // On Linux a dead process (or reused PID) is abandoned immediately.
-    const actual = await processStart(owner.pid);
+    // Match the owner's process start identity so dead or PID-reused processes are fenced.
+    const actual = await processStart(owner.pid, processPlatform);
     return actual === null ? false : actual === owner.start;
   }
   async function ownership(projectId, runId) {
