@@ -117,7 +117,13 @@ t('render: md + html contain all three courts and escape HTML', () => {
 
 // --- hosts ----------------------------------------------------------------
 t('hosts: install writes agents + merges MCP without clobbering', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'triumph-host-'));
+  // realpathSync: os.tmpdir() on macOS is under /var, itself a symlink to
+  // /private/var. installHost's validateDirectory walks up the full parent
+  // chain rejecting any symlinked component - a real, intentional anti-
+  // traversal check on real repo paths (never relaxed here). Canonicalize
+  // the test's own tmp root first so it matches an ordinary, non-symlinked
+  // repo path instead of tripping that check on the OS's own plumbing.
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'triumph-host-')));
   fs.writeFileSync(path.join(dir, '.mcp.json'), JSON.stringify({ mcpServers: { existing: { command: 'x' } } }));
   const r = installHost('claude', dir);
   const mcp = JSON.parse(fs.readFileSync(path.join(dir, '.mcp.json'), 'utf8'));
@@ -134,14 +140,16 @@ t('hosts: install writes agents + merges MCP without clobbering', () => {
 
 t('hosts: every host id installs', () => {
   for (const id of Object.keys(HOSTS)) {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'triumph-hosts-'));
+    // See realpathSync note above: canonicalize the tmp root, not the check.
+    const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'triumph-hosts-')));
     const r = installHost(id, dir);
     assert.ok(r.files.length >= 1, id + ' wrote nothing');
   }
 });
 
 t('hosts: bob installs the full structure (agents + skills + rules + modes + mcp)', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'triumph-bobfull-'));
+  // See realpathSync note above: canonicalize the tmp root, not the check.
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'triumph-bobfull-')));
   installHost('bob', dir);
   const need = [
     '.bob/agents/spec-witness.md', '.bob/agents/war-room.md',

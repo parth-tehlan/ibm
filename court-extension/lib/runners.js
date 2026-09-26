@@ -14,13 +14,47 @@
 
 'use strict';
 
-const { spawn, execSync } = require('child_process');
+const { spawn, spawnSync, execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
+// Node 22.4+ added a native, guarded `localStorage`/`sessionStorage` global.
+// jest-environment-node forwards every own property of globalThis into the
+// test sandbox; touching that guarded global without --localstorage-file
+// throws and aborts the suite before any assertion runs. --no-experimental-
+// webstorage avoids that, but is an unrecognized flag on Node <22.4 (Node
+// rejects it at startup: "bad option"), so it must never be added
+// unconditionally. Probe the `node` that PATH/opts.cwd will actually resolve
+// for the spawned command — not this engine's own process.version — since a
+// per-repo pinned Node (nvm/volta/.nvmrc) can differ from the engine's Node.
+// Cache per cwd: this can run once per court.js process, not once per file.
+const _flagSupportCache = new Map();
+function supportsNoWebstorageFlag(cwd) {
+  const key = cwd || '';
+  if (_flagSupportCache.has(key)) return _flagSupportCache.get(key);
+  let supported = false;
+  try {
+    const probe = spawnSync('node', ['--no-experimental-webstorage', '-e', 'process.exit(0)'], {
+      cwd, env: process.env, timeout: 5000,
+    });
+    // Any failure (older Node's "bad option", missing binary, timeout) means
+    // "not supported" - never guess a flag into existence.
+    supported = !probe.error && probe.status === 0;
+  } catch { supported = false; }
+  _flagSupportCache.set(key, supported);
+  return supported;
+}
+function withEnv(cwd) {
+  if (!supportsNoWebstorageFlag(cwd)) return process.env;
+  const flag = '--no-experimental-webstorage';
+  const existing = process.env.NODE_OPTIONS || '';
+  if (existing.split(/\s+/).filter(Boolean).includes(flag)) return process.env;
+  return { ...process.env, NODE_OPTIONS: [existing, flag].filter(Boolean).join(' ') };
+}
+
 function spawnCollect(cmd, args, opts) {
   return new Promise((resolve) => {
-    const child = spawn(cmd, args, { cwd: opts.cwd, env: process.env, shell: !!opts.shell });
+    const child = spawn(cmd, args, { cwd: opts.cwd, env: withEnv(opts.cwd), shell: !!opts.shell });
     let out = '';
     let err = '';
     const timer = setTimeout(() => {

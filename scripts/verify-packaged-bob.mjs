@@ -3,7 +3,7 @@
 // Usage: node scripts/verify-packaged-bob.mjs court-extension/triumph-courts.vsix
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -11,7 +11,13 @@ import { fileURLToPath } from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const archive = path.resolve(process.argv[2] || path.join(here, '../court-extension/triumph-courts.vsix'));
-const sandbox = mkdtempSync(path.join(tmpdir(), 'triumph-packaged-bob-'));
+// realpathSync: os.tmpdir() on macOS is under /var, itself a symlink to
+// /private/var. Node's own module resolution (require.resolve, __dirname)
+// canonicalizes symlinks, so comparing an un-resolved sandbox path against
+// resolved paths from inside the extension would spuriously fail on macOS.
+// Canonicalize the sandbox root itself, once, rather than loosening any
+// downstream identity check.
+const sandbox = realpathSync(mkdtempSync(path.join(tmpdir(), 'triumph-packaged-bob-')));
 const extension = path.join(sandbox, 'extension');
 const workspace = path.join(sandbox, 'disposable-workspace');
 const mcpPath = path.join(workspace, '.bob', 'mcp.json');

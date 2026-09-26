@@ -79,7 +79,12 @@ function withEngine(repo, calls) {
   // 2. MODEL-AGNOSTIC — same engine output regardless of host; hosts differ
   //    only in file layout.
   await t('Model-agnostic: host installs differ only in layout, agents identical', () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'triumph-prop-'));
+    // realpathSync: os.tmpdir() on macOS is under /var, a symlink to
+    // /private/var. installHost's validateDirectory walks the full parent
+    // chain rejecting any symlinked component - an intentional anti-
+    // traversal check on real repo paths, never relaxed here. Canonicalize
+    // the test's own tmp root so it matches an ordinary repo path.
+    const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'triumph-prop-')));
     const { installHost } = require('../lib/hosts');
     installHost('claude', dir);
     installHost('bob', dir);
@@ -151,7 +156,12 @@ function withEngine(repo, calls) {
 
   // 6. REPO-AGNOSTIC — engine runs on a second, differently-shaped repo.
   await t('Repo-agnostic: second repo (JS, no stryker config) serves all three courts', async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'triumph-repo2-'));
+    // realpathSync: Jest's own file walker reports realpath-canonicalized
+    // absolute paths; matching them against a clause-file regex anchored to
+    // this test's own (non-canonical, /var-symlinked) tmp root would never
+    // match, reporting "no tests found" though real ones exist on disk.
+    // Canonicalize the repo root so it matches what Jest itself will report.
+    const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'triumph-repo2-')));
     for (const d of ['docs', 'tests', 'src', 'fixtures', 'evidence']) fs.mkdirSync(path.join(dir, d));
     fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ devDependencies: { jest: '^29' } }));
     fs.writeFileSync(path.join(dir, 'docs', 'spec.md'), '# S\n\n## FR-1 — alpha\n\n1. x MUST y\n');

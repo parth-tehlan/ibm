@@ -9,7 +9,15 @@ const { installHost, ENGINE_TOOL_NAMES } = require('../lib/hosts');
 
 let count = 0;
 function test(name, fn) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'triumph-host-safety-'));
+  // realpathSync: os.tmpdir() on macOS is under /var, itself a symlink to
+  // /private/var. installHost's validateDirectory walks up the full parent
+  // chain rejecting any symlinked component - a real, intentional anti-
+  // traversal check on real repo paths (never relaxed here, and still
+  // exercised directly below by tests that create genuine symlinks under
+  // this same canonicalized root). Canonicalize the test's own tmp root so
+  // it matches an ordinary, non-symlinked repo path instead of tripping
+  // that check on the OS's own plumbing.
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'triumph-host-safety-')));
   try { fn(root); console.log(`ok ${++count} - ${name}`); }
   finally { fs.rmSync(root, { recursive: true, force: true }); }
 }
