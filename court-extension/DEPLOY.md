@@ -14,8 +14,8 @@ bin/deploy.sh --server user@host   # build locally, install+verify on a remote s
 ```
 
 The script:
-1. Runs the full test suite (`npm test` → 29 checks across 4 suites).
-2. Packages the extension with `@vscode/vsce` into `triumph-courts.vsix`.
+1. Runs the full test suite (`npm test` → 39 checks across 5 suites: lib, properties, wall-strength, extension-host mock, dashboard).
+2. Packages the extension with `@vscode/vsce` into `triumph-courts.vsix`. The package includes the **packaged dashboard** (`dashboard/`): the dashboard server, the v2 report contract, the built React `dist/`, and the dashboard's pinned production runtime deps (`express`, `zod`) — no Vite or other dev dependencies.
 3. Installs it into code-server (`code-server --install-extension … --force`).
 4. Verifies with `code-server --list-extensions --show-versions`.
 

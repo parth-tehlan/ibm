@@ -42,7 +42,8 @@ const { loadConfig, clauseTestFile } = require('./lib/config');
 const runners = require('./lib/runners');
 const trustgapLib = require('./lib/trustgap');
 
-const SERVER_INFO = { name: 'triumph-courts', version: '2.0.0' };
+const PKG = (() => { try { return require('./package.json'); } catch { return { version: '0.0.0' }; } })();
+const SERVER_INFO = { name: 'triumph-courts', version: PKG.version };
 
 // ---------------------------------------------------------------------------
 // Config bootstrap
@@ -57,6 +58,10 @@ function parseArgv(argv) {
 }
 
 const argv = parseArgv(process.argv);
+if (process.argv.includes('--version') || process.argv.includes('-v')) {
+  process.stdout.write(SERVER_INFO.version + '\n');
+  process.exit(0);
+}
 const REPO_ROOT = path.resolve(argv.repo || process.env.TRIUMPH_REPO_ROOT || process.cwd());
 
 let CFG = null;
@@ -685,6 +690,11 @@ const TOOL_HANDLERS = {
         REDLINE: 'Spec-witness: tests from the spec contract only; wall enforced; verdicts red/yellow/green.',
         SPLITBRAIN: 'Honesty audit: mutation kill-rate vs claimed coverage; tautologies named.',
         WARPATH: 'Incident forensics: suspect deploy, signal window, structured postmortem.',
+      },
+      async: {
+        REDLINE: { blocking: true, note: 'redline_verdict_all / redline_clause run the suite synchronously and return the verdict in one call.' },
+        SPLITBRAIN: { blocking: false, asyncTools: ['splitbrain_mutate', 'splitbrain_status'], note: 'splitbrain_mutate returns a job_id immediately; poll splitbrain_status until done. splitbrain_trustgap itself is synchronous.' },
+        WARPATH: { blocking: true, note: 'warpath_triage / warpath_context return in one call.' },
       },
     };
     if (CFG) {

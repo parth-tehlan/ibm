@@ -9,9 +9,8 @@
 #
 #   Usage:
 #     bin/deploy.sh                        # package + install into local code-server
-#     bin/deploy.sh --port 3000            # with explicit code-server port (check only)
 #     bin/deploy.sh --no-install           # just build/test the .vsix, don't install
-#     bin/deploy.sh --server <host>:<port> # target a remote code-server over ssh
+#     bin/deploy.sh --server <user@host>   # scp the vsix and install over ssh
 #     bin/deploy.sh --restart              # restart code-server after install
 #
 # Requires: node, npm, npx (for @vscode/vsce), and code-server on PATH.
@@ -29,7 +28,7 @@ RESTART=0
 SERVER=""
 
 usage() {
-  sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '3,16p' "$0" | sed 's/^# \{0,1\}//'
   exit "${1:-0}"
 }
 
@@ -72,24 +71,22 @@ npm test
 
 # --- 2. Package ----------------------------------------------------------------
 log "Packaging $EXT_ID@$VERSION → $(basename "$VSIX_OUT")…"
-if [[ "$INSTALL" -ne 0 ]] && command -v code-server >/dev/null 2>&1; then
-  # code-server already installed => use its vendored @microsoft/vscode-vsce if present,
-  # else fall back to npx. Both produce the same .vsix.
-  npx --yes @vscode/vsce package --no-dependencies --out "$VSIX_OUT"
-else
-  npx --yes @vscode/vsce package --no-dependencies --out "$VSIX_OUT"
-fi
+# Always via npx @vscode/vsce (no vendored-vsce assumption). --no-dependencies:
+# runtime deps (express, zod) live under dashboard/node_modules and are shipped
+# as-is, not re-resolved by vsce.
+npx --yes @vscode/vsce package --no-dependencies --out "$VSIX_OUT"
 [[ -s "$VSIX_OUT" ]] || die "packaging failed: $VSIX_OUT missing/empty"
 pass "built $(du -h "$VSIX_OUT" | cut -f1) → $(basename "$VSIX_OUT")"
 
 if [[ "$INSTALL" -ne 0 ]]; then
   # --- 3. Install (local, or remote via --server) ------------------------------
   if [[ -n "$SERVER" ]]; then
-    # Remote: the local box only builds; ssh to the target to install+restart.
+    # Remote: build locally, copy the artifact, install on the target over ssh.
+    # (The remote box has no access to this local $VSIX_OUT path.)
     log "Deploying to remote code-server at $SERVER…"
-    ssh "$SERVER" "code-server --install-extension '$VSIX_OUT' --force" || \
+    scp "$VSIX_OUT" "$SERVER:/tmp/$(basename "$VSIX_OUT")" || die "scp to $SERVER failed"
+    ssh "$SERVER" "code-server --install-extension '/tmp/$(basename "$VSIX_OUT")' --force" || \
       die "remote install failed (is code-server on PATH on $SERVER?)"
-    log "Transfer vsix via: scp $(basename "$VSIX_OUT") $SERVER: && ssh $SERVER code-server --install-extension $(basename "$VSIX_OUT") --force"
     pass "installed on remote $SERVER"
 
   else

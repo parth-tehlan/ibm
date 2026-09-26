@@ -33,6 +33,10 @@ function parseArgs(argv) {
     else if (a === '--skip') argv[++i].split(',').forEach((s) => out.skip.add(s.trim()));
     else if (a.startsWith('--skip=')) a.slice(7).split(',').forEach((s) => out.skip.add(s.trim()));
     else if (a === '--claimed-coverage') out.claimed = Number(argv[++i]);
+    else if (a === '--version' || a === '-v') {
+      console.log(require('../package.json').version);
+      process.exit(0);
+    }
     else if (a === '--help' || a === '-h') {
       console.log('usage: triumph-report --repo <dir> [--out <dir>] [--skip redline,splitbrain,warpath] [--claimed-coverage <pct>]');
       process.exit(0);

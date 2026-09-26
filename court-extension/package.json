@@ -42,6 +42,11 @@
         "command": "triumph.openReport",
         "title": "TRIUMPH: Open last report",
         "category": "TRIUMPH"
+      },
+      {
+        "command": "triumph.dashboardRun",
+        "title": "TRIUMPH: Run courts and publish to dashboard",
+        "category": "TRIUMPH"
       }
     ],
     "menus": {
@@ -73,7 +78,7 @@
   "scripts": {
     "setup": "node bin/triumph-setup.js",
     "report": "node bin/triumph-report.js",
-    "test": "node tests/run.js && node tests/properties.js && node tests/wall-strength.js && node tests/extension.js"
+    "test": "node tests/run.js && node tests/properties.js && node tests/wall-strength.js && node tests/extension.js && node tests/dashboard.js"
   },
   "devDependencies": {
     "@types/vscode": "^1.101.0"

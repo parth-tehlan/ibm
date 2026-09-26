@@ -28,6 +28,10 @@ function parseArgs(argv) {
     else if (a === '--detect') out.detect = true;
     else if (a === '--host') out.hosts.push(argv[++i]);
     else if (a.startsWith('--host=')) out.hosts.push(a.slice(7));
+    else if (a === '--version' || a === '-v') {
+      console.log(require('../package.json').version);
+      process.exit(0);
+    }
     else if (a === '--help' || a === '-h') {
       console.log('usage: triumph-setup --repo <dir> [--detect] [--host <id>|all] (hosts: ' + Object.keys(HOSTS).join(', ') + ')');
       process.exit(0);

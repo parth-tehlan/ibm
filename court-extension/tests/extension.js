@@ -55,7 +55,7 @@ const t = (n, f) => Promise.resolve().then(f).then(() => { passed++; console.log
   await t('activate registers all 5 commands', () => {
     const context = { subscriptions: [] };
     ext.activate(context);
-    for (const c of ['triumph.installCourts', 'triumph.detectConfig', 'triumph.runCourt', 'triumph.generateReport', 'triumph.openReport']) {
+    for (const c of ['triumph.installCourts', 'triumph.detectConfig', 'triumph.runCourt', 'triumph.generateReport', 'triumph.openReport', 'triumph.dashboardRun']) {
       assert.ok(registered.commands.includes(c), 'missing command ' + c);
     }
   });

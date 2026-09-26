@@ -22,6 +22,7 @@ const { detect, toYaml } = require('../lib/detect');
 const { installHost, HOSTS, ENGINE_ENTRY } = require('../lib/hosts');
 const { writeReports } = require('../lib/render');
 const { McpClient } = require('./mcp-client');
+const dashboardCmd = require('./dashboard');
 
 /** Primary workspace folder root, or null. */
 function repoRoot() {
@@ -175,6 +176,34 @@ async function cmdOpenReport() {
   panel.webview.html = fs.readFileSync(htmlPath, 'utf8');
 }
 
+/** TRIUMPH: Run courts and publish to the dashboard. */
+async function cmdDashboardRun(context) {
+  const root = repoRoot();
+  if (!root) return vscode.window.showWarningMessage('TRIUMPH: open a workspace folder first.');
+  await vscode.window.withProgress(
+    { location: vscode.ProgressLocation.Notification, title: 'TRIUMPH: running courts → dashboard…', cancellable: false },
+    async () => {
+      try {
+        const historyDir = path.join(context.globalStorageUri.fsPath, 'dashboard-history');
+        fs.mkdirSync(historyDir, { recursive: true });
+        const { runId, url } = await dashboardCmd.runAndPublish(vscode, {
+          root,
+          enginePath: enginePath(),
+          requested: ['redline', 'splitbrain', 'warpath'],
+          existingRun: null,
+          historyDir,
+          openExternal: (u) => vscode.env.openExternal(vscode.Uri.parse(u)),
+        });
+        vscode.window.showInformationMessage(`TRIUMPH run published.`, 'Open in dashboard').then((p) => {
+          if (p) vscode.env.openExternal(vscode.Uri.parse(url));
+        });
+      } catch (e) {
+        vscode.window.showErrorMessage('TRIUMPH dashboard: ' + (e && e.message ? e.message : e));
+      }
+    }
+  );
+}
+
 /** Register the engine as an MCP server for VS Code chat (agent mode). */
 function registerMcpProvider(context) {
   if (!vscode.lm || typeof vscode.lm.registerMcpServerDefinitionProvider !== 'function') {
@@ -195,7 +224,8 @@ function activate(context) {
     vscode.commands.registerCommand('triumph.detectConfig', cmdDetectConfig),
     vscode.commands.registerCommand('triumph.runCourt', cmdRunCourt),
     vscode.commands.registerCommand('triumph.generateReport', cmdGenerateReport),
-    vscode.commands.registerCommand('triumph.openReport', cmdOpenReport)
+    vscode.commands.registerCommand('triumph.openReport', cmdOpenReport),
+    vscode.commands.registerCommand('triumph.dashboardRun', () => cmdDashboardRun(context))
   );
   registerMcpProvider(context);
 }

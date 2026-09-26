@@ -180,9 +180,11 @@ async function runCustom(cfg, clauseId) {
 async function runTests(cfg, clauseId) {
   switch (cfg.tests.framework) {
     case 'jest': return runJest(cfg, clauseId);
-    case 'vitest': // vitest run --json shares jest's JSON reporter shape closely enough
+    case 'vitest':
     case 'mocha':
-      // Both can be driven through the custom path; give a clear steer.
+      // No dedicated runner yet: drive them through the custom path by
+      // declaring tests.runAll/runClause in .triumph.yml. Without those, fail
+      // loudly with a steer rather than guessing a JSON reporter shape.
       if (cfg.tests.runClause || cfg.tests.runAll) return runCustom(cfg, clauseId);
       throw new Error(`${cfg.tests.framework}: set tests.runClause (with {clause}/{file} placeholders) printing normalized JSON, or switch tests.framework to jest`);
     case 'pytest': return runPytest(cfg, clauseId);
