@@ -208,7 +208,11 @@ async function execute(session, requested, existingRun, openExternal) {
       } else if (event) {
         child.send({ type: 'triumph.mutationProgress', runKey, event });
       }
-    } catch { /* IPC gone — not fatal */ }
+    } catch (e) {
+      // IPC pipe broke mid-relay. Not fatal for the run itself, but log so
+      // the browser-side stall is diagnosable rather than invisible.
+      console.error('[triumph] relayProgress: IPC send failed:', e && e.message ? e.message : e);
+    }
   }
 
   // Warm-cache demo guardrail: persist every relayed event to a per-run JSONL
@@ -221,7 +225,11 @@ async function execute(session, requested, existingRun, openExternal) {
     try {
       fs.mkdirSync(mutationLogDir, { recursive: true });
       fs.appendFileSync(mutationLogPath, JSON.stringify({ ...frame, ts: Date.now() }) + '\n', 'utf8');
-    } catch { /* the live stream is primary; the cache must never block it */ }
+    } catch (e) {
+      // Cache write failed (disk full, permissions, etc.). Live stream is
+      // primary so we don't throw, but log so replay gaps are diagnosable.
+      console.error('[triumph] logMutationEvent: cache write failed:', e && e.message ? e.message : e);
+    }
   }
   function relayAndLog(jobId, event, signal) {
     if (signal === 'done') logMutationEvent({ type: 'done', status: 'done', error: null });
