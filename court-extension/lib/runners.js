@@ -79,8 +79,8 @@ function withEnv(cwd, repoRoot) {
 //
 // Resolution chain (lib/toolenv.js): the repo's own node_modules first
 // (version fidelity — ts-jest/babel transforms are version-sensitive and the
-// repo pinned them), then user-configured tool dirs (TRIUMPH_TOOL_PATH /
-// .triumph/tool-path.json), then the extension dir. This removes the old
+// repo pinned them), then user-configured tool dirs (GAIA_TOOL_PATH /
+// .gaia/tool-path.json), then the extension dir. This removes the old
 // hard requirement that the OPENED folder carry node_modules: a repo that
 // was never npm-installed still runs its courts against a configured or
 // globally-installed jest. Cached per repoRoot: resolution is a handful of
@@ -125,7 +125,7 @@ function checkNodeModules(repoRoot) {
  * no npx, no batch file — safe for any argv, including the regex
  * metacharacters allClauseFilesRegex/clauseFileRegex produce). jest is
  * located via lib/toolenv's resolution chain (repo node_modules →
- * TRIUMPH_TOOL_PATH/.triumph/tool-path.json → extension dir), so the opened
+ * GAIA_TOOL_PATH/.gaia/tool-path.json → extension dir), so the opened
  * folder no longer needs its own node_modules when a jest is configured or
  * globally reachable.
  *
@@ -177,8 +177,8 @@ async function runJestCli(repoRoot, jestArgs, spawnOpts) {
     return {
       ok: false, code: null, stdout: '', stderr: '',
       error: 'jest is not resolvable (searched ' + toolenv.describeSearch(repoRoot) + ') — ' +
-        'run npm install in the repo, set TRIUMPH_TOOL_PATH to a directory with node_modules/jest, ' +
-        'or add one to .triumph/tool-path.json',
+        'run npm install in the repo, set GAIA_TOOL_PATH to a directory with node_modules/jest, ' +
+        'or add one to .gaia/tool-path.json',
     };
   }
   return spawnCollect('npx', ['jest', ...jestArgs], spawnOpts);

@@ -1,6 +1,6 @@
 # =============================================================
 # northstar (.gitignore)
-# TRIUMPH sample payments microservice monorepo (node/ts + jest)
+# GAIA sample payments microservice monorepo (node/ts + jest)
 # =============================================================
 
 # ---- Dependencies ----
@@ -78,5 +78,5 @@ Thumbs.db
 *.temp
 *.orig
 *~
-# TRIUMPH in-loop verify workspace (lib/verify.js tmp mirrors, TTL-swept)
-.triumph/tmp/
+# GAIA in-loop verify workspace (lib/verify.js tmp mirrors, TTL-swept)
+.gaia/tmp/

@@ -1,20 +1,20 @@
 ---
-name: warpath-intake
+name: triage-intake
 description: >-
-  Stand up a WARPATH incident war room for a Sev-1: capture the alert, start the
+  Stand up a TRIAGE incident war room for a Sev-1: capture the alert, start the
   MTTR clock, seed the war-room scaffold, and open the timeline. Activate
   whenever an incident must be triaged into the incident/<SEV1> workflow.
 user-invocable: true
 ---
 
-# warpath-intake
+# triage-intake
 
 You are the **Incident Commander's intake**. When a Sev-1 surfaces (a page,
 an alert, a failed probe, a spike in error rate), you open the war room and
 begin the clock. The moment an incident is acknowledged is the start of
-**MTTR** (mean time to response/repair) — the headline metric WARPATH proves.
+**MTTR** (mean time to response/repair) — the headline metric TRIAGE proves.
 
-> **WARPATH RULE** — You work ONLY under `incident/` (and read-only signals
+> **TRIAGE RULE** — You work ONLY under `incident/` (and read-only signals
 > such as `@/docs/runbook-payments.md`). You NEVER touch `src/` or `tests/`.
 > You direct; the Surgeon patches.
 
@@ -49,10 +49,10 @@ A ready war room that fixes the origin of response:
    Symptom, Suspect Apex (e.g. "shared breaker opens below threshold"), and
    provenance (branch + short SHA from `git rev-parse --abbrev-ref HEAD` and
    `git rev-parse --short HEAD`).
-4. **Recommend forensics.** Hand off to `warpath-forensics` to confirm the apex
+4. **Recommend forensics.** Hand off to `triage-forensics` to confirm the apex
    and scope the failing seam. Do NOT guess a root cause yet.
 5. **Record MTTR origin.** Note "t=0 acked" in the timeline. At resolution, run
-   `node scripts/mttr.mjs stop` so `warpath-postmortem` can read the measured
+   `node scripts/mttr.mjs stop` so `triage-postmortem` can read the measured
    `mttrSeconds` from `incident/metrics.json`.
 
 ## Constraints

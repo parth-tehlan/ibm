@@ -2,9 +2,9 @@
 
 /** Pure presentation adapters. Engine payloads are opaque evidence: never mutate
  * them, manufacture timestamps, or infer score units from numeric magnitude.
- * Native SPLITBRAIN scores are percent and trustGap is percentage_points.
+ * Native TRUSTGAP scores are percent and trustGap is percentage_points.
  */
-const COURTS = ['REDLINE', 'SPLITBRAIN', 'WARPATH'];
+const COURTS = ['WITNESS', 'TRUSTGAP', 'TRIAGE'];
 const EXECUTIONS = ['not_run', 'queued', 'running', 'complete', 'unavailable', 'error', 'cancelled'];
 const object = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const finite = (v) => typeof v === 'number' && Number.isFinite(v);
@@ -58,7 +58,7 @@ function summarizeCourt(court, payloadOrOutcome) {
     evidenceSource: outcome.evidenceSource || (payload == null ? 'none' : 'imported'),
     evidenceFreshness,
   };
-  if (court === 'REDLINE') {
+  if (court === 'WITNESS') {
     const rows = Array.isArray(p.results) ? p.results : [];
     const clauses = rows.map((row) => ({ clause: object(row) ? row.clause : null, status: clauseStatus(row), payload: row }));
     const counts = { green: 0, red: 0, yellow: 0, total: clauses.length };
@@ -77,7 +77,7 @@ function summarizeCourt(court, payloadOrOutcome) {
     const hasFailures = counts.red > 0 || (count(reported.red) && reported.red > 0);
     summary.verdict = hasFailures ? 'findings' : counts.green > 0 && counts.green === counts.total && !(reported.yellow > 0) && !(reported.total === 0) && tests > 0 ? 'pass' : 'inconclusive';
     summary.detail = counts.total ? `${counts.red} failed · ${counts.yellow} incomplete · ${counts.green} passed clauses` : 'No executed clause evidence';
-  } else if (court === 'SPLITBRAIN') {
+  } else if (court === 'TRUSTGAP') {
     summary.metrics = [metric('claimedCoverage', p.claimedCoverage, 'percent'), metric('honestMutationScore', p.honestMutationScore, 'percent'), metric('trustGap', p.trustGap, 'percentage_points')];
     const totals = object(p.totals) ? p.totals : {};
     const mutants = Array.isArray(p.mutants) ? p.mutants : Array.isArray(p.survivors) ? p.survivors : [];

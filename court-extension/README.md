@@ -145,14 +145,14 @@ wall: { denyGlobs: ['src/**'] }
 
 ## Tool resolution (no node_modules in the opened folder?)
 
-The courts drive the repo's own toolchain (jest for REDLINE + SPLITBRAIN
-verify, stryker-or-friends for SPLITBRAIN mutation). The opened VS Code
+The courts drive the repo's own toolchain (jest for WITNESS + TRUSTGAP
+verify, stryker-or-friends for TRUSTGAP mutation). The opened VS Code
 folder no longer **has** to carry `node_modules`. Resolution order:
 
 1. **The repo's own `node_modules`** — always preferred (version fidelity:
    `ts-jest`/babel transforms are version-sensitive and the repo pinned them).
-2. **A configured tool path** — `TRIUMPH_TOOL_PATH` (PATH-style list), then
-   `<repo>/.triumph/tool-path.json`, then `~/.triumph/tool-path.json`, each
+2. **A configured tool path** — `GAIA_TOOL_PATH` (PATH-style list), then
+   `<repo>/.gaia/tool-path.json`, then `~/.gaia/tool-path.json`, each
    `{ "toolPath": ["dir", ...] }` where a dir contains a `node_modules`.
 3. **`PATH`** — globally-installed tools (`stryker`, jest).
 

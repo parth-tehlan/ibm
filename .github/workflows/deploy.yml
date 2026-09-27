@@ -1,5 +1,5 @@
 # =============================================================================
-# TRIUMPH 3-Court — Deploy workflow (GitHub Actions)
+# Gaia 3-Court — Deploy workflow (GitHub Actions)
 #
 # Triggers:
 #   - push tags v*
@@ -54,17 +54,17 @@ jobs:
       - name: Package .vsix
         working-directory: court-extension
         run: |
-          npx --yes @vscode/vsce@2.15.0 package --no-dependencies --out triumph-courts.vsix
-          node bin/verify-vsix.js triumph-courts.vsix
-          node ../scripts/verify-packaged-vsix.mjs triumph-courts.vsix
-          node ../scripts/verify-packaged-bob.mjs triumph-courts.vsix
-          echo "built $(du -h triumph-courts.vsix | cut -f1)"
+          npx --yes @vscode/vsce@2.15.0 package --no-dependencies --out gaia-courts.vsix
+          node bin/verify-vsix.js gaia-courts.vsix
+          node ../scripts/verify-packaged-vsix.mjs gaia-courts.vsix
+          node ../scripts/verify-packaged-bob.mjs gaia-courts.vsix
+          echo "built $(du -h gaia-courts.vsix | cut -f1)"
 
       - name: Upload .vsix artifact
         uses: actions/upload-artifact@v4
         with:
-          name: triumph-courts-vsix
-          path: court-extension/triumph-courts.vsix
+          name: gaia-courts-vsix
+          path: court-extension/gaia-courts.vsix
           if-no-files-found: error
 
   release:
@@ -80,13 +80,13 @@ jobs:
       - name: Download packaged .vsix
         uses: actions/download-artifact@v4
         with:
-          name: triumph-courts-vsix
+          name: gaia-courts-vsix
           path: ./dist
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/triumph-courts.vsix
+          files: dist/gaia-courts.vsix
           generate_release_notes: true
           draft: false
         env:
@@ -106,7 +106,7 @@ jobs:
       - name: Download packaged .vsix
         uses: actions/download-artifact@v4
         with:
-          name: triumph-courts-vsix
+          name: gaia-courts-vsix
           path: ./dist
 
       - name: Configure SSH
@@ -121,10 +121,10 @@ jobs:
           TARGET="${{ inputs.deploy_target }}"
           # Input may be just a host; qualify into user@host if needed.
           if [[ "$TARGET" != *"@"* ]]; then TARGET="root@${TARGET}"; fi
-          scp ./dist/triumph-courts.vsix "$TARGET:/tmp/triumph-courts.vsix"
-          ssh "$TARGET" "code-server --install-extension /tmp/triumph-courts.vsix --force"
+          scp ./dist/gaia-courts.vsix "$TARGET:/tmp/gaia-courts.vsix"
+          ssh "$TARGET" "code-server --install-extension /tmp/gaia-courts.vsix --force"
           echo "Installed:"
-          ssh "$TARGET" "code-server --list-extensions --show-versions | grep -i triumph"
+          ssh "$TARGET" "code-server --list-extensions --show-versions | grep -i gaia"
 
       - name: Notify status
         run: echo "Deployed to ${{ inputs.deploy_target }}"

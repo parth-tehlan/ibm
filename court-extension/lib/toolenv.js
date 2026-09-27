@@ -2,8 +2,8 @@
 /**
  * lib/toolenv.js — external-tool resolution for the court engine.
  *
- * The courts drive the repo's own toolchain (jest for REDLINE / SPLITBRAIN
- * verify, stryker-or-friends for SPLITBRAIN mutation). Historically that
+ * The courts drive the repo's own toolchain (jest for WITNESS / TRUSTGAP
+ * verify, stryker-or-friends for TRUSTGAP mutation). Historically that
  * toolchain had to live in the OPENED folder's node_modules, because
  * resolution was `require.resolve(..., { paths: [repoRoot] })` or an
  * unmodified PATH — so a repo without `npm install` could not run any court.
@@ -13,8 +13,8 @@
  *   1. the repo's own node_modules (preferred — version fidelity: ts-jest,
  *      babel transforms and stryker plugins are version-sensitive, and the
  *      repo pinned them);
- *   2. a user-configured tool path: TRIUMPH_TOOL_PATH env (PATH-style list),
- *      then <repo>/.triumph/tool-path.json, then ~/.triumph/tool-path.json
+ *   2. a user-configured tool path: GAIA_TOOL_PATH env (PATH-style list),
+ *      then <repo>/.gaia/tool-path.json, then ~/.gaia/tool-path.json
  *      ({ "toolPath": [...] } — extra directories containing node_modules
  *      roots or .bin dirs);
  *   3. PATH (globally-installed tools).
@@ -41,20 +41,20 @@ const EXT_DIR = path.resolve(__dirname, '..');
 /**
  * Collect the user-configured tool search dirs for a repo, in priority
  * order. Sources (earlier wins):
- *   - TRIUMPH_TOOL_PATH: PATH-style delimited list of directories
- *   - <repoRoot>/.triumph/tool-path.json: { "toolPath": ["dir", ...] }
- *   - ~/.triumph/tool-path.json: same shape, global default
+ *   - GAIA_TOOL_PATH: PATH-style delimited list of directories
+ *   - <repoRoot>/.gaia/tool-path.json: { "toolPath": ["dir", ...] }
+ *   - ~/.gaia/tool-path.json: same shape, global default
  * Relative entries in the JSON files resolve against the file's own dir.
  */
 function configuredToolDirs(repoRoot) {
   const dirs = [];
-  const env = process.env.TRIUMPH_TOOL_PATH;
+  const env = process.env.GAIA_TOOL_PATH;
   if (env) {
     for (const d of env.split(path.delimiter).filter(Boolean)) dirs.push(path.resolve(d));
   }
   const jsonFiles = [
-    repoRoot ? path.join(repoRoot, '.triumph', 'tool-path.json') : null,
-    path.join(os.homedir(), '.triumph', 'tool-path.json'),
+    repoRoot ? path.join(repoRoot, '.gaia', 'tool-path.json') : null,
+    path.join(os.homedir(), '.gaia', 'tool-path.json'),
   ].filter(Boolean);
   for (const fp of jsonFiles) {
     let parsed;

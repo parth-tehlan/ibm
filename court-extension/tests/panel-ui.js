@@ -51,29 +51,29 @@ test('arrow keys and Home/End implement roving tab focus', h => {
   assert.equal(h.d.activeElement.id, 'tab-evidence'); assert.equal(h.d.getElementById('tab-run').tabIndex, -1);
   h.d.activeElement.dispatchEvent(new h.dom.window.KeyboardEvent('keydown', { key: 'Home', bubbles: true })); assert.equal(h.d.activeElement.id, 'tab-run');
 });
-test('first run is REDLINE only, publication off, exact subset request', h => {
-  h.state(); assert.equal(h.d.getElementById('court-REDLINE').checked, true);
-  assert.equal(h.d.getElementById('court-SPLITBRAIN').checked, false); assert.equal(h.d.getElementById('publish-toggle').checked, false);
-  h.click('court-WARPATH'); h.click('publish-toggle'); h.click('run-btn');
-  assert.deepEqual(h.last('runCourt').courts, ['REDLINE', 'WARPATH']); assert.equal(h.last('runCourt').outputTarget, 'dashboard');
+test('first run is WITNESS only, publication off, exact subset request', h => {
+  h.state(); assert.equal(h.d.getElementById('court-WITNESS').checked, true);
+  assert.equal(h.d.getElementById('court-TRUSTGAP').checked, false); assert.equal(h.d.getElementById('publish-toggle').checked, false);
+  h.click('court-TRIAGE'); h.click('publish-toggle'); h.click('run-btn');
+  assert.deepEqual(h.last('runCourt').courts, ['WITNESS', 'TRIAGE']); assert.equal(h.last('runCourt').outputTarget, 'dashboard');
   assert.equal(h.d.getElementById('run-btn').disabled, true); h.click('run-btn'); assert.equal(h.messages.filter(m => m.type === 'runCourt').length, 1);
 });
 test('unavailable first court selects nothing; remembered unavailable court requires review', h => {
-  const s = fixtures.ready(); s.readiness.courts.REDLINE = { ready: false, reason: 'No clause fixtures' };
-  h.state(s); assert.equal(h.d.getElementById('court-REDLINE').checked, false); assert.equal(h.d.getElementById('run-btn').disabled, true);
-  h.click('court-WARPATH'); s.readiness.courts.WARPATH = { ready: false, reason: 'No incident inputs' }; h.state(s);
-  assert.equal(h.d.getElementById('court-WARPATH').checked, true); assert.equal(h.d.getElementById('court-WARPATH').disabled, false); assert.equal(h.d.getElementById('run-btn').disabled, true);
-  h.click('court-WARPATH'); assert.equal(h.d.getElementById('court-WARPATH').checked, false);
+  const s = fixtures.ready(); s.readiness.courts.WITNESS = { ready: false, reason: 'No clause fixtures' };
+  h.state(s); assert.equal(h.d.getElementById('court-WITNESS').checked, false); assert.equal(h.d.getElementById('run-btn').disabled, true);
+  h.click('court-TRIAGE'); s.readiness.courts.TRIAGE = { ready: false, reason: 'No incident inputs' }; h.state(s);
+  assert.equal(h.d.getElementById('court-TRIAGE').checked, true); assert.equal(h.d.getElementById('court-TRIAGE').disabled, false); assert.equal(h.d.getElementById('run-btn').disabled, true);
+  h.click('court-TRIAGE'); assert.equal(h.d.getElementById('court-TRIAGE').checked, false);
 });
 test('workspace-scoped selections, publication and timeout do not bleed', h => {
-  h.state(); h.click('court-SPLITBRAIN'); h.click('publish-toggle');
+  h.state(); h.click('court-TRUSTGAP'); h.click('publish-toggle');
   h.state(fixtures.ready({ workspace: { root: '/other', name: 'Other', trusted: true } }));
-  assert.equal(h.d.getElementById('court-SPLITBRAIN').checked, false); assert.equal(h.d.getElementById('publish-toggle').checked, false);
-  h.state(); assert.equal(h.d.getElementById('court-SPLITBRAIN').checked, true); assert.equal(h.d.getElementById('publish-toggle').checked, true);
+  assert.equal(h.d.getElementById('court-TRUSTGAP').checked, false); assert.equal(h.d.getElementById('publish-toggle').checked, false);
+  h.state(); assert.equal(h.d.getElementById('court-TRUSTGAP').checked, true); assert.equal(h.d.getElementById('publish-toggle').checked, true);
 });
 test('legacy preferences migrate without implicit dashboard publication', h => {
-  const other = harness({ tab: 'report', courts: ['WARPATH'], outputTarget: 'dashboard' });
-  try { other.state(); assert.equal(other.d.getElementById('panel-evidence').hidden, false); other.click('tab-run'); assert.equal(other.d.getElementById('court-WARPATH').checked, true); assert.equal(other.d.getElementById('publish-toggle').checked, false); assert.equal(other.saved.version, 2); } finally { other.close(); }
+  const other = harness({ tab: 'report', courts: ['TRIAGE'], outputTarget: 'dashboard' });
+  try { other.state(); assert.equal(other.d.getElementById('panel-evidence').hidden, false); other.click('tab-run'); assert.equal(other.d.getElementById('court-TRIAGE').checked, true); assert.equal(other.d.getElementById('publish-toggle').checked, false); assert.equal(other.saved.version, 2); } finally { other.close(); }
 });
 test('unsupported timeout overrides cannot be submitted or silently ignored', h => {
   h.state(); const input = h.d.getElementById('timeout-input'); assert.equal(input.disabled, true);
@@ -89,12 +89,12 @@ test('supported timeout override validates a positive whole number', h => {
 });
 test('progress freezes controls, distinguishes queued, only real denominator yields progress', h => {
   const run = fixtures.running(); h.state(fixtures.ready({ activeRun: run }));
-  assert.equal(h.d.getElementById('court-REDLINE').disabled, true); assert.equal(h.d.getElementById('publish-toggle').disabled, true);
-  assert.match(h.d.body.textContent, /WARPATH · queued/); assert.equal(h.d.querySelector('progress').max, 120);
-  run.courts.SPLITBRAIN.progress.total = null; h.state(fixtures.ready({ activeRun: run })); assert.equal(h.d.querySelector('progress'), null);
+  assert.equal(h.d.getElementById('court-WITNESS').disabled, true); assert.equal(h.d.getElementById('publish-toggle').disabled, true);
+  assert.match(h.d.body.textContent, /TRIAGE · queued/); assert.equal(h.d.querySelector('progress').max, 120);
+  run.courts.TRUSTGAP.progress.total = null; h.state(fixtures.ready({ activeRun: run })); assert.equal(h.d.querySelector('progress'), null);
   assert.equal(h.d.getElementById('stop-run'), null);
   h.state(fixtures.ready({ activeRun: run, capabilities: { ...fixtures.capabilities, cancelRun: true } })); h.click('stop-run'); assert.equal(h.last('cancelRun').runId, run.runId);
-  assert.match(h.d.body.textContent, /Stopping/); assert.equal(h.d.getElementById('court-REDLINE').disabled, true);
+  assert.match(h.d.body.textContent, /Stopping/); assert.equal(h.d.getElementById('court-WITNESS').disabled, true);
 });
 test('completion stays on Run and never opens dashboard or reruns', h => {
   h.state(fixtures.ready({ activeRun: fixtures.running() }));
@@ -102,20 +102,20 @@ test('completion stays on Run and never opens dashboard or reruns', h => {
   assert.equal(h.d.getElementById('panel-run').hidden, false); assert.ok(h.d.getElementById('view-evidence'));
   assert.equal(h.last('dashboardOpen'), undefined); assert.equal(h.last('runCourt'), undefined);
 });
-test('zero tests remain inconclusive and missing WARPATH signal never means clear', h => {
+test('zero tests remain inconclusive and missing TRIAGE signal never means clear', h => {
   h.state(fixtures.ready({ selectedRun: fixtures.evidence() })); h.click('tab-evidence');
-  const red = h.d.getElementById('evidence-REDLINE'), war = h.d.getElementById('evidence-WARPATH');
+  const red = h.d.getElementById('evidence-WITNESS'), war = h.d.getElementById('evidence-TRIAGE');
   assert.match(red.textContent, /zero tests executed/); assert.equal(red.querySelector('.pass'), null);
   assert.match(war.textContent, /insufficient incident signal/); assert.equal(war.querySelector('.pass'), null);
 });
 test('percent values are not multiplied; pp including negatives are preserved', h => {
-  const run = fixtures.evidence(); run.courts.SPLITBRAIN.payload.trustGap = -2.19;
-  h.state(fixtures.ready({ selectedRun: run })); h.click('tab-evidence'); const t = h.d.getElementById('evidence-SPLITBRAIN').textContent;
+  const run = fixtures.evidence(); run.courts.TRUSTGAP.payload.trustGap = -2.19;
+  h.state(fixtures.ready({ selectedRun: run })); h.click('tab-evidence'); const t = h.d.getElementById('evidence-TRUSTGAP').textContent;
   assert.match(t, /Claimed coverage 88.5%/); assert.match(t, /Mutation score 90.69%/); assert.match(t, /Trust gap -2.19 pp/); assert.doesNotMatch(t, /219%|8850%/);
 });
 test('mutation command error remains error even when old metrics exist', h => {
-  const run = fixtures.evidence(); run.courts.SPLITBRAIN.execution = 'error'; run.courts.SPLITBRAIN.errors = [{ message: 'Exit 1; no fresh report' }];
-  h.state(fixtures.ready({ selectedRun: run })); h.click('tab-evidence'); assert.match(h.d.body.textContent, /Finished with execution errors/); assert.match(h.d.getElementById('evidence-SPLITBRAIN').textContent, /Exit 1; no fresh report/);
+  const run = fixtures.evidence(); run.courts.TRUSTGAP.execution = 'error'; run.courts.TRUSTGAP.errors = [{ message: 'Exit 1; no fresh report' }];
+  h.state(fixtures.ready({ selectedRun: run })); h.click('tab-evidence'); assert.match(h.d.body.textContent, /Finished with execution errors/); assert.match(h.d.getElementById('evidence-TRUSTGAP').textContent, /Exit 1; no fresh report/);
 });
 test('export, publication retry and recent selection never start courts', h => {
   const run = fixtures.evidence(); h.state(fixtures.ready({ selectedRun: run, recentRuns: [run] })); h.click('tab-evidence');
@@ -161,11 +161,11 @@ test('focus and disclosure are preserved on host snapshots', h => {
   assert.equal(h.d.activeElement.id, 'timeout-input'); assert.equal(h.d.getElementById('advanced').open, true);
 });
 test('host strings render as text, never HTML or executable URLs', h => {
-  const run = fixtures.evidence(); run.summary = { courts: { WARPATH: { label: '<img src=x onerror=alert(1)>', verdict: 'inconclusive' } } };
+  const run = fixtures.evidence(); run.summary = { courts: { TRIAGE: { label: '<img src=x onerror=alert(1)>', verdict: 'inconclusive' } } };
   h.state(fixtures.ready({ selectedRun: run })); h.click('tab-evidence'); assert.equal(h.d.querySelector('img'), null); assert.match(h.d.body.textContent, /<img/);
 });
 test('old state remains usable with safe disabled write upgrades', h => {
-  h.state({ workspace: { root: '/legacy' }, config: { exists: true }, hosts: { default: 'all', available: ['all'] }, lastReport: { redline: { summary: { green: 2, red: 0, yellow: 0 } }, warpath: {}, htmlPath: '/reports/latest.html' } });
+  h.state({ workspace: { root: '/legacy' }, config: { exists: true }, hosts: { default: 'all', available: ['all'] }, lastReport: { witness: { summary: { green: 2, red: 0, yellow: 0 } }, triage: {}, htmlPath: '/reports/latest.html' } });
   assert.equal(h.d.getElementById('run-btn').disabled, false); h.click('tab-evidence'); assert.equal(h.d.querySelector('.pass'), null);
   h.click('export-html'); assert.equal(h.last('openLastReport').format, 'html'); h.click('setup-nav'); assert.equal(h.d.getElementById('config-preview').disabled, true);
 });

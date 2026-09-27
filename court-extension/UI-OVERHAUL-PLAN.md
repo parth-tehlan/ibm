@@ -1,4 +1,4 @@
-# TRIUMPH extension — UI and workflow overhaul
+# GAIA extension — UI and workflow overhaul
 
 ## Decision
 
@@ -36,9 +36,9 @@ The two-tab rationale below remains the current presentation decision. Theme tok
 | Dashboard runs do not share the local report path | Local artifacts are written only in the local branch of `runCourt` | Always persist local evidence; dashboard publication is additive. |
 | Execution errors and findings are conflated | Returned `{kind:'error'}` outcomes do not necessarily enter the aggregate `errors` list | Aggregate from structured outcomes, not thrown exceptions or activity text. |
 | Trust-gap presentation disagrees | Tile shows raw gap; report multiplies by 100 and clamps; `lib/trustgap.js` produces percentage-point differences | Display e.g. `Trust gap 2.19 pp`; scores are already 0–100 percentages. Remove misleading gauge. |
-| Missing evidence can look positive | REDLINE tile checks only `red > 0`; WARPATH absence of incident window becomes `clear` | Explicit incomplete/unavailable/error states; pass/clear requires affirmative evidence. |
+| Missing evidence can look positive | WITNESS tile checks only `red > 0`; TRIAGE absence of incident window becomes `clear` | Explicit incomplete/unavailable/error states; pass/clear requires affirmative evidence. |
 | Report freshness is inferred from shared artifacts | `findLastReport` uses file mtime and may combine files from different runs | Immutable run identity, per-court provenance, artifact ownership. |
-| Setup labels understate writes | `detectConfig` writes `.triumph.yml`; its button says auto-detect | Read-only validation; explicit create/re-detect preview before replacing config. |
+| Setup labels understate writes | `detectConfig` writes `.gaia.yml`; its button says auto-detect | Read-only validation; explicit create/re-detect preview before replacing config. |
 | Long URLs, paths, timestamps and nested logs dominate | Visible in screenshots | Friendly link labels, relative paths, compact timestamps; full values in accessible details/copy actions. |
 | Current UI tests lock in old layout | `tests/panel-ui.js` asserts exact icons, rail CSS and copy | Replace obsolete assertions with interaction/state tests and visual checks. |
 
@@ -59,17 +59,17 @@ This review is source-based, not a completed runtime audit or a claim that exist
 Illustrative wireframe, not actual collected evidence:
 
 ```text
-TRIUMPH                         Setup
+GAIA                            Setup
 northstar ▾               Config ready
 
 [ Run ]  [ Evidence ]
 
 Choose courts
-[x] REDLINE
+[x] WITNESS
     Verify spec requirements
-[x] SPLITBRAIN
+[x] TRUSTGAP
     Test assertion strength · slower
-[ ] WARPATH
+[ ] TRIAGE
     Investigate incident evidence
 
 [ ] Also publish to local dashboard
@@ -81,17 +81,17 @@ Reports are always saved locally.
 
 LATEST RUN                 4 min ago
 Completed · findings need attention
-REDLINE       8 failed · 2 incomplete
-SPLITBRAIN         Trust gap 2.19 pp
+WITNESS       8 failed · 2 incomplete
+TRUSTGAP         Trust gap 2.19 pp
 [ View evidence ]    Open dashboard ↗
 ```
 
-- First use: select available REDLINE; do not silently default to an expensive mutation run. If REDLINE is unavailable, select nothing and show the readiness reasons. Persist explicit selections per workspace afterward.
-- WARPATH is opt-in; incident investigation is not a mandatory routine check.
+- First use: select available WITNESS; do not silently default to an expensive mutation run. If WITNESS is unavailable, select nothing and show the readiness reasons. Persist explicit selections per workspace afterward.
+- TRIAGE is opt-in; incident investigation is not a mandatory routine check.
 - Use checkboxes, not ambiguous selectable cards. Entire label row is clickable; controls have visible focus states.
 - Show unavailable courts with a reason and `Configure` action. Do not quietly drop a selected court if prerequisites later disappear; require review before execution.
 - Dashboard toggle defaults off; persist a user's explicit choice. Label it as local so “publish” does not imply public hosting.
-- Advanced contains the effective mutation timeout, its source, and a per-run override. Do not use only a placeholder such as “from .triumph”.
+- Advanced contains the effective mutation timeout, its source, and a per-run override. Do not use only a placeholder such as “from .gaia”.
 - Default local outputs: canonical run JSON plus existing HTML and Markdown. Remove export-format checkboxes from the run form; choosing how to read results should not change what evidence is preserved.
 - Preserve existing explicit format options for programmatic callers while always keeping internal canonical evidence.
 
@@ -99,8 +99,8 @@ SPLITBRAIN         Trust gap 2.19 pp
 
 ```text
 Running 2 courts                 1m 42s
-✓ REDLINE       8 clause failures
-◌ SPLITBRAIN    Testing mutations
+✓ WITNESS       8 clause failures
+◌ TRUSTGAP    Testing mutations
   37 / 120 tested · 24 killed
 
 [ Stop run ]                View logs
@@ -123,9 +123,9 @@ Running 2 courts                 1m 42s
 - Distinguish `Completed — findings need attention`, `Completed — incomplete evidence`, `Finished with execution errors`, `Stopped — partial evidence`, and `Completed — no issues found`.
 - Dashboard transport failure says `Evidence saved · dashboard publish failed` with **Retry publish**. Retrying publication never reruns tests.
 - Evidence rows show the finding, its basis, freshness, and an action—not only a colored badge.
-- REDLINE: failed/incomplete clause list and actual test counts; open a local source/test location when the engine supplies a valid workspace path.
-- SPLITBRAIN: claimed coverage, mutation score, trust gap in pp, survivor count, fresh versus imported evidence. Use the existing dashboard for mutant-level exploration.
-- WARPATH: distinguish detected incident, insufficient signal, unavailable inputs, and engine error; do not invent an incident count or assert “clear” from missing fields.
+- WITNESS: failed/incomplete clause list and actual test counts; open a local source/test location when the engine supplies a valid workspace path.
+- TRUSTGAP: claimed coverage, mutation score, trust gap in pp, survivor count, fresh versus imported evidence. Use the existing dashboard for mutant-level exploration.
+- TRIAGE: distinguish detected incident, insufficient signal, unavailable inputs, and engine error; do not invent an incident count or assert “clear” from missing fields.
 - Exports menu: HTML report, Markdown, JSON, and reveal report folder. Disable unavailable artifacts with explanations.
 - Recent runs: latest 10 summaries, load more on demand; never load all mutation payloads into the sidebar. Full comparisons remain in the dashboard.
 
@@ -207,7 +207,7 @@ Use JSON Schema for persisted and message contracts, plus JSDoc for authoring. S
 | schemaVersion | literal `1` |
 | runId | UUID; stable across local evidence and publication |
 | workspaceId | canonical project/workspace identifier |
-| requestedCourts | nonempty unique array of `REDLINE`, `SPLITBRAIN`, `WARPATH` |
+| requestedCourts | nonempty unique array of `WITNESS`, `TRUSTGAP`, `TRIAGE` |
 | trigger | `sidebar`, `command`, `dashboard` |
 | startedAt / finishedAt | ISO timestamps; finishedAt nullable |
 | phase | `preflight`, `executing`, `saving`, `publishing`, `settled` |
@@ -236,11 +236,11 @@ Adapter rule: cancelled court → existing v2 `error` envelope with cancellation
 
 ### Evidence rules — hard requirements
 
-- REDLINE with zero executed tests is inconclusive/yellow, never a pass. Yellow is not universally “skipped”: preserve the engine's actual reason. Duplicate discovery under tests and `.stryker-tmp` does not prove assertions ran successfully.
-- SPLITBRAIN mutation command failure/no fresh report is an execution error. Preserve stdout, stderr, exit code and report provenance where the runner exposes them; extend runner diagnostics where necessary. An old report may be opened separately but not relabeled as this run's success.
+- WITNESS with zero executed tests is inconclusive/yellow, never a pass. Yellow is not universally “skipped”: preserve the engine's actual reason. Duplicate discovery under tests and `.stryker-tmp` does not prove assertions ran successfully.
+- TRUSTGAP mutation command failure/no fresh report is an execution error. Preserve stdout, stderr, exit code and report provenance where the runner exposes them; extend runner diagnostics where necessary. An old report may be opened separately but not relabeled as this run's success.
 - Engine mutation score and claimed coverage are percentages already; trust gap is their difference in percentage points. No multiplication by 100, no clamping into a percentage meter, no value-based unit guessing. Preserve negative gaps; explain them rather than classifying them by an invented threshold.
 - Use authoritative configured/domain thresholds where they exist. If no verified verdict policy exists, show metrics and findings without manufacturing pass/fail thresholds.
-- WARPATH without sufficient input/signal is unavailable or inconclusive, never an automatic all-clear.
+- TRIAGE without sufficient input/signal is unavailable or inconclusive, never an automatic all-clear.
 - `complete` means the collector finished; it does not mean the evidence passed. Aggregate outcome comes from all requested court outcomes and artifact/publication status.
 - Missing, stale, imported and not-run are distinct. Legacy files without run provenance receive unknown freshness, never a fabricated current timestamp.
 
@@ -281,7 +281,7 @@ Existing messages and command IDs translate to these operations during migration
 
 Implement in this order. Each task includes its verification gate.
 
-1. **Capture baseline and lock semantics.** Add fixtures for zero-test REDLINE, actual clause failures, failed mutation/no fresh report, precomputed mutation data, missing WARPATH signal, selected-subset runs, publication failure and stale artifacts. Document the current percentage units. Gate: regression tests fail against the misleading behavior they target.
+1. **Capture baseline and lock semantics.** Add fixtures for zero-test WITNESS, actual clause failures, failed mutation/no fresh report, precomputed mutation data, missing TRIAGE signal, selected-subset runs, publication failure and stale artifacts. Document the current percentage units. Gate: regression tests fail against the misleading behavior they target.
 2. **Introduce shared normalization and run contract.** Add `schemas/run-record.schema.json`, a message schema and host-side `lib/run-summary.js`; reuse existing converters where appropriate. Gate: sidebar, status bar and dashboard adapters agree on outcome, units and source freshness for every fixture.
 3. **Unify execution ownership.** Add `src/run-coordinator.js`; reconcile collectors from `actions.js` and `dashboard.js`; route sidebar, command and browser requests through it. Thread effective timeout into the actual runner, not just the polling deadline. Gate: each selected court executes exactly once, unselected courts never execute, and competing mutation requests cannot overlap through extension entry points.
 4. **Persist once, publish without rerunning.** Add run storage/index and artifact manifests; always retain canonical evidence including errors. Keep legacy latest report paths as compatibility outputs. Route publish/retry through snapshot conversion and existing transport. Gate: transport failure retains local evidence; retry has zero engine invocations; reload restores the correct run/artifacts.

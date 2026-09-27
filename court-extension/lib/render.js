@@ -31,7 +31,7 @@ function renderMarkdown(input) {
   L.push('');
 
   if (witness) {
-    const s = witness.summary || {};
+    const s = summarizeCourt('WITNESS', witness).counts;
     L.push(`## WITNESS — spec-witness`);
     L.push('');
     L.push(`Verdict: **${s.green ?? 0} green / ${s.red ?? 0} red / ${s.yellow ?? 0} yellow** of ${s.total ?? 0} clauses`);
@@ -56,6 +56,7 @@ function renderMarkdown(input) {
 
   if (trustgap) {
     L.push('## TRUSTGAP — honesty audit');
+    L.push(`Evidence: **${summarizeCourt('TRUSTGAP', trustgap).label}**`);
     L.push('');
     if (trustgap.status === 'not-run' || trustgap.status === 'unconfigured') {
       L.push(`_${trustgap.note || 'not run'}_`);
@@ -89,6 +90,7 @@ function renderMarkdown(input) {
 
   if (triage) {
     L.push('## TRIAGE — incident forensics');
+    L.push(summarizeCourt('TRIAGE', triage).detail);
     L.push('');
     if (triage.status && triage.status.startsWith('no-')) {
       L.push(`_${triage.detail || triage.status}_`);
@@ -130,6 +132,7 @@ function esc(s) {
 
 function renderHtml(input) {
   const { repo, generated, witness, trustgap, triage } = input;
+  const witnessSummary = witness ? summarizeCourt('WITNESS', witness) : null;
   const verdict = (st) => `<span class="pill ${st}">${st}</span>`;
 
   const clauseRows = (witness && witness.results || []).map((r, i) => `
@@ -157,13 +160,13 @@ function renderHtml(input) {
     `<li class="${e.level}"><span class="mono">${esc(e.t)}</span> <span class="lvl">${esc(e.level)}</span> ${esc(e.msg)}</li>`
   ).join('');
 
-  const sbSummary = trustgap && trustgap.claimedCoverage != null ? `
+  const tgSummary = trustgap && trustgap.claimedCoverage != null ? `
     <div class="gauges">
       <div class="gauge"><div class="num">${esc(fmtPct(trustgap.claimedCoverage))}</div><div class="lbl">claimed coverage</div></div>
       <div class="gauge"><div class="num">${esc(fmtPct(trustgap.honestMutationScore))}</div><div class="lbl">honest kill-rate</div></div>
-      <div class="gauge ${trustgap.trustGap != null && (trustgap.trustGap > 5 && trustgap.trustGap > 0.05) ? 'bad' : 'good'}"><div class="num">${esc(formatMetric(trustgap.trustGap, 'percentage_points'))}</div><div class="lbl">trust gap</div></div>
+<div class="gauge"><div class="num">${esc(formatMetric(trustgap.trustGap, 'percentage_points'))}</div><div class="lbl">trust gap · coverage minus mutation score</div></div>
     </div>
-    ${(trustgap.dishonestTests || []).length ? `<div class="dishonest"><b>Dishonest tests (tautologies):</b><ul>${trustgap.dishonestTests.map((d) => `<li><code>${esc(d.testName || d.testId || d)}</code> tolerated ${esc(JSON.stringify(d.survivedMutants || []))}</li>`).join('')}</ul></div>` : '<div class="honest">No tautologies found — every covered mutant was killed.</div>'}
+    ${(trustgap.dishonestTests || []).length ? `<div class="dishonest"><b>Dishonest tests (tautologies):</b><ul>${trustgap.dishonestTests.map((d) => `<li><code>${esc(d.testName || d.testId || d)}</code> tolerated ${esc(JSON.stringify(d.survivedMutants || []))}</li>`).join('')}</ul></div>` : '<p class="muted">No tests named in this ledger. Survivors may be unattributed; this does not establish that all tests are honest.</p>'}
   ` : `<p class="muted">${esc(trustgap && (trustgap.note || trustgap.status) || 'TRUSTGAP not run')}</p>`;
 
   return `<!doctype html>
@@ -212,17 +215,19 @@ function renderHtml(input) {
 </header>
 <main>
 <section id="witness">
-  <h2>WITNESS — spec-witness ${witness ? verdict(summaryStatus(witness.summary)) : ''}</h2>
-  ${witness && witness.summary ? `<p class="sub">${witness.summary.green} green / ${witness.summary.red} red / ${witness.summary.yellow} yellow of ${witness.summary.total} clauses. Click a row to expand failures.</p>` : '<p class="muted">WITNESS not run.</p>'}
+  <h2>WITNESS — spec-witness ${witness ? verdict(witnessSummary.tone) : ''}</h2>
+  ${witness && witness.summary ? `<p class="sub">${witnessSummary.counts.green} green / ${witnessSummary.counts.red} red / ${witnessSummary.counts.yellow} yellow of ${witnessSummary.counts.total} clauses. Click a row to expand failures.</p>` : '<p class="muted">WITNESS not run.</p>'}
   ${clauseRows ? `<table><thead><tr><th>Clause</th><th>Verdict</th><th>Pass/Fail/Total</th><th>Test</th><th>Spec anchor</th></tr></thead><tbody>${clauseRows}</tbody></table>` : ''}
 </section>
 <section id="trustgap">
   <h2>TRUSTGAP — honesty audit</h2>
-  ${sbSummary}
+  <p class="muted">${esc(summarizeCourt('TRUSTGAP', trustgap).label)}</p>
+  ${tgSummary}
   ${survivorRows ? `<h3 style="margin-top:18px">Surviving mutants (gutter)</h3><table><thead><tr><th>ID</th><th>Mutator</th><th>Location</th><th>Replacement</th><th>Covered by</th></tr></thead><tbody>${survivorRows}</tbody></table>` : ''}
 </section>
 <section id="triage">
   <h2>TRIAGE — incident forensics</h2>
+  <p class="muted">${esc(summarizeCourt('TRIAGE', triage).detail)}</p>
   ${triage && triage.suspect ? `
     <div class="gauges">
       <div class="gauge"><div class="num mono" style="font-size:18px">${esc(triage.suspect.id)}</div><div class="lbl">suspect deploy${triage.suspect.commit ? ' (' + esc(triage.suspect.commit) + ')' : ''}</div></div>

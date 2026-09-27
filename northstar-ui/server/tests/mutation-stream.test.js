@@ -9,7 +9,7 @@ import { createHistory } from '../history.js';
 import { createMutationBus } from '../mutation-bus.js';
 
 async function setup(t) {
-  const dir = await mkdtemp(path.join(os.tmpdir(), 'triumph-mutation-sse-'));
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'gaia-mutation-sse-'));
   const history = createHistory({ dir });
   const app = createApp({ history });
   const server = app.listen(0, '127.0.0.1');
@@ -98,7 +98,7 @@ test('mutation-stream rejects malformed ids; replay returns 404 without a log', 
 
 test('warm-cache replay: JSONL written by the extension is served after a restart', async (t) => {
   // Seed a history dir with an extension-style event log.
-  const dir = await mkdtemp(path.join(os.tmpdir(), 'triumph-mutation-cache-'));
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'gaia-mutation-cache-'));
   t.after(() => rm(dir, { recursive: true, force: true }));
   const projectId = randomUUID();
   const runId = randomUUID();

@@ -1,17 +1,17 @@
 ---
-name: redline-audit
-description: Grade REDLINE completeness — verify every clause-wall entry W1..W8 has a spec-legal test, check coverage, and publish the clause-wall status to evidence/. Activate whenever a REDLINE pass is to be audited/graded for coverage.
+name: witness-audit
+description: Grade WITNESS completeness — verify every clause-wall entry W1..W8 has a spec-legal test, check coverage, and publish the clause-wall status to evidence/. Activate whenever a WITNESS pass is to be audited/graded for coverage.
 user-invocable: true
 ---
 
-# redline-audit
+# witness-audit
 
-Grade the REDLINE lane: confirm that every extracted clause actually got a
+Grade the WITNESS lane: confirm that every extracted clause actually got a
 spec-legal test, that tests stayed honest (derived from the document), and that
 the wall status is recorded as evidence. You are the **auditor / compliance
 reviewer** — you direct, you do not fix the implementation.
 
-> **WITNESS RULE** — Like the rest of REDLINE, you do not read `src/`. You audit
+> **WITNESS RULE** — Like the rest of WITNESS, you do not read `src/`. You audit
 > the *tests* and the *clause wall*, not the implementation.
 
 ## Goal / Definition of done
@@ -41,7 +41,7 @@ more tests, (b) flags any clause with no test, and (c) writes the wall status to
 ## Inputs
 
 - `@/evidence/clauses.json` — the extracted clause wall (W1..W8).
-- `@/tests/redline-coverage.json` — test→clause mapping from `redline-test`.
+- `@/tests/witness-coverage.json` — test→clause mapping from `witness-test`.
 - `@/tests/clause-*.test.ts` — the authored tests (for a *spot* review only).
 
 ## Steps
@@ -63,11 +63,11 @@ more tests, (b) flags any clause with no test, and (c) writes the wall status to
 5. **Write `evidence/clause-wall.json`.** Emit the full matrix + a human summary
    ("X of 8 clauses covered; gaps: ..."). Strict valid JSON.
 6. **Report.** State the wall status clearly so the camera/runbook can reflect a
-   single REDLINE verdict.
+   single WITNESS verdict.
 
 ## Constraints
 
 - Write ONLY under `evidence/`. Never edit tests, docs, or the implementation.
-- If `clauses.json` or `redline-coverage.json` is absent or malformed, record it
+- If `clauses.json` or `witness-coverage.json` is absent or malformed, record it
   as a hard gap and STOP rather than fabricate coverage.
 - Rewriting tests is out of scope here — you grade and record, you do not fix.

@@ -1,13 +1,13 @@
 ---
-name: splitbrain-isolate
+name: trustgap-isolate
 description: >-
   Compute and emit TrustGap.json — the honest-vs-claimed coverage trust gap,
   scored per spec-assertion it-block from a Stryker mutation ledger. Activate
-  whenever SPLITBRAIN must turn a mutation report into a Trust Gap verdict.
+  whenever TRUSTGAP must turn a mutation report into a Trust Gap verdict.
 user-invocable: true
 ---
 
-# splitbrain-isolate
+# trustgap-isolate
 
 Score the suite's **honesty**. You combine (a) the policy tests' claimed coverage
 with (b) the Mutineer's Stryker mutation ledger to produce `trustgap/TrustGap.json`

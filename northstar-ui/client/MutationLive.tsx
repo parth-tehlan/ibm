@@ -1,7 +1,7 @@
 import { useEffect, useReducer, useRef, useState } from 'react';
 
 /**
- * MutationLive — real-time SPLITBRAIN mutation execution stream.
+ * MutationLive — real-time TRUSTGAP mutation execution stream.
  *
  * Subscribes to the dashboard server's SSE endpoint
  *   GET /api/projects/:projectId/runs/:runId/mutation-stream

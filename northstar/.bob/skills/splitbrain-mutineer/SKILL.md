@@ -1,13 +1,13 @@
 ---
-name: splitbrain-mutineer
+name: trustgap-mutineer
 description: >-
   Generate mutants with Stryker on a scratch copy of src/ (never the live code)
   and produce a per-it-block mutation report for the isolate mode. Activate
-  whenever SPLITBRAIN must probe whether the test suite actually catches defects.
+  whenever TRUSTGAP must probe whether the test suite actually catches defects.
 user-invocable: true
 ---
 
-# splitbrain-mutineer
+# trustgap-mutineer
 
 Run **Stryker** (the standard JS mutation-testing tool) on a **scratch copy** of
 the code to find which tests are lying. A mutant is a tiny deliberate defect

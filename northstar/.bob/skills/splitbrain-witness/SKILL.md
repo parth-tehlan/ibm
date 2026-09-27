@@ -1,21 +1,21 @@
 ---
-name: splitbrain-witness
+name: trustgap-witness
 description: >-
   Write honest policy tests from PRICING_POLICY.md (or a policy document) alone,
-  never from the implementation. Activate whenever SPLITBRAIN needs honest
+  never from the implementation. Activate whenever TRUSTGAP needs honest
   witness tests that assert what the POLICY says, not what the code does.
 user-invocable: true
 ---
 
-# splitbrain-witness
+# trustgap-witness
 
-Write **honest** policy tests for the SPLITBRAIN court: tests that assert exactly
+Write **honest** policy tests for the TRUSTGAP court: tests that assert exactly
 what the written policy document promises, with **no** knowledge of how `src/`
 is implemented. These are the "accusations" the Mutineer's Stryker run will
 grade — if a mutant survives an honest test, that test was not sharp enough.
 
-> **WITNESS RULE (SPLITBRAIN)** — You are isolated from `src/` exactly like the
-> REDLINE witness. You MUST NOT read, list, `grep`, or `@`-mention anything under
+> **WITNESS RULE (TRUSTGAP)** — You are isolated from `src/` exactly like the
+> WITNESS witness. You MUST NOT read, list, `grep`, or `@`-mention anything under
 > `src/`. The policy document is your only source of truth.
 
 ## Goal / Definition of done

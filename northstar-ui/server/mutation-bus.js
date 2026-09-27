@@ -3,7 +3,7 @@
  * progress events, fanned out to browser SSE subscribers.
  *
  * The trusted editor-host process relays engine progress over IPC
- * (triumph.mutationProgress / triumph.mutationDone) keyed by runKey
+ * (gaia.mutationProgress / gaia.mutationDone) keyed by runKey
  * (`${projectId}:${runId}`); the browser subscribes at
  * GET /api/projects/:id/runs/:runId/mutation-stream.
  *

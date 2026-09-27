@@ -1,12 +1,12 @@
 ---
-name: redline-test
-description: Write spec-legal tests for each clause-wall entry (evidence/clauses.json → tests/clause-*.ts), asserting ONLY what the document says. Activate whenever REDLINE test authoring from the clause wall is needed.
+name: witness-test
+description: Write spec-legal tests for each clause-wall entry (evidence/clauses.json → tests/clause-*.ts), asserting ONLY what the document says. Activate whenever WITNESS test authoring from the clause wall is needed.
 user-invocable: true
 ---
 
-# redline-test
+# witness-test
 
-Take the clause wall produced by `redline-extract` and author **one test per
+Take the clause wall produced by `witness-extract` and author **one test per
 clause** that asserts what the *document* requires — never what the source does.
 You are a **behavior author**: you specify the contract from the spec alone.
 
@@ -45,13 +45,13 @@ document.
 5. **Falsifiability check.** For each test, ask: *if the implementation violated
    this clause, would this test fail?* If no, tighten the assertion to the
    document's language.
-6. **Write a coverage stub** `tests/redline-coverage.json` mapping each test file
-   to the clause id(s) it covers, so `redline-audit` can later grade coverage.
+6. **Write a coverage stub** `tests/witness-coverage.json` mapping each test file
+   to the clause id(s) it covers, so `witness-audit` can later grade coverage.
 
 ## Constraints
 
-- Write ONLY under `tests/clause-*` and `tests/redline-coverage.json`.
+- Write ONLY under `tests/clause-*` and `tests/witness-coverage.json`.
 - Never open `src/`. Never weaken a test to make it pass — the whole point is
   that some of these SHOULD currently fail against planted violations.
 - Do not run against the live/near-zero-spend account. Tests are authored
-  locally; execution and grading happen in `redline-audit`/rehearsal.
+  locally; execution and grading happen in `witness-audit`/rehearsal.

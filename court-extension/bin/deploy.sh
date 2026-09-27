@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# TRIUMPH 3-Court — Deploy workflow
+# Gaia 3-Court — Deploy workflow
 #
 # Packages the court-extension into a .vsix and installs it into a running
 # code-server (VS Code Server). Re-runnable: safe to run repeatedly, upgrade
@@ -20,8 +20,8 @@ set -euo pipefail
 # --- config -----------------------------------------------------------------
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PKG_JSON="$ROOT/package.json"
-VSIX_OUT="$ROOT/triumph-courts.vsix"
-EXT_ID="triumph.triumph-courts"
+VSIX_OUT="$ROOT/gaia-courts.vsix"
+EXT_ID="gaia.gaia-courts"
 
 INSTALL=1
 RESTART=0

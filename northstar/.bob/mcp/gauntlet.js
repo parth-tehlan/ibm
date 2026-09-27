@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// gauntlet.js - MCP server for TRIUMPH (STDIO transport, JSON-RPC 2.0).
+// gauntlet.js - MCP server for GAIA (STDIO transport, JSON-RPC 2.0).
 // Serves real local fixture and evidence data only. Fully offline. No internet.
 //
 // Every tool reads real state from fixtures/ and evidence/. No tool returns a

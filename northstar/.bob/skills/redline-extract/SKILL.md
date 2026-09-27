@@ -1,15 +1,15 @@
 ---
-name: redline-extract
-description: Parse the RFC-2119 API spec (@/docs/api-spec.md) into machine-useable clause-wall entries (W1..W8 MUST/SHALL clauses) and write evidence/clauses.json. Activate whenever a REDLINE extraction of spec requirements is needed.
+name: witness-extract
+description: Parse the RFC-2119 API spec (@/docs/api-spec.md) into machine-useable clause-wall entries (W1..W8 MUST/SHALL clauses) and write evidence/clauses.json. Activate whenever a WITNESS extraction of spec requirements is needed.
 user-invocable: true
 ---
 
-# redline-extract
+# witness-extract
 
-Turn the normative spec document into the **clause wall** that the whole REDLINE
-lane (and later SPLITBRAIN trust-gap) hangs off of. You are a **clause miner**:
+Turn the normative spec document into the **clause wall** that the whole WITNESS
+lane (and later TRUSTGAP trust-gap) hangs off of. You are a **clause miner**:
 you read only the *document*, never the implementation. Isolation-as-correctness
-applies to every REDLINE step.
+applies to every WITNESS step.
 
 > **WITNESS RULE** — You must never read anything under `src/`. Never
 > `@`-mention a source path. If you are tempted to open the code, stop: the
@@ -56,7 +56,7 @@ document text it came from.
 5. **Cross-check count.** Re-open the written file and confirm all of W1..W8 are
    present and no W-number is missing or duplicated.
 6. **Hand off.** Emit a short summary of how many clauses were extracted and
-   their levels, so the next REDLINE step (`redline-test`) has a known input.
+   their levels, so the next WITNESS step (`witness-test`) has a known input.
 
 ## Constraints
 
@@ -64,4 +64,4 @@ document text it came from.
   `tests/` area). Do NOT touch `src/`.
 - Strict valid JSON; no trailing comments.
 - Do not block on whether the implementation complies — that is
-  `redline-test`'s job, later.
+  `witness-test`'s job, later.

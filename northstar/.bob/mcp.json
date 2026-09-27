@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "triumph-acp": {
+    "gaia-acp": {
       "command": "node",
       "args": [
         "../acp-server/court.js"
@@ -8,13 +8,13 @@
       "cwd": ".",
       "env": {},
       "alwaysAllow": [
-        "redline_verdict_all",
-        "redline_clause",
-        "splitbrain_trustgap",
-        "splitbrain_mutants",
-        "warpath_context",
-        "warpath_triage",
-        "warpath_postmortem",
+        "witness_verdict_all",
+        "witness_clause",
+        "trustgap_report",
+        "trustgap_mutants",
+        "triage_context",
+        "triage_run",
+        "triage_postmortem",
         "courts_about"
       ],
       "disabled": false
@@ -38,7 +38,7 @@
       ],
       "disabled": false
     },
-    "triumph-courts": {
+    "gaia-courts": {
       "command": "node",
       "args": [
         "/home/ubuntu/ibm-bob/court-extension/court.js",
@@ -46,16 +46,16 @@
         "/home/ubuntu/ibm-bob/northstar"
       ],
       "alwaysAllow": [
-        "redline_clauses",
-        "redline_verdict_all",
-        "redline_clause",
-        "splitbrain_trustgap",
-        "splitbrain_mutants",
-        "splitbrain_mutate",
-        "splitbrain_status",
-        "warpath_context",
-        "warpath_triage",
-        "warpath_postmortem",
+        "witness_clauses",
+        "witness_verdict_all",
+        "witness_clause",
+        "trustgap_report",
+        "trustgap_mutants",
+        "trustgap_mutate",
+        "trustgap_status",
+        "triage_context",
+        "triage_run",
+        "triage_postmortem",
         "courts_about"
       ],
       "disabled": false

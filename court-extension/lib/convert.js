@@ -31,7 +31,7 @@ function uuidv5(name) {
 }
 
 // NOTE: renaming this namespace changes the deterministic project id for
-// every existing workspace (intentional as part of the full TRIUMPH->Gaia
+// every existing workspace (intentional as part of the full GAIA->Gaia
 // rename — any previously persisted dashboard history keyed by the old id
 // becomes unreachable under the new one; workspaces re-register on next run).
 const projectId = (workspaceUri) => uuidv5(`gaia:workspace:${workspaceUri}`);

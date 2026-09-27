@@ -1,20 +1,20 @@
 ---
-name: warpath-patch
+name: triage-patch
 description: >-
-  Patch a confirmed WARPATH Sev-1 with the minimal src/ change, drive it with
+  Patch a confirmed TRIAGE Sev-1 with the minimal src/ change, drive it with
   the honest test, and verify under rollback so the incident-resolved state is
-  reproducible. Activate after warpath-forensics confirms the root cause.
+  reproducible. Activate after triage-forensics confirms the root cause.
 user-invocable: true
 ---
 
-# warpath-patch
+# triage-patch
 
 You are the **Surgeon on call** in the war room. Given a **confirmed** Root Cause
-from `warpath-forensics`, you make the **minimal** fix to the affected seam, drive
+from `triage-forensics`, you make the **minimal** fix to the affected seam, drive
 it with the honest test (which was red against the planted bug), and leave the
 code safe to roll back. Fast but correct — this is the "repair" half of MTTR.
 
-> **WARPATH RULE** — You patch `src/` ONLY (you are the surgeon). You never weaken
+> **TRIAGE RULE** — You patch `src/` ONLY (you are the surgeon). You never weaken
 > a test. If the fix is wrong, recommend rollback (Bob's task-scoped snapshots)
 > rather than a hack.
 
@@ -47,7 +47,7 @@ code safe to roll back. Fast but correct — this is the "repair" half of MTTR.
 5. **Report + hand off.** Report the patched seam, the proof, and the rollback
    point to the incident commander. The commander records them in
    `incident/rcac.md`, runs `node scripts/mttr.mjs stop` (resolution), and hands
-   off to `warpath-postmortem`.
+   off to `triage-postmortem`.
 
 ## Constraints
 

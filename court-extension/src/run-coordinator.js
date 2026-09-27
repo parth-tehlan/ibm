@@ -9,7 +9,7 @@ const { loadConfig, findConfigFile } = require('../lib/config');
 const { projectId, sourceGeneratedAt } = require('../lib/convert');
 const store = require('../lib/run-store');
 const { McpClient } = require('./mcp-client');
-const ALL = ['redline', 'splitbrain', 'warpath'];
+const ALL = ['witness', 'trustgap', 'triage'];
 const COURTS = ALL.map(c => c.toUpperCase());
 const active = new Map();
 const listeners = new Set();
@@ -56,24 +56,24 @@ function preflight(root) {
   const reasons = {};
   let cfg;
   try {
-    if (!findConfigFile(root)) throw new Error('No TRIUMPH configuration found');
+    if (!findConfigFile(root)) throw new Error('No GAIA configuration found');
     cfg = loadConfig(root);
   } catch (e) {
-    for (const court of ALL) reasons[court] = `Invalid TRIUMPH configuration: ${e.message}`;
+    for (const court of ALL) reasons[court] = `Invalid GAIA configuration: ${e.message}`;
     return { runnable: [], reasons };
   }
-  if (!fs.existsSync(cfg.spec.absPath)) reasons.redline = 'spec.path missing';
-  if (!fs.existsSync(cfg.tests.absDir)) reasons.redline = 'tests.dir missing';
+  if (!fs.existsSync(cfg.spec.absPath)) reasons.witness = 'spec.path missing';
+  if (!fs.existsSync(cfg.tests.absDir)) reasons.witness = 'tests.dir missing';
   if (!(cfg.mutation.absReport && fs.existsSync(cfg.mutation.absReport)) &&
       !fs.existsSync(cfg.evidence.trustgap) && !cfg.mutation.command) {
-    reasons.splitbrain = 'no mutation report, TrustGap ledger or mutation command';
+    reasons.trustgap = 'no mutation report, TrustGap ledger or mutation command';
   }
-  if (!cfg.fixtures.metrics || !fs.existsSync(cfg.fixtures.metrics)) reasons.warpath = 'metrics fixture missing';
-  else if (!cfg.fixtures.deploys || !fs.existsSync(cfg.fixtures.deploys)) reasons.warpath = 'deploy fixture missing';
+  if (!cfg.fixtures.metrics || !fs.existsSync(cfg.fixtures.metrics)) reasons.triage = 'metrics fixture missing';
+  else if (!cfg.fixtures.deploys || !fs.existsSync(cfg.fixtures.deploys)) reasons.triage = 'deploy fixture missing';
   const runnable = ALL.filter((c) => !reasons[c]);
   const configuredTimeout = cfg.mutation.timeoutSeconds;
   if (!Number.isFinite(configuredTimeout) || configuredTimeout <= 0 || configuredTimeout > 86400) {
-    reasons.splitbrain = 'mutation.timeoutSeconds must be a number between 0 and 86400 (exclusive of 0)';
+    reasons.trustgap = 'mutation.timeoutSeconds must be a number between 0 and 86400 (exclusive of 0)';
   }
   return { runnable: ALL.filter(c => !reasons[c]), reasons, cfg };
 }
@@ -81,16 +81,16 @@ function preflight(root) {
 /** Classify a court's engine payload as complete/unavailable/error evidence. */
 function outcome(court, payload) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return { kind: 'error', errors: ['Engine returned no object evidence'] };
-  if (court === 'redline' && (payload.status === 'error' || !Array.isArray(payload.results))) {
-    return { kind: 'error', errors: [String(payload.detail || 'REDLINE produced no verdicts')], payload };
+  if (court === 'witness' && (payload.status === 'error' || !Array.isArray(payload.results))) {
+    return { kind: 'error', errors: [String(payload.detail || 'WITNESS produced no verdicts')], payload };
   }
-  if (court === 'splitbrain' && payload.status !== 'ok') return {
+  if (court === 'trustgap' && payload.status !== 'ok') return {
     kind: payload.status === 'not-run' || payload.status === 'unconfigured' ? 'unavailable' : 'error',
-    errors: [String(payload.note || payload.error || `SPLITBRAIN status: ${payload.status || 'missing'}`)], payload,
+    errors: [String(payload.note || payload.error || `TRUSTGAP status: ${payload.status || 'missing'}`)], payload,
   };
-  if (court === 'warpath' && (payload.status || !payload.incidentWindow)) return {
+  if (court === 'triage' && (payload.status || !payload.incidentWindow)) return {
     kind: payload.status === 'no-signal-window' ? 'unavailable' : 'error',
-    errors: [String(payload.detail || `WARPATH status: ${payload.status || 'missing incident window'}`)], payload,
+    errors: [String(payload.detail || `TRIAGE status: ${payload.status || 'missing incident window'}`)], payload,
   };
   return { kind: 'complete', payload };
 }
@@ -106,13 +106,13 @@ async function collectCourts(client, root, requested, reasons = {}, cfg, signal,
     if (signal?.aborted) { outcomes[court] = { kind: 'error', errors: ['Extension stopped'] }; continue; }
     try {
       let payload;
-      if (court === 'redline') payload = await client.call('redline_verdict_all');
-      else if (court === 'warpath') payload = await client.call('warpath_triage');
+      if (court === 'witness') payload = await client.call('witness_verdict_all');
+      else if (court === 'triage') payload = await client.call('triage_run');
       else {
         if (cfg.mutation.command) {
           const startedAt = Date.now();
           const before = fileStamp(cfg.mutation.absReport);
-          const started = await client.call('splitbrain_mutate');
+          const started = await client.call('trustgap_mutate');
           if (started.status !== 'started' || !started.job_id) { outcomes[court] = outcome(court, started); continue; }
           const jobId = started.job_id;
           const deadline = Date.now() + (cfg.mutation.timeoutSeconds || 900) * 1000 + 10_000;
@@ -122,7 +122,7 @@ async function collectCourts(client, root, requested, reasons = {}, cfg, signal,
             if (signal?.aborted) throw new Error('Extension stopped');
             if (Date.now() > deadline) throw new Error('Mutation job timed out');
             await new Promise((resolve) => setTimeout(resolve, options.pollIntervalMs ?? 1000));
-            status = await client.call('splitbrain_status', { job_id: jobId });
+            status = await client.call('trustgap_status', { job_id: jobId });
             // Forward any new progress events to the dashboard's mutation bus.
             if (onMutationProgress && Array.isArray(status.progress)) {
               const newEvents = status.progress.slice(lastProgressIdx);
@@ -143,10 +143,10 @@ async function collectCourts(client, root, requested, reasons = {}, cfg, signal,
           // Signal completion to the bus.
           if (onMutationProgress) onMutationProgress(jobId, null, 'done');
         }
-        payload = await client.call('splitbrain_trustgap');
+        payload = await client.call('trustgap_report');
       }
       outcomes[court] = outcome(court, payload);
-      outcomes[court].evidenceSource = court === 'splitbrain' && !cfg.mutation.command ? 'precomputed' : 'executed';
+      outcomes[court].evidenceSource = court === 'trustgap' && !cfg.mutation.command ? 'precomputed' : 'executed';
       outcomes[court].evidenceFreshness = outcomes[court].evidenceSource === 'executed' ? 'fresh' : 'unknown';
     } catch (e) {
       outcomes[court] = { kind: 'error', errors: [String(e.message || e)] };
@@ -209,7 +209,7 @@ function renderArtifacts(ctx, run, formats) {
   const add = (kind, file, err) => artifacts.push({ id: kind, artifactId: kind, runId: run.runId, kind, path: file, status: err ? 'failed' : 'ready', error: err ? String(err.message || err) : null });
   // Canonical evidence is always present even when JSON export was not selected.
   add('canonical', path.join(dir, 'run.json'));
-  try { store.atomic(path.join(dir, 'triumph-input.json'), input); add('json', path.join(dir, 'triumph-input.json')); }
+  try { store.atomic(path.join(dir, 'gaia-input.json'), input); add('json', path.join(dir, 'gaia-input.json')); }
   catch (e) { add('json', null, e); }
   if (formats.includes('html') || formats.includes('md')) {
     try {
@@ -223,7 +223,7 @@ function renderArtifacts(ctx, run, formats) {
   run.artifacts = artifacts;
   // Compatibility paths contain only this run. Remove obsolete exports rather
   // than combining the latest JSON with an older successful HTML report.
-  for (const [kind, name] of [['json', 'triumph-input.json'], ['html', 'triumph-report.html'], ['md', 'triumph-report.md']]) {
+  for (const [kind, name] of [['json', 'gaia-input.json'], ['html', 'gaia-report.html'], ['md', 'gaia-report.md']]) {
     const dest = path.join(store.directory(ctx.root), name);
     const a = artifacts.find(a => a.kind === kind && a.status === 'ready');
     try { if (a) store.atomic(dest, fs.readFileSync(a.path, 'utf8')); else fs.rmSync(dest, { force: true }); }
@@ -256,10 +256,10 @@ function runCourt(ctx, opts = {}) {
       if (prior.signature !== signature) throw error('INVALID_REQUEST', 'Request ID was already used with different settings');
       return prior.promise;
     }
-    if (active.has(root)) throw error('BUSY', 'TRIUMPH run already in progress for this workspace');
+    if (active.has(root)) throw error('BUSY', 'GAIA run already in progress for this workspace');
     const plan = preflight(root);
     const timeout = plan.cfg?.mutation.timeoutSeconds || 900;
-    if (opts.timeoutSeconds !== undefined && opts.timeoutSeconds !== timeout && selected.includes('SPLITBRAIN')) throw error('NOT_SUPPORTED', 'The engine does not support per-run timeout overrides. Change mutation.timeoutSeconds in configuration and validate it first.');
+    if (opts.timeoutSeconds !== undefined && opts.timeoutSeconds !== timeout && selected.includes('TRUSTGAP')) throw error('NOT_SUPPORTED', 'The engine does not support per-run timeout overrides. Change mutation.timeoutSeconds in configuration and validate it first.');
     const runId = opts.runId || crypto.randomUUID();
     store.runDirectory(root, runId); // validates caller-provided dashboard IDs
     if (fs.existsSync(path.join(store.runDirectory(root, runId), 'run.json'))) throw error('INVALID_REQUEST', 'Run ID already exists; publish the saved run instead');

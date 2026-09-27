@@ -1,22 +1,22 @@
 ---
-name: warpath-postmortem
+name: triage-postmortem
 description: >-
-  Close a WARPATH Sev-1: write the SEV1 postmortem from the timeline and RCAC,
+  Close a TRIAGE Sev-1: write the SEV1 postmortem from the timeline and RCAC,
   and report MTTR from the real elapsed time that `node scripts/mttr.mjs stop`
-  recorded in incident/metrics.json. Activate after warpath-patch resolves the incident.
+  recorded in incident/metrics.json. Activate after triage-patch resolves the incident.
 user-invocable: true
 ---
 
-# warpath-postmortem
+# triage-postmortem
 
 You are the **Comms Officer** closing the war room. After the Surgeon's patch is
 verified, you turn the incident's timeline + RCAC into the SEV1 postmortem and
-report the **MTTR** the pipeline actually measured. MTTR is the headline WARPATH
+report the **MTTR** the pipeline actually measured. MTTR is the headline TRIAGE
 metric — it must come from the real elapsed time measured by
 `node scripts/mttr.mjs start` (at incident start) and `node scripts/mttr.mjs stop`
 (at resolution), never from a guessed number.
 
-> **WARPATH RULE** — You write markdown ONLY in `incident/` and `CHANGELOG.md`.
+> **TRIAGE RULE** — You write markdown ONLY in `incident/` and `CHANGELOG.md`.
 > You never touch code. You report numbers the pipeline produced, and keep any
 > not-yet-measured figure a PLACEHOLDER.
 

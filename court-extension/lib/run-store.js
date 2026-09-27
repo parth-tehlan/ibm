@@ -10,7 +10,7 @@ function canonicalRoot(value) {
   if (!root) throw Object.assign(new Error('Open a workspace folder first.'), { code: 'NO_WORKSPACE' });
   return fs.realpathSync(root);
 }
-function directory(root) { return path.join(canonicalRoot(root), 'reports', 'triumph'); }
+function directory(root) { return path.join(canonicalRoot(root), 'reports', 'gaia'); }
 function runDirectory(root, id) {
   if (!UUID.test(id || '')) throw Object.assign(new Error('Invalid run ID'), { code: 'INVALID_REQUEST' });
   return path.join(directory(root), 'runs', id);
