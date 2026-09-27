@@ -1,0 +1,8 @@
+{
+  "zeroTests": {"court":"REDLINE","summary":{"green":1,"yellow":0,"red":0,"total":1},"results":[{"clause":"S-1","status":"green","passed":0,"failed":0,"total":0,"note":"Test file discovered twice; no assertions executed","test":".stryker-tmp/tests/S-1.test.js"}]},
+  "passed": {"court":"REDLINE","summary":{"green":1,"yellow":0,"red":0,"total":1},"results":[{"clause":"S-1","status":"green","passed":2,"failed":0,"total":2}]},
+  "failed": {"court":"REDLINE","summary":{"green":0,"yellow":0,"red":1,"total":1},"results":[{"clause":"S-1","status":"red","passed":1,"failed":1,"total":2,"failures":[{"title":"contract violated","message":"actual differs from expected"}]}]},
+  "mutationError": {"kind":"error","errors":["Mutation failed without a fresh report"],"payload":{"status":"failed","exitCode":1,"stdout":"Stryker dry run","stderr":"test runner crashed","reportProduced":false}},
+  "precomputed": {"execution":"complete","verdict":"pass","evidenceSource":"precomputed","evidenceFreshness":"unknown","sourceGeneratedAt":"2026-01-01T00:00:00Z","payload":{"court":"SPLITBRAIN","status":"ok","schemaVersion":1,"claimedCoverage":0.9,"honestMutationScore":0.5,"trustGap":0.4,"totals":{"counted":200,"killed":1,"survived":199,"noCoverage":0},"dishonestTests":[],"mutants":[],"opaque":{"notToBeDropped":"producer extension"}}},
+  "noSignal": {"court":"WARPATH","status":"no-signal-window","detail":"No incident signal window could be established","evidence":[]}
+}

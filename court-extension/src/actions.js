@@ -1,395 +1,135 @@
 'use strict';
-/**
- * src/actions.js — TRIUMPH action logic, extracted from the old
- * src/extension.js cmd* command handlers so the persistent panel (and the
- * thin command wrappers) can call the same code.
- *
- * NO vscode.window.* calls here (and no `require('vscode')` at all) — every
- * VS-Code-specific capability comes in through `ctx`:
- *   ctx = { root, enginePath, emit, emitStep, emitMutation, globalStoragePath, openExternal, vscode }
- *     root:             workspace root (string) or null/undefined
- *     enginePath:       resolved path to court.js
- *     emit({level, text}): stream a raw console-log line ('info'|'warn'|'error')
- *     emitStep({status, text}): push an agent-activity feed entry
- *                       ('running'|'success'|'warn'|'error'|'pending'). Panel
- *                       mirrors steps into the raw log; actions never have to.
- *     emitMutation(event, signal): live SPLITBRAIN progress events
- *                       (lib/mutation-progress.js shape); signal 'done' ends the run.
- *     globalStoragePath: extension global storage dir (dashboard publish only)
- *     openExternal(url): open a URL in the user's browser (dashboard publish only)
- *     vscode:           the real `vscode` module, forwarded through to
- *                        dashboardCmd.runAndPublish — supplied by panel.js's
- *                        _actionsCtx(); actions.js itself never requires 'vscode'.
- * ctx.McpClient / ctx.dashboardCmd may be injected (tests) — default to the
- * real modules otherwise.
- *
- * Every action throws Error on failure, including Error('Open a workspace
- * folder first.') when ctx.root is falsy. Callers (panel.js's runJob) turn
- * that into an `error` message.
- */
-
-const path = require('path');
+/** Thin public action adapters. All execution (including reports and dashboard
+ * commands) goes through run-coordinator; publication never executes courts. */
 const fs = require('fs');
-
-const DefaultMcpClient = require('./mcp-client').McpClient;
-const DefaultDashboardCmd = require('./dashboard');
-
-const COURTS = ['REDLINE', 'SPLITBRAIN', 'WARPATH'];
-const CONFIG_NAMES = ['.triumph.yml', '.triumph.yaml', '.triumph.json'];
+const path = require('path');
+const crypto = require('crypto');
+const coordinator = require('./run-coordinator');
+const store = require('../lib/run-store');
 const REPORT_FORMATS = ['html', 'md', 'json'];
-
-function emit(ctx, level, text) {
-  if (ctx && typeof ctx.emit === 'function') {
-    try { ctx.emit({ level, text }); } catch { /* logging must never throw */ }
-  }
+const previews = new Map();
+function fail(code, message) { return Object.assign(new Error(message), {code}); }
+function rootFor(ctx, write = false) {
+  if (write && (ctx.isTrusted === false || ctx.vscode?.workspace?.isTrusted === false)) throw fail('UNTRUSTED_WORKSPACE', 'Trust this workspace before writing files.');
+  return store.canonicalRoot(ctx);
 }
-
-/** Agent-activity feed entry. Falls back to the raw log when the host
- *  provides no step channel (CLI callers, older panel). */
-function step(ctx, status, text) {
-  if (ctx && typeof ctx.emitStep === 'function') {
-    try { ctx.emitStep({ status, text }); return; } catch { /* fall through to raw log */ }
-  }
-  emit(ctx, status === 'error' ? 'error' : status === 'warn' ? 'warn' : 'info', text);
-}
-
-function emitMutation(ctx, event, signal) {
-  if (ctx && typeof ctx.emitMutation === 'function') {
-    try { ctx.emitMutation(event, signal); } catch { /* progress is best-effort */ }
-  }
-}
-
-function requireRoot(ctx) {
-  const root = ctx && ctx.root;
-  if (!root) throw new Error('Open a workspace folder first.');
-  return root;
-}
-
-function findConfigPath(root) {
-  for (const name of CONFIG_NAMES) {
-    const p = path.join(root, name);
-    if (fs.existsSync(p)) return p;
-  }
-  return null;
-}
-
-/** Read the mutation timeout from .triumph.yml (0 when unset/unreadable). */
-function mutationTimeoutSeconds(root) {
+function revision(file) {
   try {
-    const { loadConfig } = require('../lib/config');
-    const cfg = loadConfig(root);
-    return (cfg.mutation && cfg.mutation.timeoutSeconds) || 0;
-  } catch { return 0; }
+    const stat = fs.lstatSync(file);
+    if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1) throw new Error('Unsafe config target: ' + file);
+    return crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+  } catch (e) { if (e.code === 'ENOENT') return null; throw e; }
 }
-
-/** Lightweight existence check (no auto-detect) for state refresh. */
+function configPath(root) { return require('../lib/config').findConfigFile(root); }
 function configStatus(root) {
-  if (!root) return { exists: false, path: null, notes: [] };
-  const p = findConfigPath(root);
-  return { exists: Boolean(p), path: p, notes: [] };
+  if (!root) return {exists: false, path: null, notes: [], readiness: {}};
+  try {
+    const file = configPath(root);
+    const {cfg, reasons, runnable} = coordinator.preflight(root);
+    return {exists: !!file, path: file, valid: !!cfg, notes: [...new Set(Object.values(reasons))],
+      revision: file ? revision(file) : null,
+      timeoutSeconds: cfg?.mutation.timeoutSeconds || 900, timeoutSource: cfg ? 'configuration' : 'default',
+      readiness: Object.fromEntries(coordinator.COURTS.map(c => [c, {ready: runnable.includes(c.toLowerCase()), reason: reasons[c.toLowerCase()] || null}]))};
+  } catch (e) { return {exists: false, path: null, valid: false, notes: [e.message], readiness: {}}; }
 }
-
-/** Same as old cmdDetectConfig, minus opening the file in an editor. */
+function validateConfig(ctx) { return configStatus(rootFor(ctx)); }
+function remember(preview) {
+  previews.set(preview.previewId, preview);
+  if (previews.size > 100) previews.delete(previews.keys().next().value);
+  return JSON.parse(JSON.stringify(preview));
+}
+function previewConfig(ctx) {
+  const root = rootFor(ctx);
+  const {detect, toYaml} = require('../lib/detect');
+  const {config, notes} = detect(root);
+  const dest = configPath(root) || path.join(root, '.triumph.yml');
+  if (path.dirname(dest) !== root) throw fail('INVALID_REQUEST', 'Configuration outside the workspace is read-only in Setup.');
+  const expectedConfigRevision = revision(dest);
+  const content = dest.endsWith('.json') ? JSON.stringify(config, null, 2) + '\n' : '# TRIUMPH repo adapter. Review before applying.\n' + toYaml(config) + '\n';
+  return remember({kind: 'config', previewId: crypto.randomUUID(), root, path: dest, content, notes,
+    expectedConfigRevision, replace: expectedConfigRevision !== null, files: [dest], createdAt: Date.now()});
+}
+function applyConfig(ctx, {previewId, expectedConfigRevision, confirmReplace = false} = {}) {
+  const root = rootFor(ctx, true);
+  const preview = previews.get(previewId);
+  if (!preview || preview.kind !== 'config' || preview.root !== root || Date.now() - preview.createdAt > 15 * 60_000) throw fail('STALE_PREVIEW', 'Create a fresh configuration preview first.');
+  if (expectedConfigRevision !== preview.expectedConfigRevision || revision(preview.path) !== preview.expectedConfigRevision || (configPath(root) || path.join(root, '.triumph.yml')) !== preview.path) throw fail('STALE_PREVIEW', 'Configuration changed since the preview; nothing was written.');
+  if (preview.replace && !confirmReplace) throw fail('INVALID_REQUEST', 'Explicit replacement confirmation is required.');
+  let backupPath = null;
+  if (preview.replace) {
+    backupPath = preview.path + '.' + crypto.randomUUID() + '.bak';
+    fs.copyFileSync(preview.path, backupPath, fs.constants.COPYFILE_EXCL);
+    store.atomic(preview.path, preview.content);
+  } else fs.writeFileSync(preview.path, preview.content, {flag: 'wx', mode: 0o600});
+  previews.delete(previewId);
+  return {path: preview.path, notes: preview.notes, backupPath, validation: configStatus(root)};
+}
+/** Legacy create-config command remains explicit creation, never replacement. */
 async function detectConfig(ctx) {
-  const root = requireRoot(ctx);
-  const { detect, toYaml } = require('../lib/detect');
-  const { config, notes } = detect(root);
-  const dest = path.join(root, '.triumph.yml');
-  const header = '# TRIUMPH 3-court repo adapter. See schemas/triumph-config.schema.json in the extension.\n';
-  fs.writeFileSync(dest, header + toYaml(config) + '\n', 'utf8');
-  step(ctx, 'success', 'Loaded detection heuristics — .triumph.yml written');
-  emit(ctx, 'info', `.triumph.yml written. ${notes.join(' · ')}`);
-  return { path: dest, notes };
+  const preview = previewConfig(ctx);
+  if (preview.replace) throw fail('CONFIRM_REPLACE', 'Configuration already exists. Validate it or preview and explicitly confirm replacement.');
+  return applyConfig(ctx, {previewId: preview.previewId, expectedConfigRevision: null});
 }
-
-/** Same as old cmdInstallCourts (minus the quickpick — host is given). */
-async function installCourts(ctx, { host } = {}) {
-  const root = requireRoot(ctx);
-  const { HOSTS, installHost } = require('../lib/hosts');
-
-  const hasConfig = Boolean(findConfigPath(root));
-  if (!hasConfig) {
-    step(ctx, 'running', 'No .triumph.yml — auto-detecting first');
-    await detectConfig(ctx);
+function hostFiles(root, host) {
+  const {AGENTS, EXT_DIR} = require('../lib/hosts');
+  const base = host === 'claude' ? '.claude' : host === 'bob' ? '.bob' : host === 'codex' ? '.codex' : '.triumph';
+  const files = host === 'vscode' ? AGENTS.map(n => path.join(root, '.github', 'chatmodes', `triumph-${n}.chatmode.md`)) : AGENTS.map(n => path.join(root, base, 'agents', n + '.md'));
+  files.push(path.join(root, host === 'claude' ? '.mcp.json' : host === 'vscode' ? '.vscode/mcp.json' : base + (host === 'codex' ? '/config.json' : '/mcp.json')));
+  if (host === 'bob') {
+    const walk = (source, target) => { for (const item of fs.readdirSync(source, {withFileTypes: true})) {
+      const src = path.join(source, item.name), dest = path.join(target, item.name);
+      if (item.isDirectory()) walk(src, dest); else files.push(dest);
+    }};
+    walk(path.join(EXT_DIR, 'agents', 'skills'), path.join(root, '.bob', 'skills'));
+    walk(path.join(EXT_DIR, 'agents', 'bob'), path.join(root, '.bob'));
   }
-
+  return [...new Set(files)];
+}
+function previewInstall(ctx, {host} = {}) {
+  const root = rootFor(ctx);
+  const {HOSTS} = require('../lib/hosts');
+  if (host !== 'all' && !Object.hasOwn(HOSTS, host)) throw fail('INVALID_REQUEST', 'Choose an integration host explicitly.');
   const hosts = host === 'all' ? Object.keys(HOSTS) : [host];
-  const written = [];
-  const errors = [];
-  for (const h of hosts) {
-    try {
-      const r = installHost(h, root);
-      written.push(...r.files.map((f) => path.relative(root, f)));
-      step(ctx, 'success', `${h}: courts installed`);
-      emit(ctx, 'info', `${h}: installed`);
-    } catch (e) {
-      errors.push({ host: h, message: e.message });
-      step(ctx, 'error', `${h}: ${e.message}`);
-      emit(ctx, 'error', `TRIUMPH ${h}: ${e.message}`);
-    }
-  }
-  const extVersion = require('../package.json').version;
-  emit(ctx, 'info', `files written: ${written.join(', ') || '(none)'}`);
-  emit(ctx, 'info',
-    `TRIUMPH courts installed (${hosts.join(', ')}) — extension v${extVersion}. ${written.length} files written. ` +
-    `If you expected skills/rules/modes and only see agents+mcp.json, reload the window (Developer: Reload Window) so the host picks up the current extension build.`);
-  step(ctx, errors.length ? 'warn' : 'success',
-    `Install complete — ${written.length} files written (${hosts.join(', ')})`);
-  return { hosts, files: written, errors };
+  const files = [...new Set(hosts.flatMap(h => hostFiles(root, h)))].map(file => ({path: file, revision: revision(file), action: fs.existsSync(file) ? 'merge-or-preserve' : 'create'}));
+  return remember({kind: 'install', previewId: crypto.randomUUID(), root, hosts, files, createdAt: Date.now()});
 }
-
-// ---------------------------------------------------------------------------
-// Court execution
-// ---------------------------------------------------------------------------
-
-/**
- * Run REDLINE: wall verification, then every clause witness suite.
- * Returns { kind: 'complete', payload } | { kind: 'error', error }.
- */
-async function runRedline(ctx, client) {
-  step(ctx, 'running', 'REDLINE — verifying testimony wall');
-  const payload = await client.call('redline_verdict_all');
-  const s = payload && payload.summary;
-  if (!s) {
-    step(ctx, 'error', 'REDLINE returned no clause summary');
-    return { kind: 'error', error: 'REDLINE produced no verdict summary', payload };
+async function installCourts(ctx, {host, previewId} = {}) {
+  const root = rootFor(ctx, true);
+  let preview;
+  if (previewId) {
+    preview = previews.get(previewId);
+    if (!preview || preview.kind !== 'install' || preview.root !== root || Date.now() - preview.createdAt > 15 * 60_000 || preview.files.some(f => revision(f.path) !== f.revision)) throw fail('STALE_PREVIEW', 'Integration files changed; preview installation again.');
+  } else preview = previewInstall(ctx, {host}); // compatibility for explicit command callers
+  const {installHost} = require('../lib/hosts');
+  const files = [], errors = [];
+  for (const h of preview.hosts) {
+    try { const installed = installHost(h, root); files.push(...installed.files.map(f => path.relative(root, f))); }
+    catch (e) { errors.push({host: h, message: e.message}); }
   }
-  step(ctx, 'success', `REDLINE clause tests complete — ${s.green} green / ${s.red} red / ${s.yellow} yellow of ${s.total}`);
-  if (s.red > 0) step(ctx, 'warn', `${s.red} clause${s.red === 1 ? '' : 's'} red — witness failures are evidence, not noise`);
-  return { kind: 'complete', payload };
+  previews.delete(preview.previewId);
+  // Integration installation is optional and never creates/replaces config.
+  return {hosts: preview.hosts, files, errors};
 }
-
-/**
- * Run SPLITBRAIN. With a configured mutation.command this is async:
- * splitbrain_mutate starts the runner and splitbrain_status is polled until
- * the job settles, streaming live progress through ctx.emitMutation.
- * Without a command, the precomputed report/ledger is read directly.
- */
-async function runSplitbrain(ctx, client, { timeoutSeconds } = {}) {
-  const McpClientCtor = (ctx && ctx.McpClient) || DefaultMcpClient;
-  const startedAt = Date.now();
-  step(ctx, 'running', 'SPLITBRAIN — starting mutation runner');
-  const start = await client.call('splitbrain_mutate');
-  if (start.status === 'started' && start.job_id) {
-    const jobId = start.job_id;
-    step(ctx, 'success', `Mutation job ${jobId} started — streaming verdicts`);
-    const cfgTimeout = mutationTimeoutSeconds(ctx.root);
-    const deadline = startedAt + (timeoutSeconds || cfgTimeout || 900) * 1000 + 10_000;
-    let status;
-    let lastProgressIdx = 0;
-    for (;;) {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      status = await client.call('splitbrain_status', { job_id: jobId });
-      const progress = Array.isArray(status.progress) ? status.progress : [];
-      const fresh = progress.slice(lastProgressIdx);
-      lastProgressIdx = progress.length;
-      for (const ev of fresh) emitMutation(ctx, ev);
-      if (status.status !== 'running') break;
-      if (Date.now() > deadline) {
-        step(ctx, 'error', 'Mutation job timed out — partial evidence only');
-        return { kind: 'error', error: 'Mutation job timed out', payload: status };
-      }
-    }
-    emitMutation(ctx, null, 'done');
-    if (status.status !== 'done') {
-      const detail = status.error || `mutation status: ${status.status}`;
-      step(ctx, 'error', `Mutation job failed — ${detail}`);
-      return { kind: 'error', error: detail, payload: status };
-    }
-    step(ctx, 'success', 'Mutation run finished — deriving trust gap');
-    const payload = await client.call('splitbrain_trustgap');
-    stepSplitbrainSummary(ctx, payload);
-    return { kind: 'complete', payload };
-  }
-  if (start.status === 'busy') {
-    step(ctx, 'warn', start.error || 'A mutation job is already running in this engine');
-  }
-  // Unconfigured / busy / skipped: the honest answer is the precomputed
-  // report or TrustGap ledger — never pretend a rerun happened.
-  step(ctx, 'running', 'Reading precomputed mutation evidence (report / TrustGap ledger)');
-  const payload = await client.call('splitbrain_trustgap');
-  stepSplitbrainSummary(ctx, payload);
-  return { kind: 'complete', payload };
+function runCourt(ctx, opts) { return coordinator.runCourt(ctx, opts); }
+async function generateReport(ctx, {formats} = {}) {
+  const result = await runCourt(ctx, {courts: coordinator.COURTS, formats, trigger: 'command'});
+  return {...result.report, run: result.run, runRecord: result.run, errors: result.errors};
 }
-
-function stepSplitbrainSummary(ctx, payload) {
-  if (payload && payload.trustGap != null) {
-    const score = payload.honestMutationScore != null ? `, honest mutation ${Math.round(payload.honestMutationScore * 100)}%` : '';
-    step(ctx, 'success', `SPLITBRAIN complete — trust gap ${payload.trustGap}${score}`);
-  } else if (payload && payload.status && payload.status !== 'ok') {
-    step(ctx, 'warn', `SPLITBRAIN: ${payload.note || payload.status}`);
-  } else {
-    step(ctx, 'success', 'SPLITBRAIN complete');
-  }
+async function dashboardRun(ctx, opts = {}) {
+  const result = await runCourt(ctx, {...opts, courts: opts.courts || coordinator.COURTS, publishToDashboard: true});
+  return {...result, url: result.dashboardUrl};
 }
-
-/** Run WARPATH: incident forensics triage over the fixtures. */
-async function runWarpath(ctx, client) {
-  step(ctx, 'running', 'WARPATH — triaging deploys, metrics and log window');
-  const payload = await client.call('warpath_triage');
-  if (payload && payload.incidentWindow) {
-    step(ctx, 'warn', `WARPATH incident window ${payload.incidentWindow}${payload.suspect && payload.suspect.id ? ` — suspect ${payload.suspect.id}` : ''}`);
-  } else if (payload && payload.status) {
-    step(ctx, 'warn', `WARPATH: ${payload.detail || payload.status}`);
-  } else {
-    step(ctx, 'success', 'WARPATH complete — no incident window detected');
-  }
-  return { kind: 'complete', payload };
-}
-
-/**
- * Write local report artifacts for the courts that actually ran.
- * Honours formats ('html' | 'md' | 'json'); the JSON input is always written
- * when 'json' is selected OR when a dashboard publish will need it. Returns
- * null when nothing ran.
- */
-function writeLocalReports(ctx, results, formats) {
-  const input = { repo: path.basename(ctx.root), repoRootAbs: ctx.root, generated: new Date().toISOString() };
-  let any = false;
-  if (results.redline && results.redline.kind === 'complete') { input.redline = results.redline.payload; any = true; }
-  if (results.splitbrain && results.splitbrain.kind === 'complete') { input.splitbrain = results.splitbrain.payload; any = true; }
-  if (results.warpath && results.warpath.kind === 'complete') { input.warpath = results.warpath.payload; any = true; }
-  if (!any) return null;
-  const outDir = path.join(ctx.root, 'reports', 'triumph');
-  fs.mkdirSync(outDir, { recursive: true });
-  const wanted = new Set(formats && formats.length ? formats : REPORT_FORMATS);
-  let htmlPath = null;
-  let mdPath = null;
-  if (wanted.has('html') || wanted.has('md')) {
-    const written = require('../lib/render').writeReports(input, outDir);
-    if (wanted.has('html')) htmlPath = written.htmlPath; else fs.rmSync(written.htmlPath, { force: true });
-    if (wanted.has('md')) mdPath = written.mdPath; else fs.rmSync(written.mdPath, { force: true });
-  }
-  let jsonPath = null;
-  if (wanted.has('json')) {
-    jsonPath = path.join(outDir, 'triumph-input.json');
-    fs.writeFileSync(jsonPath, JSON.stringify(input, null, 2) + '\n', 'utf8');
-  }
-  step(ctx, 'success', `Report written — ${[htmlPath && 'HTML', mdPath && 'Markdown', jsonPath && 'JSON'].filter(Boolean).join(' + ') || 'no artifacts'}`);
-  return { htmlPath, mdPath, jsonPath, generatedAt: input.generated };
-}
-
-/**
- * Run one or more courts. `court` (legacy single) and `courts` (multi-select
- * panel) are both accepted; the panel order is preserved.
- *
- * opts.outputTarget: 'local' (default) writes report artifacts under
- * reports/triumph/; 'dashboard' additionally publishes all three courts and
- * keeps the dashboard session alive for browser "Run again".
- *
- * Returns { courts: { REDLINE?, SPLITBRAIN?, WARPATH? }, dashboardUrl?,
- *           report?, errors? } — per-court values are
- *           { kind: 'complete'|'error', payload?, error? }.
- */
-async function runCourt(ctx, { court, courts, outputTarget, timeoutSeconds, formats } = {}) {
-  const root = requireRoot(ctx);
-  let selected = courts !== undefined ? courts : (court !== undefined ? [court] : null);
-  if (!Array.isArray(selected) || !selected.length || selected.some((c) => !COURTS.includes(c)) ||
-      new Set(selected).size !== selected.length) {
-    throw new Error(`Court selection must be a non-empty distinct subset of ${COURTS.join(', ')}`);
-  }
-  const target = outputTarget === 'dashboard' ? 'dashboard' : 'local';
-
-  step(ctx, 'success', `Loaded .triumph.yml — ${selected.join(' + ')} queued`);
-
-  const results = {};
-  const errors = [];
-  const McpClientCtor = (ctx && ctx.McpClient) || DefaultMcpClient;
-  const client = new McpClientCtor(ctx.enginePath, root);
-  try {
-    await client.start();
-    for (const c of selected) {
-      try {
-        if (c === 'REDLINE') results.redline = await runRedline(ctx, client);
-        else if (c === 'SPLITBRAIN') results.splitbrain = await runSplitbrain(ctx, client, { timeoutSeconds });
-        else results.warpath = await runWarpath(ctx, client);
-      } catch (e) {
-        const message = e && e.message ? e.message : String(e);
-        results[c.toLowerCase()] = { kind: 'error', error: message };
-        errors.push(`${c}: ${message}`);
-        step(ctx, 'error', `${c} failed — ${message}`);
-      }
-    }
-  } finally {
-    client.dispose();
-  }
-
-  const out = { courts: {} };
-  for (const c of selected) out.courts[c] = results[c.toLowerCase()];
-
-  if (target === 'local') {
-    const report = writeLocalReports(ctx, results, formats);
-    if (report) out.report = report;
-  } else {
-    step(ctx, 'running', 'Publishing all three courts to the dashboard');
-    const dashboardCmdMod = (ctx && ctx.dashboardCmd) || DefaultDashboardCmd;
-    const historyDir = path.join(ctx.globalStoragePath, 'dashboard-history');
-    fs.mkdirSync(historyDir, { recursive: true });
-    try {
-      const { url } = await dashboardCmdMod.runAndPublish(ctx.vscode, {
-        root,
-        enginePath: ctx.enginePath,
-        requested: ['redline', 'splitbrain', 'warpath'],
-        existingRun: null,
-        historyDir,
-        openExternal: null, // the user opens the dashboard explicitly from its tab
-        onError: (e) => emit(ctx, 'error', 'dashboard: ' + (e && e.message ? e.message : String(e))),
-      });
-      out.dashboardUrl = url;
-      step(ctx, 'success', `Published — dashboard live at ${url}`);
-    } catch (e) {
-      const message = e && e.message ? e.message : String(e);
-      errors.push('dashboard: ' + message);
-      step(ctx, 'error', `Dashboard publish failed — ${message}`);
-    }
-  }
-
-  if (errors.length) out.errors = errors;
-  step(ctx, errors.length ? 'warn' : 'success',
-    errors.length ? `Run finished with ${errors.length} failure${errors.length === 1 ? '' : 's'}` : 'Run complete — all selected courts settled');
-  return out;
-}
-
-/** Full three-court report (same engine calls as old cmdGenerateReport). */
-async function generateReport(ctx, { formats } = {}) {
-  const root = requireRoot(ctx);
-  const McpClientCtor = (ctx && ctx.McpClient) || DefaultMcpClient;
-  const client = new McpClientCtor(ctx.enginePath, root);
-  try {
-    await client.start();
-    const input = { repo: path.basename(root), repoRootAbs: root, generated: new Date().toISOString() };
-    input.redline = (await runRedline(ctx, client)).payload || null;
-    input.splitbrain = (await runSplitbrain(ctx, client, {})).payload || null;
-    input.warpath = (await runWarpath(ctx, client)).payload || null;
-
-    const outDir = path.join(root, 'reports', 'triumph');
-    fs.mkdirSync(outDir, { recursive: true });
-    const wanted = new Set(formats && formats.length ? formats : REPORT_FORMATS);
-    // triumph-input.json is the scorecard's data source — always written.
-    fs.writeFileSync(path.join(outDir, 'triumph-input.json'), JSON.stringify(input, null, 2) + '\n', 'utf8');
-    let htmlPath = null;
-    let mdPath = null;
-    if (wanted.has('html') || wanted.has('md')) {
-      const written = require('../lib/render').writeReports(input, outDir);
-      if (wanted.has('html')) htmlPath = written.htmlPath; else fs.rmSync(written.htmlPath, { force: true });
-      if (wanted.has('md')) mdPath = written.mdPath; else fs.rmSync(written.mdPath, { force: true });
-    }
-    step(ctx, 'success', 'Report written — HTML + Markdown + JSON input');
-    emit(ctx, 'info', `report written: ${htmlPath || '(no html)'}, ${mdPath || '(no md)'}`);
-    return { htmlPath, mdPath, generatedAt: input.generated };
-  } finally {
-    client.dispose();
-  }
-}
-
-/**
- * Stat reports/triumph/triumph-report.html (+.md) → summary/metadata, or
- * null if no report has ever been generated for this root. When
- * triumph-input.json is readable its per-court payloads are exposed verbatim
- * so the panel can render the verdict scorecard (REDLINE pills, SPLITBRAIN
- * trust gap, WARPATH incident status) without re-running anything.
- */
 function findLastReport(root) {
+  if (!root) return null;
+  const run = store.latestRun(root);
+  if (!run) return legacyLastReport(root);
+  const result = coordinator.resultFor(run);
+  const payload = c => run.courts[c].payload;
+  return {...result.report, runId: run.runId, run, runRecord: run, summary: payload('REDLINE')?.summary || null,
+    redline: payload('REDLINE'), splitbrain: payload('SPLITBRAIN'), warpath: payload('WARPATH'),
+    evidenceFreshness: 'run-owned'};
+}
+function legacyLastReport(root) {
   if (!root) return null;
   const outDir = path.join(root, 'reports', 'triumph');
   const htmlPath = path.join(outDir, 'triumph-report.html');
@@ -417,7 +157,10 @@ function findLastReport(root) {
   return {
     htmlPath: htmlExists ? htmlPath : null,
     mdPath: fs.existsSync(mdPath) ? mdPath : null,
-    generatedAt: stat.mtime.toISOString(),
+    generatedAt: null,
+    modifiedAt: stat.mtime.toISOString(),
+    evidenceFreshness: 'unknown',
+    evidenceSource: 'imported',
     summary,
     redline,
     splitbrain,
@@ -425,39 +168,9 @@ function findLastReport(root) {
   };
 }
 
-/** Same core as old cmdDashboardRun (progress notification lives in panel.js/extension.js). */
-async function dashboardRun(ctx) {
-  const root = requireRoot(ctx);
-  const dashboardCmdMod = (ctx && ctx.dashboardCmd) || DefaultDashboardCmd;
-  const historyDir = path.join(ctx.globalStoragePath, 'dashboard-history');
-  fs.mkdirSync(historyDir, { recursive: true });
-  step(ctx, 'running', 'Running all three courts and publishing to the dashboard');
-  emit(ctx, 'info', 'publishing…');
-  const { url } = await dashboardCmdMod.runAndPublish(ctx.vscode, {
-    root,
-    enginePath: ctx.enginePath,
-    requested: ['redline', 'splitbrain', 'warpath'],
-    existingRun: null,
-    historyDir,
-    openExternal: ctx.openExternal,
-    // The session (and its "Run again" polling loop) outlives this job, so
-    // a browser-triggered failure after this call returns must still reach
-    // the panel log — not just failures from this dashboardRun itself.
-    onError: (e) => emit(ctx, 'error', 'dashboard: ' + (e && e.message ? e.message : String(e))),
-  });
-  step(ctx, 'success', `Published — dashboard live at ${url}`);
-  emit(ctx, 'info', `published: ${url}`);
-  return { url };
-}
 
-module.exports = {
-  COURTS,
-  REPORT_FORMATS,
-  configStatus,
-  detectConfig,
-  installCourts,
-  runCourt,
-  generateReport,
-  findLastReport,
-  dashboardRun,
-};
+module.exports = {COURTS: coordinator.COURTS, REPORT_FORMATS, configStatus, validateConfig,
+  previewConfig, applyConfig, previewInstall, detectConfig, installCourts, runCourt, generateReport, findLastReport, dashboardRun,
+  listRuns: coordinator.listRuns, readRun: coordinator.readRun, selectRun: coordinator.selectRun,
+  selectedRun: coordinator.selectedRun, publishRun: coordinator.publishRun, cancelRun: coordinator.cancelRun,
+  onRunEvent: coordinator.onRunEvent, getActiveRun: coordinator.getActiveRun, capabilities: coordinator.capabilities};

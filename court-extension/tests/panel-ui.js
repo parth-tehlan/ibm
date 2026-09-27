@@ -1,144 +1,198 @@
 #!/usr/bin/env node
-/**
- * tests/panel-ui.js — structural integrity checks for the redesigned webview
- * (media/panel.js + media/panel.css). The webview runs inside VS Code's
- * sandbox, so these checks verify the shipped assets directly:
- *
- *   - no hardcoded colors anywhere (var(--vscode-*) tokens only)
- *   - the four-tab layout exists with the specified icons and labels
- *   - the agent-activity step protocol is wired (message type + statuses)
- *   - the mutation live component + log drawer + scorecard are present
- *   - no transitions longer than 200ms
- *   - narrow-width (320px) fallback present
- *   - media/panel.js parses as valid JS
- */
 'use strict';
-const assert = require('assert');
-const fs = require('fs');
-const path = require('path');
-
-const EXT = path.resolve(__dirname, '..');
-const JS = fs.readFileSync(path.join(EXT, 'media', 'panel.js'), 'utf8');
-const CSS = fs.readFileSync(path.join(EXT, 'media', 'panel.css'), 'utf8');
-
-let passed = 0, failed = 0;
-function t(name, fn) {
-  return Promise.resolve()
-    .then(fn)
-    .then(() => { passed++; console.log('  ok  ' + name); })
-    .catch((e) => { failed++; console.error('  FAIL ' + name + ' — ' + e.message); });
+/** DOM interaction tests. Run `node tests/panel-ui.js` with dev-only jsdom.
+ * No VS Code, engine, filesystem writes, mutation jobs or full suite required.
+ */
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const { JSDOM } = require('jsdom');
+const source = fs.readFileSync(path.join(__dirname, '../media/panel.js'), 'utf8');
+const css = fs.readFileSync(path.join(__dirname, '../media/panel.css'), 'utf8');
+const fixtures = require('./panel-ui-fixtures');
+let passed = 0;
+function harness(persisted = {}) {
+  const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', { runScripts: 'outside-only', url: 'https://webview.test/' });
+  const messages = [], errors = [];
+  let saved = persisted;
+  dom.window.acquireVsCodeApi = () => ({ getState: () => saved, setState: v => { saved = v; }, postMessage: m => messages.push(JSON.parse(JSON.stringify(m))) });
+  dom.window.addEventListener('error', e => errors.push(e.error));
+  dom.window.eval(source);
+  const d = dom.window.document;
+  return {
+    dom, d, messages, errors, get saved() { return saved; },
+    send(m) { dom.window.dispatchEvent(new dom.window.MessageEvent('message', { data: m })); assert.deepEqual(errors, []); },
+    state(s = fixtures.ready()) { this.send({ type: 'state', state: s }); },
+    click(id) { const n = d.getElementById(id); assert.ok(n, 'Missing #' + id); n.click(); assert.deepEqual(errors, []); },
+    last(type) { return messages.filter(m => m.type === type).at(-1); },
+    response(type, data, status = 'ok') { const p = this.last(type); assert.ok(p, 'Request ' + type); this.send({ type: 'response', requestId: p.requestId, status, data }); },
+    close() { dom.window.close(); },
+  };
 }
-
-(async () => {
-  console.log('panel UI integrity checks\n');
-
-  await t('media/panel.js parses as valid JavaScript', () => {
-    new Function(JS); // syntax check only — never executed
-  });
-
-  await t('no hardcoded colors: every color is a var(--vscode-*) token', () => {
-    // Hex colors, rgb()/rgba(), and named-color declarations are banned in CSS.
-    assert.ok(!/#[0-9a-fA-F]{3,8}\b/.test(CSS), 'hex color found in panel.css');
-    assert.ok(!/\brgba?\(/.test(CSS), 'rgb()/rgba() found in panel.css');
-    const decl = /(?:^|[{;\s])color\s*:\s*([^;}]+)/g;
-    let m;
-    while ((m = decl.exec(CSS))) {
-      const value = m[1].trim();
-      assert.ok(/^var\(--vscode-/.test(value) || value === 'inherit' || value === 'transparent',
-        'non-token color declaration: ' + value);
-    }
-    // The webview JS must never inject a color literal either.
-    assert.ok(!/#[0-9a-fA-F]{6}\b/.test(JS), 'hex color literal found in panel.js');
-  });
-
-  await t('all transitions are 150ms ease (none longer than 200ms)', () => {
-    const times = [...CSS.matchAll(/transition:[^;]*?(\d+(?:\.\d+)?)(m?s)\b/g)];
-    assert.ok(times.length > 0, 'expected at least one transition');
-    for (const [, n, unit] of times) {
-      const ms = unit === 's' ? parseFloat(n) * 1000 : parseFloat(n);
-      assert.ok(ms <= 200, `transition longer than 200ms found: ${n}${unit}`);
-    }
-    assert.ok(CSS.includes('150ms ease'), 'transitions should use 150ms ease');
-  });
-
-  await t('tab bar: four tabs (Run ▶ / Report 📋 / Dashboard ⬡ / Setup ⚙) with active focusBorder indicator', () => {
-    for (const [id, icon, label] of [['run', '▶', 'Run'], ['report', '📋', 'Report'], ['dashboard', '⬡', 'Dashboard'], ['setup', '⚙', 'Setup']]) {
-      assert.ok(JS.includes(`id: '${id}'`), `missing tab id ${id}`);
-      assert.ok(JS.includes(`icon: '${icon}'`), `missing tab icon for ${id}`);
-      assert.ok(JS.includes(`label: '${label}'`), `missing tab label ${label}`);
-    }
-    assert.ok(/\.tab-item\.active\s*\{[^}]*border-left-color:\s*var\(--vscode-focusBorder\)/.test(CSS), 'active tab must use a focusBorder left strip');
-  });
-
-  await t('tab persistence via vscode.setState', () => {
-    assert.ok(JS.includes("persist({ tab: tab.id })"), 'tab clicks must persist the active tab');
-    assert.ok(/persisted\.tab/.test(JS), 'the active tab must be restored on load');
-  });
-
-  await t('court tiles: multi-select (aria-pressed, not radio), badge classes, selected tint via color-mix', () => {
-    assert.ok(JS.includes("aria-pressed"), 'tiles must expose toggle state');
-    assert.ok(!/name: 'court'/.test(JS), 'old single-select radio selector must be gone');
-    for (const cls of ['badge-passed', 'badge-failed', 'badge-running']) {
-      assert.ok(CSS.includes('.tile-badge.' + cls), 'missing tile badge class ' + cls);
-    }
-    assert.ok(CSS.includes('color-mix(in srgb, var(--vscode-list-activeSelectionBackground) 40%, transparent)'),
-      'selected tile must tint with list-activeSelectionBackground at 40%');
-  });
-
-  await t('single Run button + options block (output target, timeout, formats)', () => {
-    assert.ok(JS.includes("'Run selected courts'"), 'the single Run button label');
-    assert.ok(JS.includes("value: 'local'") && JS.includes("value: 'dashboard'"), 'output target radio options');
-    assert.ok(JS.includes('timeout-input'), 'SPLITBRAIN timeout override input');
-    for (const fmt of ['HTML', 'Markdown', 'JSON']) assert.ok(JS.includes(`'${fmt}'`), `format checkbox ${fmt}`);
-    assert.ok(!JS.includes("'Run courts → dashboard'"), 'the old split dashboard run button must be gone');
-  });
-
-  await t('agent activity feed: step message protocol with the five states', () => {
-    assert.ok(JS.includes("case 'step'"), 'webview must handle the step message type');
-    for (const s of ['success', 'warn', 'error', 'pending', 'running']) {
-      assert.ok(JS.includes(`'${s}'`), `step status '${s}' must be handled`);
-    }
-    assert.ok(JS.includes('feedPinned'), 'feed needs pin-to-bottom auto-scroll logic');
-    assert.ok(JS.includes('STEP_LIMIT'), 'feed must cap entries');
-  });
-
-  await t('green ticks use the plain Unicode ✓ colored with testing-iconPassed (no emoji)', () => {
-    assert.ok(JS.includes("'✓'"), 'plain ✓ glyph required for success steps');
-    assert.ok(CSS.includes('var(--vscode-testing-iconPassed'), 'testing-iconPassed token required');
-    assert.ok(!CSS.includes('content: "✅"') && !JS.includes('✅'), 'emoji ticks are not allowed');
-  });
-
-  await t('console log drawer: collapsible, 180px max-height, live entry count', () => {
-    assert.ok(JS.includes('log-drawer') && JS.includes('logSummaryCount'), 'log drawer + live count');
-    assert.ok(/\.log-container\s*\{[^}]*max-height:\s*180px/.test(CSS), 'log drawer max-height must be 180px');
-  });
-
-  await t('report tab scorecard: per-court rows, pills, gap bar, "Not run yet" empty state', () => {
-    for (const cls of ['pill-pass', 'pill-fail', 'pill-skip']) assert.ok(CSS.includes('.' + cls), 'missing pill class ' + cls);
-    assert.ok(JS.includes('Not run yet'), 'scorecard rows must say "Not run yet"');
-    assert.ok(JS.includes('gap-track') && JS.includes('gap-fill'), 'SPLITBRAIN gap bar');
-    assert.ok(!JS.includes('No report has been generated yet'), 'the old empty-state paragraph must be gone');
-  });
-
-  await t('dashboard tab: no run button (output target lives on the Run tab)', () => {
-    assert.ok(!JS.includes("dashboardRunBtn"), 'dashboard tab must not carry a run button');
-    assert.ok(JS.includes("'Open dashboard'") && JS.includes("'Refresh status'"), 'open/refresh buttons remain');
-  });
-
-  await t('mutation live component: progress bar, climbing counter, status classes', () => {
-    assert.ok(JS.includes('mutation-live') && JS.includes('progress-fill') && JS.includes('mutation-pct'),
-      'mutation live widget must render bar + counter in the panel');
-    for (const sel of ['.progress-track', '.progress-fill', '.mutation-stats']) {
-      assert.ok(CSS.includes(sel), 'missing CSS selector ' + sel);
-    }
-  });
-
-  await t('narrow-width fallback below 320px: tiles stack, tab labels hide', () => {
-    assert.ok(/@media\s*\(max-width:\s*320px\)/.test(CSS), 'a 320px media query is required');
-    assert.ok(/@media\s*\(max-width:\s*320px\)[\s\S]*?\.tab-label\s*\{\s*display:\s*none/.test(CSS), 'tab labels must hide at narrow width');
-    assert.ok(/@media\s*\(max-width:\s*320px\)[\s\S]*?\.court-tiles\s*\{\s*flex-direction:\s*column/.test(CSS), 'court tiles must stack at narrow width');
-  });
-
-  console.log(`\n${passed} passed, ${failed} failed`);
-  process.exit(failed ? 1 : 0);
-})().catch((e) => { console.error(e); process.exit(1); });
+function test(name, fn) {
+  const h = harness();
+  try { fn(h); passed++; console.log('  ok ' + name); }
+  finally { h.close(); }
+}
+test('two main tabs and secondary Setup/Dashboard routes', h => {
+  h.state(); assert.equal(h.d.querySelectorAll('[role=tab]').length, 2);
+  assert.deepEqual([...h.d.querySelectorAll('[role=tab]')].map(n => n.getAttribute('aria-label')), ['Run', 'Evidence']);
+  h.click('setup-nav'); assert.equal(h.d.getElementById('panel-setup').hidden, false);
+  assert.equal(h.d.querySelectorAll('[role=tab]:not([hidden])').length, 2);
+  h.click('back-nav'); assert.equal(h.d.getElementById('panel-run').hidden, false);
+  h.click('tab-evidence'); h.click('dashboard-nav'); h.click('back-nav');
+  assert.equal(h.d.getElementById('panel-evidence').hidden, false);
+  for (const [section, id] of [['report','evidence'], ['dashboard','dashboard']]) { h.send({ type: 'focus', section }); assert.equal(h.d.getElementById('panel-' + id).hidden, false); }
+  h.send({ type: 'focus', section: 'install', preselect: { host: 'bob' } }); assert.equal(h.d.getElementById('host-select').value, 'bob');
+});
+test('arrow keys and Home/End implement roving tab focus', h => {
+  h.state(); const tab = h.d.getElementById('tab-run'); tab.focus();
+  tab.dispatchEvent(new h.dom.window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+  assert.equal(h.d.activeElement.id, 'tab-evidence'); assert.equal(h.d.getElementById('tab-run').tabIndex, -1);
+  h.d.activeElement.dispatchEvent(new h.dom.window.KeyboardEvent('keydown', { key: 'Home', bubbles: true })); assert.equal(h.d.activeElement.id, 'tab-run');
+});
+test('first run is REDLINE only, publication off, exact subset request', h => {
+  h.state(); assert.equal(h.d.getElementById('court-REDLINE').checked, true);
+  assert.equal(h.d.getElementById('court-SPLITBRAIN').checked, false); assert.equal(h.d.getElementById('publish-toggle').checked, false);
+  h.click('court-WARPATH'); h.click('publish-toggle'); h.click('run-btn');
+  assert.deepEqual(h.last('runCourt').courts, ['REDLINE', 'WARPATH']); assert.equal(h.last('runCourt').outputTarget, 'dashboard');
+  assert.equal(h.d.getElementById('run-btn').disabled, true); h.click('run-btn'); assert.equal(h.messages.filter(m => m.type === 'runCourt').length, 1);
+});
+test('unavailable first court selects nothing; remembered unavailable court requires review', h => {
+  const s = fixtures.ready(); s.readiness.courts.REDLINE = { ready: false, reason: 'No clause fixtures' };
+  h.state(s); assert.equal(h.d.getElementById('court-REDLINE').checked, false); assert.equal(h.d.getElementById('run-btn').disabled, true);
+  h.click('court-WARPATH'); s.readiness.courts.WARPATH = { ready: false, reason: 'No incident inputs' }; h.state(s);
+  assert.equal(h.d.getElementById('court-WARPATH').checked, true); assert.equal(h.d.getElementById('court-WARPATH').disabled, false); assert.equal(h.d.getElementById('run-btn').disabled, true);
+  h.click('court-WARPATH'); assert.equal(h.d.getElementById('court-WARPATH').checked, false);
+});
+test('workspace-scoped selections, publication and timeout do not bleed', h => {
+  h.state(); h.click('court-SPLITBRAIN'); h.click('publish-toggle');
+  h.state(fixtures.ready({ workspace: { root: '/other', name: 'Other', trusted: true } }));
+  assert.equal(h.d.getElementById('court-SPLITBRAIN').checked, false); assert.equal(h.d.getElementById('publish-toggle').checked, false);
+  h.state(); assert.equal(h.d.getElementById('court-SPLITBRAIN').checked, true); assert.equal(h.d.getElementById('publish-toggle').checked, true);
+});
+test('legacy preferences migrate without implicit dashboard publication', h => {
+  const other = harness({ tab: 'report', courts: ['WARPATH'], outputTarget: 'dashboard' });
+  try { other.state(); assert.equal(other.d.getElementById('panel-evidence').hidden, false); other.click('tab-run'); assert.equal(other.d.getElementById('court-WARPATH').checked, true); assert.equal(other.d.getElementById('publish-toggle').checked, false); assert.equal(other.saved.version, 2); } finally { other.close(); }
+});
+test('unsupported timeout overrides cannot be submitted or silently ignored', h => {
+  h.state(); const input = h.d.getElementById('timeout-input'); assert.equal(input.disabled, true);
+  input.value = '120'; input.dispatchEvent(new h.dom.window.Event('input'));
+  assert.equal(h.d.getElementById('run-btn').disabled, true);
+  assert.match(h.d.body.textContent, /Per-run timeout overrides are unavailable/);
+});
+test('supported timeout override validates a positive whole number', h => {
+  h.state(fixtures.ready({capabilities: {...fixtures.capabilities, timeoutOverride: true}}));
+  const input = h.d.getElementById('timeout-input'); input.value = '-1'; input.dispatchEvent(new h.dom.window.Event('input'));
+  assert.equal(h.d.getElementById('run-btn').disabled, true);
+  input.value = '120'; input.dispatchEvent(new h.dom.window.Event('input')); h.click('run-btn'); assert.equal(h.last('runCourt').timeoutSeconds, 120);
+});
+test('progress freezes controls, distinguishes queued, only real denominator yields progress', h => {
+  const run = fixtures.running(); h.state(fixtures.ready({ activeRun: run }));
+  assert.equal(h.d.getElementById('court-REDLINE').disabled, true); assert.equal(h.d.getElementById('publish-toggle').disabled, true);
+  assert.match(h.d.body.textContent, /WARPATH · queued/); assert.equal(h.d.querySelector('progress').max, 120);
+  run.courts.SPLITBRAIN.progress.total = null; h.state(fixtures.ready({ activeRun: run })); assert.equal(h.d.querySelector('progress'), null);
+  assert.equal(h.d.getElementById('stop-run'), null);
+  h.state(fixtures.ready({ activeRun: run, capabilities: { ...fixtures.capabilities, cancelRun: true } })); h.click('stop-run'); assert.equal(h.last('cancelRun').runId, run.runId);
+  assert.match(h.d.body.textContent, /Stopping/); assert.equal(h.d.getElementById('court-REDLINE').disabled, true);
+});
+test('completion stays on Run and never opens dashboard or reruns', h => {
+  h.state(fixtures.ready({ activeRun: fixtures.running() }));
+  h.state(fixtures.ready({ activeRun: null, recentRuns: [fixtures.evidence()] }));
+  assert.equal(h.d.getElementById('panel-run').hidden, false); assert.ok(h.d.getElementById('view-evidence'));
+  assert.equal(h.last('dashboardOpen'), undefined); assert.equal(h.last('runCourt'), undefined);
+});
+test('zero tests remain inconclusive and missing WARPATH signal never means clear', h => {
+  h.state(fixtures.ready({ selectedRun: fixtures.evidence() })); h.click('tab-evidence');
+  const red = h.d.getElementById('evidence-REDLINE'), war = h.d.getElementById('evidence-WARPATH');
+  assert.match(red.textContent, /zero tests executed/); assert.equal(red.querySelector('.pass'), null);
+  assert.match(war.textContent, /insufficient incident signal/); assert.equal(war.querySelector('.pass'), null);
+});
+test('percent values are not multiplied; pp including negatives are preserved', h => {
+  const run = fixtures.evidence(); run.courts.SPLITBRAIN.payload.trustGap = -2.19;
+  h.state(fixtures.ready({ selectedRun: run })); h.click('tab-evidence'); const t = h.d.getElementById('evidence-SPLITBRAIN').textContent;
+  assert.match(t, /Claimed coverage 88.5%/); assert.match(t, /Mutation score 90.69%/); assert.match(t, /Trust gap -2.19 pp/); assert.doesNotMatch(t, /219%|8850%/);
+});
+test('mutation command error remains error even when old metrics exist', h => {
+  const run = fixtures.evidence(); run.courts.SPLITBRAIN.execution = 'error'; run.courts.SPLITBRAIN.errors = [{ message: 'Exit 1; no fresh report' }];
+  h.state(fixtures.ready({ selectedRun: run })); h.click('tab-evidence'); assert.match(h.d.body.textContent, /Finished with execution errors/); assert.match(h.d.getElementById('evidence-SPLITBRAIN').textContent, /Exit 1; no fresh report/);
+});
+test('export, publication retry and recent selection never start courts', h => {
+  const run = fixtures.evidence(); h.state(fixtures.ready({ selectedRun: run, recentRuns: [run] })); h.click('tab-evidence');
+  h.click('export-json'); assert.equal(h.last('openArtifact').artifactId, 'canonical'); assert.equal(h.last('openArtifact').runId, run.runId);
+  assert.equal(h.d.getElementById('export-md').disabled, true);
+  h.click('evidence-publish'); assert.equal(h.last('publishRun').runId, run.runId);
+  h.click('recent-0'); assert.equal(h.last('selectRun').runId, run.runId); assert.equal(h.last('runCourt'), undefined);
+});
+test('logs use host Output action when available and safe bounded legacy fallback otherwise', h => {
+  const run = fixtures.evidence(); h.state(fixtures.ready({ selectedRun: run })); h.click('tab-evidence'); h.click('logs-' + run.runId); assert.equal(h.last('openLogs').runId, run.runId);
+  h.state(fixtures.ready({ capabilities: {}, log: [{ level: 'error', text: '<script>bad()</script>' }], selectedRun: run })); h.click('logs-' + run.runId);
+  assert.match(h.d.getElementById('legacy-logs').textContent, /<script>/); assert.equal(h.d.querySelector('script'), null);
+});
+test('Setup validates read-only, preview requires confirmation and exact revision', h => {
+  h.state(); h.click('setup-nav'); h.click('config-validate'); assert.ok(h.last('configValidate')); assert.equal(h.last('detectConfig'), undefined);
+  h.response('configValidate', { valid: true }); h.click('config-preview'); h.response('configPreview', fixtures.preview());
+  assert.equal(h.d.getElementById('config-apply').disabled, true); h.click('config-confirm'); h.click('config-apply');
+  assert.equal(h.last('configApply').previewId, 'preview-config-1'); assert.equal(h.last('configApply').expectedConfigRevision, 'revision-1');
+  h.response('configApply', { message: 'Configuration written' }); assert.equal(h.d.getElementById('config-apply'), null); assert.equal(h.last('runCourt'), undefined);
+});
+test('stale preview and untrusted workspace cannot apply', h => {
+  h.state(fixtures.ready({ configPreview: fixtures.preview() })); h.click('setup-nav'); h.click('config-confirm');
+  h.state(fixtures.ready({ config: { exists: true, revision: 'revision-2' }, configPreview: fixtures.preview() }));
+  assert.equal(h.d.getElementById('config-apply').disabled, true); assert.match(h.d.body.textContent, /preview is stale/);
+  h.state(fixtures.ready({ workspace: { root: '/work', trusted: false }, configPreview: fixtures.preview() }));
+  assert.equal(h.d.getElementById('config-confirm').disabled, true); assert.equal(h.d.getElementById('install-preview').disabled, true); assert.equal(h.last('configApply'), undefined);
+});
+test('agent host is explicit; integration preview/install reports partial failures', h => {
+  h.state(); h.click('setup-nav'); assert.equal(h.d.getElementById('host-select').value, ''); assert.equal(h.d.getElementById('install-preview').disabled, true);
+  const select = h.d.getElementById('host-select'); select.value = 'bob'; select.dispatchEvent(new h.dom.window.Event('change'));
+  h.click('install-preview'); assert.equal(h.last('installPreview').host, 'bob');
+  h.response('installPreview', { ...fixtures.preview(), host: 'bob', previewId: 'integration-1' }); h.click('install-confirm'); h.click('install-apply'); assert.equal(h.last('installApply').previewId, 'integration-1');
+  h.response('installApply', { partial: true, failures: [{ message: 'Cannot write MCP configuration' }], files: [{ path: '.bob/prompt.md', status: 'written' }] });
+  assert.match(h.d.body.textContent, /Partial installation/); assert.match(h.d.body.textContent, /Cannot write MCP configuration/); assert.equal(h.last('installCourts'), undefined);
+});
+test('no workspace gates run and install, offers native folder action', h => {
+  h.state(fixtures.ready({ workspace: { root: null } })); assert.equal(h.d.getElementById('run-btn').disabled, true); h.click('open-folder'); assert.ok(h.last('openFolder'));
+  h.click('setup-nav'); assert.equal(h.d.getElementById('config-preview').disabled, true); assert.equal(h.d.getElementById('install-preview').disabled, true);
+});
+test('focus and disclosure are preserved on host snapshots', h => {
+  const supported = fixtures.ready({capabilities: {...fixtures.capabilities, timeoutOverride: true}});
+  h.state(supported); h.d.getElementById('advanced').open = true; h.d.getElementById('timeout-input').focus(); h.state(supported);
+  assert.equal(h.d.activeElement.id, 'timeout-input'); assert.equal(h.d.getElementById('advanced').open, true);
+});
+test('host strings render as text, never HTML or executable URLs', h => {
+  const run = fixtures.evidence(); run.summary = { courts: { WARPATH: { label: '<img src=x onerror=alert(1)>', verdict: 'inconclusive' } } };
+  h.state(fixtures.ready({ selectedRun: run })); h.click('tab-evidence'); assert.equal(h.d.querySelector('img'), null); assert.match(h.d.body.textContent, /<img/);
+});
+test('old state remains usable with safe disabled write upgrades', h => {
+  h.state({ workspace: { root: '/legacy' }, config: { exists: true }, hosts: { default: 'all', available: ['all'] }, lastReport: { redline: { summary: { green: 2, red: 0, yellow: 0 } }, warpath: {}, htmlPath: '/reports/latest.html' } });
+  assert.equal(h.d.getElementById('run-btn').disabled, false); h.click('tab-evidence'); assert.equal(h.d.querySelector('.pass'), null);
+  h.click('export-html'); assert.equal(h.last('openLastReport').format, 'html'); h.click('setup-nav'); assert.equal(h.d.getElementById('config-preview').disabled, true);
+});
+test('live step timeline and raw console drawer retain honest statuses and count', h => {
+  h.state();
+  assert.equal(h.d.getElementById('console-log').open, false);
+  h.send({type: 'step', step: {status: 'running', text: 'Testing mutations', ts: '2025-01-01T00:00:00Z'}});
+  h.send({type: 'step', step: {status: 'warn', text: 'Zero tests executed', ts: '2025-01-01T00:00:01Z'}});
+  h.send({type: 'log', entry: {level: 'error', text: '<script>exit 1</script>', ts: '2025-01-01T00:00:02Z'}});
+  assert.equal(h.d.querySelectorAll('#activity-feed .activity-step').length, 2);
+  assert.equal(h.d.querySelectorAll('.step-success').length, 0);
+  assert.match(h.d.getElementById('console-log').textContent, /1 entries/);
+  assert.equal(h.d.querySelector('script'), null);
+  h.d.getElementById('console-log').open = true;
+  h.state(fixtures.ready({steps: [{status: 'error', text: 'Mutation command exited 1'}], log: [{level: 'error', text: 'exit 1'}]}));
+  assert.equal(h.d.getElementById('console-log').open, true);
+  assert.match(h.d.getElementById('activity-feed').textContent, /Mutation command exited 1/);
+});
+test('dashboard recovery does not dispatch a court run', h => {
+  h.state(fixtures.ready({dashboard: {connected: false, url: 'http://stale'}}));
+  h.click('dashboard-nav'); assert.equal(h.d.getElementById('dashboard-open').disabled, true);
+  h.click('dashboard-start'); assert.equal(h.last('dashboardStart').type, 'dashboardStart');
+  assert.equal(h.last('runCourt'), undefined);
+});
+test('theme styling uses horizontal tabs and reduced motion', () => {
+  assert.doesNotMatch(css, /#[0-9a-f]{3,8}\b|rgba?\(/i);
+  assert.match(css, /prefers-reduced-motion/); assert.match(css, /forced-colors/);
+  assert.match(css, /\.tabs \{ display: flex; width: 100%/); assert.doesNotMatch(css, /\.app-shell/);
+});
+console.log(`\n${passed} panel DOM tests passed`);

@@ -22,6 +22,11 @@ the documented contract and nothing else.
 
 ## How to author
 
+> **Prerequisite** — Clause suites run through `jest`. Before calling
+> `redline_clause`, confirm `node_modules/.bin/jest` exists in the repo root.
+> If it is absent, run `npm install` first — a missing `node_modules` causes
+> a spawn or parse error, not a real verdict.
+
 1. Call `redline_clauses` to list clause IDs; read the spec section for the
    clause you are authoring. Quote its normative sentences in a comment at the
    top of the test file.

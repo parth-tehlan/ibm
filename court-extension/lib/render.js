@@ -15,6 +15,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { summarizeCourt, formatMetric, clauseStatus } = require('./run-summary');
 
 // ---------------------------------------------------------------------------
 // Markdown
@@ -30,7 +31,7 @@ function renderMarkdown(input) {
   L.push('');
 
   if (redline) {
-    const s = redline.summary || {};
+    const s = summarizeCourt('REDLINE', redline).counts;
     L.push(`## REDLINE — spec-witness`);
     L.push('');
     L.push(`Verdict: **${s.green ?? 0} green / ${s.red ?? 0} red / ${s.yellow ?? 0} yellow** of ${s.total ?? 0} clauses`);
@@ -38,8 +39,9 @@ function renderMarkdown(input) {
     L.push('| Clause | Verdict | Passed | Failed | Total | Spec |');
     L.push('|--------|---------|--------|--------|-------|------|');
     for (const r of redline.results || []) {
-      const mark = r.status === 'green' ? '🟢' : r.status === 'red' ? '🔴' : '🟡';
-      L.push(`| ${r.clause} | ${mark} ${r.status} | ${r.passed} | ${r.failed} | ${r.total} | ${r.spec_anchor || ''} |`);
+      const status = clauseStatus(r);
+      const mark = status === 'green' ? '🟢' : status === 'red' ? '🔴' : '🟡';
+      L.push(`| ${r.clause} | ${mark} ${status} | ${r.passed} | ${r.failed} | ${r.total} | ${r.spec_anchor || ''} |`);
     }
     L.push('');
     for (const r of (redline.results || []).filter((x) => (x.failures || []).length)) {
@@ -54,13 +56,14 @@ function renderMarkdown(input) {
 
   if (splitbrain) {
     L.push('## SPLITBRAIN — honesty audit');
+    L.push(`Evidence: **${summarizeCourt('SPLITBRAIN', splitbrain).label}**`);
     L.push('');
     if (splitbrain.status === 'not-run' || splitbrain.status === 'unconfigured') {
       L.push(`_${splitbrain.note || 'not run'}_`);
     } else {
       L.push(`- **Claimed coverage:** ${fmtPct(splitbrain.claimedCoverage)}`);
       L.push(`- **Honest mutation score:** ${fmtPct(splitbrain.honestMutationScore)}`);
-      L.push(`- **Trust gap:** ${fmtPct(splitbrain.trustGap)} ${gapVerdict(splitbrain)}`);
+      L.push(`- **Trust gap:** ${formatMetric(splitbrain.trustGap, 'percentage_points')}`);
       const dt = splitbrain.dishonestTests || [];
       L.push(`- **Dishonest tests (tautologies):** ${dt.length ? dt.length : 'none'}`);
       if (dt.length) {
@@ -87,6 +90,7 @@ function renderMarkdown(input) {
 
   if (warpath) {
     L.push('## WARPATH — incident forensics');
+    L.push(summarizeCourt('WARPATH', warpath).detail);
     L.push('');
     if (warpath.status && warpath.status.startsWith('no-')) {
       L.push(`_${warpath.detail || warpath.status}_`);
@@ -111,21 +115,13 @@ function renderMarkdown(input) {
     L.push('');
   }
 
+  L.push('## Raw court evidence', '', '```json', JSON.stringify({ redline, splitbrain, warpath }, null, 2), '```', '');
   L.push('---');
   L.push('*Rendered deterministically from TRIUMPH engine JSON. Re-run: collect redline_verdict_all / splitbrain_trustgap / warpath_triage and feed to the report generator.*');
   return L.join('\n');
 }
 
-function fmtPct(v) {
-  if (v == null) return 'n/a';
-  return (typeof v === 'number' && v <= 1 && v >= 0 ? Math.round(v * 10000) / 100 : v) + '%';
-}
-function gapVerdict(sb) {
-  const gap = sb.trustGap;
-  if (gap == null) return '';
-  const g = gap <= 1 ? gap * 100 : gap;
-  return g <= 5 ? '(honest ✅)' : g <= 15 ? '(inflated ⚠️)' : '(dishonest ❌)';
-}
+function fmtPct(v) { return formatMetric(v, 'percent'); }
 
 // ---------------------------------------------------------------------------
 // HTML
@@ -136,12 +132,13 @@ function esc(s) {
 
 function renderHtml(input) {
   const { repo, generated, redline, splitbrain, warpath } = input;
+  const redlineSummary = redline ? summarizeCourt('REDLINE', redline) : null;
   const verdict = (st) => `<span class="pill ${st}">${st}</span>`;
 
   const clauseRows = (redline && redline.results || []).map((r, i) => `
-    <tr class="clause-row ${r.status}" data-i="${i}">
+    <tr class="clause-row ${clauseStatus(r)}" data-i="${i}">
       <td class="mono">${esc(r.clause)}</td>
-      <td>${verdict(r.status)}</td>
+      <td>${verdict(clauseStatus(r))}</td>
       <td>${r.passed}/${r.failed}/${r.total}</td>
       <td class="mono"><a href="vscode://file/${esc(input.repoRootAbs || '')}/${esc(r.test)}">${esc(r.test)}</a></td>
       <td class="mono">${esc(r.spec_anchor || '')}</td>
@@ -167,9 +164,9 @@ function renderHtml(input) {
     <div class="gauges">
       <div class="gauge"><div class="num">${esc(fmtPct(splitbrain.claimedCoverage))}</div><div class="lbl">claimed coverage</div></div>
       <div class="gauge"><div class="num">${esc(fmtPct(splitbrain.honestMutationScore))}</div><div class="lbl">honest kill-rate</div></div>
-      <div class="gauge ${splitbrain.trustGap != null && (splitbrain.trustGap > 5 && splitbrain.trustGap > 0.05) ? 'bad' : 'good'}"><div class="num">${esc(fmtPct(splitbrain.trustGap))}</div><div class="lbl">trust gap ${esc(gapVerdict(splitbrain))}</div></div>
+      <div class="gauge"><div class="num">${esc(formatMetric(splitbrain.trustGap, 'percentage_points'))}</div><div class="lbl">trust gap · coverage minus mutation score</div></div>
     </div>
-    ${(splitbrain.dishonestTests || []).length ? `<div class="dishonest"><b>Dishonest tests (tautologies):</b><ul>${splitbrain.dishonestTests.map((d) => `<li><code>${esc(d.testName || d.testId || d)}</code> tolerated ${esc(JSON.stringify(d.survivedMutants || []))}</li>`).join('')}</ul></div>` : '<div class="honest">No tautologies found — every covered mutant was killed.</div>'}
+    ${(splitbrain.dishonestTests || []).length ? `<div class="dishonest"><b>Dishonest tests (tautologies):</b><ul>${splitbrain.dishonestTests.map((d) => `<li><code>${esc(d.testName || d.testId || d)}</code> tolerated ${esc(JSON.stringify(d.survivedMutants || []))}</li>`).join('')}</ul></div>` : '<p class="muted">No tests named in this ledger. Survivors may be unattributed; this does not establish that all tests are honest.</p>'}
   ` : `<p class="muted">${esc(splitbrain && (splitbrain.note || splitbrain.status) || 'SPLITBRAIN not run')}</p>`;
 
   return `<!doctype html>
@@ -218,17 +215,19 @@ function renderHtml(input) {
 </header>
 <main>
 <section id="redline">
-  <h2>REDLINE — spec-witness ${redline ? verdict(summaryStatus(redline.summary)) : ''}</h2>
-  ${redline && redline.summary ? `<p class="sub">${redline.summary.green} green / ${redline.summary.red} red / ${redline.summary.yellow} yellow of ${redline.summary.total} clauses. Click a row to expand failures.</p>` : '<p class="muted">REDLINE not run.</p>'}
+  <h2>REDLINE — spec-witness ${redline ? verdict(redlineSummary.tone) : ''}</h2>
+  ${redline && redline.summary ? `<p class="sub">${redlineSummary.counts.green} green / ${redlineSummary.counts.red} red / ${redlineSummary.counts.yellow} yellow of ${redlineSummary.counts.total} clauses. Click a row to expand failures.</p>` : '<p class="muted">REDLINE not run.</p>'}
   ${clauseRows ? `<table><thead><tr><th>Clause</th><th>Verdict</th><th>Pass/Fail/Total</th><th>Test</th><th>Spec anchor</th></tr></thead><tbody>${clauseRows}</tbody></table>` : ''}
 </section>
 <section id="splitbrain">
   <h2>SPLITBRAIN — honesty audit</h2>
+  <p class="muted">${esc(summarizeCourt('SPLITBRAIN', splitbrain).label)}</p>
   ${sbSummary}
   ${survivorRows ? `<h3 style="margin-top:18px">Surviving mutants (gutter)</h3><table><thead><tr><th>ID</th><th>Mutator</th><th>Location</th><th>Replacement</th><th>Covered by</th></tr></thead><tbody>${survivorRows}</tbody></table>` : ''}
 </section>
 <section id="warpath">
   <h2>WARPATH — incident forensics</h2>
+  <p class="muted">${esc(summarizeCourt('WARPATH', warpath).detail)}</p>
   ${warpath && warpath.suspect ? `
     <div class="gauges">
       <div class="gauge"><div class="num mono" style="font-size:18px">${esc(warpath.suspect.id)}</div><div class="lbl">suspect deploy${warpath.suspect.commit ? ' (' + esc(warpath.suspect.commit) + ')' : ''}</div></div>
@@ -239,6 +238,7 @@ function renderHtml(input) {
     <h3>Evidence timeline</h3><ul class="timeline">${timeline}</ul>
   ` : `<p class="muted">${esc(warpath && (warpath.detail || warpath.status) || 'WARPATH not run')}</p>`}
 </section>
+<details><summary>Raw court JSON · as reported</summary><pre>${esc(JSON.stringify({ redline, splitbrain, warpath }, null, 2))}</pre></details>
 </main>
 <script>
   document.querySelectorAll('tr.clause-row').forEach((row) => {
