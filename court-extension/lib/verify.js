@@ -214,9 +214,10 @@ async function executeMutants(cfg, srcAbs, srcRel, mutants, testsAbs) {
       wrapperFiles.push(wAbs);
     }
 
-    // Run jest against the wrappers.
+    // Run jest against the wrappers (via the repo's resolved jest CLI —
+    // no npx/shell, so argv reaches jest intact on every platform).
     const relWrappers = wrapperFiles.map((w) => path.relative(cfg.repoRoot, w).split(path.sep).join('/'));
-    const run = await runners.spawnCollect('npx', ['jest', '--json', '--config', cfgPath, ...relWrappers], {
+    const run = await runners.runJestCli(cfg.repoRoot, ['--json', '--config', cfgPath, ...relWrappers], {
       cwd: cfg.repoRoot,
       timeoutMs: 120_000,
     });

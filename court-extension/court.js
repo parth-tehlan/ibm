@@ -320,7 +320,7 @@ async function resolveStrykerTestNames(cfg, mutants) {
   let files = allFiles;
   if (cfg.mutation.absStrykerJestConfig && fs.existsSync(cfg.mutation.absStrykerJestConfig)) {
     // jest --config <stryker> --json runs exactly the mutation suite.
-    const r = await runners.spawnCollect('npx', ['jest', '--json', '--config=' + cfg.mutation.absStrykerJestConfig], {
+    const r = await runners.runJestCli(cfg.repoRoot, ['--json', '--config=' + cfg.mutation.absStrykerJestConfig], {
       cwd: cfg.repoRoot, timeoutMs: 120_000,
     });
     const parsed = runners.extractJson(r.stdout);
@@ -339,8 +339,8 @@ async function resolveStrykerTestNames(cfg, mutants) {
   let idx = 0;
   for (const fp of files.sort()) {
     const rel = path.relative(cfg.repoRoot, fp);
-    const args = ['jest', '--json', '--testPathPattern=' + rel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')];
-    const r = await runners.spawnCollect('npx', args, { cwd: cfg.repoRoot, timeoutMs: 120_000 });
+    const jestArgs = ['--json', '--testPathPattern=' + rel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')];
+    const r = await runners.runJestCli(cfg.repoRoot, jestArgs, { cwd: cfg.repoRoot, timeoutMs: 120_000 });
     const parsed = runners.extractJson(r.stdout);
     if (!parsed || !parsed.testResults) continue;
     for (const tr of parsed.testResults) {

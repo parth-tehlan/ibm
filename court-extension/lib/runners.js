@@ -52,6 +52,65 @@ function withEnv(cwd) {
   return { ...process.env, NODE_OPTIONS: [existing, flag].filter(Boolean).join(' ') };
 }
 
+// `npx jest ...` used to be spawned directly. On Windows, `npx` resolves to
+// the `npx.cmd` batch shim, which Node's spawn() cannot execute without
+// shell:true — and shell:true naively string-joins argv with no per-argument
+// escaping, so a jest --testPathPattern regex containing `(`, `)`, `|`, `$`
+// (routine: allClauseFilesRegex/clauseFileRegex escape path metachars and
+// then insert an unescaped capture group for the clause-id pattern) breaks
+// the shell's own line parsing on both cmd.exe and /bin/sh. Resolving jest's
+// own JS CLI entry point and spawning it with `node <entry> <args>` (the
+// same process.execPath + argv-array pattern src/mcp-client.js already uses
+// for court.js) sidesteps npx, the OS shell and any batch-file layer
+// entirely — argv reaches jest unmodified on every platform. Cached per
+// repoRoot: resolution is a handful of require.resolve calls, not free.
+const _jestCliCache = new Map();
+function resolveJestCli(repoRoot) {
+  const key = repoRoot || '';
+  if (_jestCliCache.has(key)) return _jestCliCache.get(key);
+  let resolved = null;
+  try {
+    const pkgPath = require.resolve('jest/package.json', { paths: [repoRoot] });
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+    const binRel = typeof pkg.bin === 'string' ? pkg.bin : (pkg.bin && pkg.bin.jest);
+    if (binRel) {
+      const abs = path.resolve(path.dirname(pkgPath), binRel);
+      if (fs.existsSync(abs)) resolved = abs;
+    }
+  } catch { /* jest not resolvable from repoRoot — caller falls back to npx */ }
+  _jestCliCache.set(key, resolved);
+  return resolved;
+}
+
+/**
+ * Run `jest <jestArgs>` for this repo and return spawnCollect's result
+ * shape. Prefers jest's own CLI entry via `node <entry> <args>` (no shell,
+ * no npx, no batch file — safe for any argv, including the regex
+ * metacharacters allClauseFilesRegex/clauseFileRegex produce).
+ *
+ * Falls back to plain `npx` (shell:false — a real executable on PATH, no
+ * batch-file layer, so no shell is needed or used) when jest isn't
+ * resolvable from repoRoot; this matches the pre-existing POSIX behavior
+ * exactly. On win32 that fallback is not attempted: `npx` there is the
+ * `npx.cmd` batch shim, which Node's spawn cannot execute without
+ * shell:true, and shell:true naively string-joins argv with no
+ * per-argument escaping — silently corrupting a metacharacter-bearing
+ * --testPathPattern into the wrong (or no) test selection is worse than
+ * failing loudly, so this reports a clear, actionable error instead of
+ * guessing through a shell.
+ */
+async function runJestCli(repoRoot, jestArgs, spawnOpts) {
+  const cli = resolveJestCli(repoRoot);
+  if (cli) return spawnCollect(process.execPath, [cli, ...jestArgs], spawnOpts);
+  if (process.platform === 'win32') {
+    return {
+      ok: false, code: null, stdout: '', stderr: '',
+      error: `jest is not resolvable from ${repoRoot} (no node_modules/jest) — run npm install in the repo`,
+    };
+  }
+  return spawnCollect('npx', ['jest', ...jestArgs], spawnOpts);
+}
+
 function spawnCollect(cmd, args, opts) {
   return new Promise((resolve) => {
     const child = spawn(cmd, args, { cwd: opts.cwd, env: withEnv(opts.cwd), shell: !!opts.shell });
@@ -112,15 +171,10 @@ async function runJest(cfg, clauseId /* null = all clause suites */) {
   // (matches unrelated suites); jest 30 removed the singular form. Try
   // singular first (works in 29 + most 30.x), fall back to plural on the
   // "replaced/unknown option" error.
-  let r = await spawnCollect('npx', ['jest', '--json', '--testPathPattern=' + pattern], {
-    cwd: cfg.repoRoot,
-    timeoutMs: 120_000,
-  });
+  const spawnOpts = { cwd: cfg.repoRoot, timeoutMs: 120_000 };
+  let r = await runJestCli(cfg.repoRoot, ['--json', '--testPathPattern=' + pattern], spawnOpts);
   if (!extractJson(r.stdout) && /testPathPattern/.test(r.stderr || '') && /replaced|Unrecognized|not.*available|unknown option/i.test(r.stderr || '')) {
-    r = await spawnCollect('npx', ['jest', '--json', '--testPathPatterns=' + pattern], {
-      cwd: cfg.repoRoot,
-      timeoutMs: 120_000,
-    });
+    r = await runJestCli(cfg.repoRoot, ['--json', '--testPathPatterns=' + pattern], spawnOpts);
   }
   const parsed = r.parsed !== undefined ? r.parsed : extractJson(r.stdout);
   if (!parsed) {
@@ -191,8 +245,9 @@ async function runJestFiles(cfg, testFiles, opts = {}) {
   const relFiles = testFiles.map((f) =>
     path.isAbsolute(f) ? path.relative(cfg.repoRoot, f) : f
   ).map((f) => f.split(path.sep).join('/'));
-  const args = ['jest', '--json', ...relFiles];
-  let r = await spawnCollect('npx', args, {
+  // runJestCli resolves jest's own CLI entry (node <entry> <args>), so argv
+  // reaches jest unmodified on every platform — no npx, no shell, no shim.
+  const r = await runJestCli(cfg.repoRoot, ['--json', ...relFiles], {
     cwd: cfg.repoRoot,
     timeoutMs: opts.timeoutMs || 120_000,
   });
@@ -225,7 +280,7 @@ async function runJestFiles(cfg, testFiles, opts = {}) {
 
 /** List every test file jest would discover (cheap, read-only). */
 async function listJestTests(cfg, opts = {}) {
-  const r = await spawnCollect('npx', ['jest', '--listTests'], {
+  const r = await runJestCli(cfg.repoRoot, ['--listTests'], {
     cwd: cfg.repoRoot,
     timeoutMs: opts.timeoutMs || 60_000,
   });
@@ -323,4 +378,4 @@ async function runTests(cfg, clauseId) {
   }
 }
 
-module.exports = { runTests, runJestFiles, listJestTests, spawnCollect, extractJson, clauseFileRegex, allClauseFilesRegex, isClauseTestFile, execSync };
+module.exports = { runTests, runJestFiles, listJestTests, spawnCollect, extractJson, clauseFileRegex, allClauseFilesRegex, isClauseTestFile, execSync, runJestCli, resolveJestCli };
