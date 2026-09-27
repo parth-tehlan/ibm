@@ -67,7 +67,7 @@ function mkVscode(opts = {}) {
     },
     window: {
       activeTextEditor: undefined,
-      showQuickPick: async (items) => { rec.quickPicks.push(items); return items && items[0]; },
+      showQuickPick: async (items, opts) => { rec.quickPicks.push({items, opts}); return opts && opts.canPickMany ? [items[0]] : items && items[0]; },
       showTextDocument: async (doc, o) => { rec.opened.push({ doc, opts: o }); },
       showWarningMessage: (m) => { throw new Error('warn: ' + m); },
       showErrorMessage: (m) => { throw new Error('err: ' + m); },
@@ -230,8 +230,7 @@ function fakeWebviewView(posted) {
 
     // Live mutation events climb the kill-rate counter.
     if (provider.onMutation) provider.onMutation({ tested: 12, total: 40, killed: 9, killRate: 75, line: '12/40 Mutants' });
-    assert.ok(/12\/40/.test(bar.text), 'live tested/total counter must appear');
-    assert.ok(/75% killed/.test(bar.text), 'live kill-rate must appear');
+    assert.doesNotMatch(bar.text, /12\/40|75% killed/, 'technical mutation metrics belong in the tooltip, not the compact bar');
     assert.ok(/MUTATION LIVE/.test(bar.tooltip), 'tooltip explains the live stream');
 
     // Done signal clears the live segment; job clear removes the spinner.
@@ -242,7 +241,7 @@ function fakeWebviewView(posted) {
 
     // Court results recolor the bar: red clauses → error background.
     if (provider.onCourtResult) provider.onCourtResult('redline', { summary: { green: 2, red: 1, yellow: 0, total: 3 } });
-    assert.ok(/R:2↑1↓/.test(bar.text), 'redline verdict counts render');
+    assert.match(bar.text, /TRIUMPH: findings/, 'the status bar names the outcome without cryptic glyphs');
     assert.ok(bar.backgroundColor && bar.backgroundColor.id === 'statusBarItem.errorBackground', 'red clauses tint the bar red');
   });
 
@@ -314,14 +313,15 @@ function fakeWebviewView(posted) {
 
   // --- persistent panel: old commands still invoke the right logic (contract G) ---
 
-  await t('old commands reach the underlying actions; installCourts/runCourt only preselect + focus (no dispatch, no quickpick)', async () => {
+  await t('palette commands select courts and preview integrations without silent writes', async () => {
     const calls = [];
     const fakeActions = {
       COURTS: ['REDLINE', 'SPLITBRAIN', 'WARPATH'],
       configStatus: () => ({ exists: false, path: null, notes: [] }),
       detectConfig: async () => { calls.push('detectConfig'); return { path: '/repo/.triumph.yml', notes: [] }; },
-      installCourts: async () => { throw new Error('installCourts must not be called by the bare command'); },
-      runCourt: async () => { throw new Error('runCourt must not be called by the bare command'); },
+      installCourts: async () => { throw new Error('installCourts must require confirmation'); },
+      previewInstall: (_ctx, {host}) => { calls.push('previewInstall:' + host); return {previewId: 'preview-1', host, files: []}; },
+      runCourt: async (_ctx, {courts}) => { calls.push('runCourt:' + courts.join(',')); return {runId: 'run-1', courts: {REDLINE: {execution: 'complete'}}}; },
       generateReport: async () => { calls.push('generateReport'); return { htmlPath: 'h', mdPath: 'm', generatedAt: 'now' }; },
       findLastReport: () => { calls.push('findLastReport'); return null; },
       dashboardRun: async () => { calls.push('dashboardRun'); return { url: 'http://dash/1' }; },
@@ -348,22 +348,18 @@ function fakeWebviewView(posted) {
 
     calls.length = 0; posted.length = 0;
     await rec.commandFns['triumph.installCourts']();
-    assert.ok(rec.executed.some((e) => e.id === 'triumph.panel.focus'), 'triumph.installCourts must execute triumph.panel.focus');
-    assert.deepStrictEqual(calls, [], 'triumph.installCourts must not call actions.installCourts');
-    assert.strictEqual(rec.quickPicks.length, 0, 'triumph.installCourts must not use showQuickPick');
-    const focusInstall = posted.find((m) => m.type === 'focus');
-    assert.ok(focusInstall, 'expected a focus message for installCourts');
-    assert.strictEqual(focusInstall.section, 'install');
-    assert.deepStrictEqual(focusInstall.preselect, { host: 'claude' }, 'host must be preselected from triumph.defaultHost');
+    await waitForJobClear(provider);
+    assert.ok(rec.executed.some((e) => e.id === 'triumph.panel.focus'));
+    assert.ok(calls.some(c => c.startsWith('previewInstall:')), 'installation opens an actual preview');
+    assert.ok(!calls.includes('installCourts'), 'preview does not write files');
+    assert.ok(posted.some(m => m.type === 'focus' && m.section === 'install'));
 
     calls.length = 0; posted.length = 0;
     await rec.commandFns['triumph.runCourt']();
-    assert.ok(rec.executed.some((e) => e.id === 'triumph.panel.focus'), 'triumph.runCourt must execute triumph.panel.focus');
-    assert.deepStrictEqual(calls, [], 'triumph.runCourt must not call actions.runCourt');
-    assert.strictEqual(rec.quickPicks.length, 0, 'triumph.runCourt must not use showQuickPick');
-    const focusRun = posted.find((m) => m.type === 'focus');
-    assert.ok(focusRun, 'expected a focus message for runCourt');
-    assert.strictEqual(focusRun.section, 'run');
+    await waitForJobClear(provider);
+    assert.ok(rec.quickPicks.some(p => p.opts && p.opts.canPickMany), 'court subset is selected explicitly');
+    assert.ok(calls.includes('runCourt:REDLINE'), 'chosen court reaches the shared run path');
+    assert.ok(posted.some(m => m.type === 'focus' && m.section === 'run'));
 
     calls.length = 0; posted.length = 0;
     await rec.commandFns['triumph.generateReport']();
