@@ -13,4 +13,4 @@ Thumbs.db
 *.logdashboard/
 
 # Packaged extension binary is a build artifact (deploy.yml rebuilds it)
-triumph-courts.vsix
+gaia-courts.vsix

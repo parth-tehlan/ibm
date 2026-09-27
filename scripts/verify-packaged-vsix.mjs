@@ -11,8 +11,8 @@ import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const archive = path.resolve(process.argv[2] || path.join(here, '../court-extension/triumph-courts.vsix'));
-const dir = mkdtempSync(path.join(tmpdir(), 'triumph-vsix-test-'));
+const archive = path.resolve(process.argv[2] || path.join(here, '../court-extension/gaia-courts.vsix'));
+const dir = mkdtempSync(path.join(tmpdir(), 'gaia-vsix-test-'));
 const entry = path.join(dir, 'extension/dashboard/server/index.js');
 const project = { id: randomUUID(), name: 'isolated-vsix-fixture' };
 const runId = randomUUID();
@@ -22,7 +22,7 @@ function waitFor(type, requestId, timeout = 12000) {
     const timer = setTimeout(() => { cleanup(); reject(new Error(`Timed out waiting for ${type}`)); }, timeout);
     const onMessage = (message) => {
       if (message?.type === type && (requestId === undefined || message.requestId === requestId)) { cleanup(); resolve(message); }
-      if (message?.type === 'triumph.registrationError' && message.requestId === requestId) { cleanup(); reject(new Error(message.error)); }
+      if (message?.type === 'gaia.registrationError' && message.requestId === requestId) { cleanup(); reject(new Error(message.error)); }
     };
     const onExit = (code) => { cleanup(); reject(new Error(`Dashboard exited ${code} before ${type}`)); };
     const cleanup = () => { clearTimeout(timer); child.off('message', onMessage); child.off('exit', onExit); };
@@ -32,15 +32,15 @@ function waitFor(type, requestId, timeout = 12000) {
 async function start() {
   child = fork(entry, [], {
     cwd: path.dirname(path.dirname(entry)), stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
-    env: { ...process.env, PORT: '0', TRIUMPH_HOST: '127.0.0.1', XDG_DATA_HOME: path.join(dir, 'history') },
+    env: { ...process.env, PORT: '0', GAIA_HOST: '127.0.0.1', XDG_DATA_HOME: path.join(dir, 'history') },
   });
   let error = '';
   child.stderr.on('data', (chunk) => { error += chunk; });
-  const ready = await waitFor('triumph.ready').catch((e) => { throw new Error(`${e.message}\n${error}`); });
+  const ready = await waitFor('gaia.ready').catch((e) => { throw new Error(`${e.message}\n${error}`); });
   assert.match(ready.url, /^http:\/\/127\.0\.0\.1:\d+$/);
   const requestId = randomUUID();
-  const registered = waitFor('triumph.registered', requestId);
-  child.send({ type: 'triumph.register', requestId, project });
+  const registered = waitFor('gaia.registered', requestId);
+  child.send({ type: 'gaia.register', requestId, project });
   const { token } = await registered;
   assert.match(token, /^[0-9a-f]{64}$/);
   return { url: ready.url, token };
@@ -62,8 +62,8 @@ function snapshot(revision, createdAt, id = runId) {
     schemaVersion: 2, project, runId: id, createdAt, updatedAt: now, revision, state: 'complete',
     checkedOutCommit: null, branch: null, workingTreeDirty: null,
     producer: { name: 'isolated-vsix-test', version: '1' },
-    redline: { state: 'complete', collectedAt: now, sourceGeneratedAt: null, payload: { summary: { red: 1, green: 0 }, results: [{ clause: 'W1', status: 'red' }] }, errors: [] },
-    splitbrain: empty, warpath: empty,
+    witness: { state: 'complete', collectedAt: now, sourceGeneratedAt: null, payload: { summary: { red: 1, green: 0 }, results: [{ clause: 'W1', status: 'red' }] }, errors: [] },
+    trustgap: empty, triage: empty,
   };
 }
 async function request(base, route, method = 'GET', body, token) {
@@ -86,18 +86,18 @@ try {
   assert.equal((await request(first.url, `/api/extension/${project.id}/runs`, 'POST', snapshot(0, createdAt), first.token)).status, 201);
   const detail = await request(first.url, `/api/projects/${project.id}/runs/${runId}`);
   assert.equal(detail.status, 200);
-  assert.equal(detail.data.redline.payload.results[0].status, 'red');
-  assert.equal((await request(first.url, `/api/projects/${project.id}/run`, 'POST', { courts: ['redline'] })).status, 202);
+  assert.equal(detail.data.witness.payload.results[0].status, 'red');
+  assert.equal((await request(first.url, `/api/projects/${project.id}/run`, 'POST', { courts: ['witness'] })).status, 202);
   const pending = await request(first.url, `/api/extension/${project.id}/requests`, 'GET', undefined, first.token);
   assert.equal(pending.status, 200);
-  assert.deepEqual(pending.data.request.courts, ['redline']);
+  assert.deepEqual(pending.data.request.courts, ['witness']);
   const rerun = pending.data.request;
   assert.equal((await request(first.url, `/api/extension/${project.id}/requests/${rerun.requestId}/ack`, 'POST', {}, first.token)).status, 200);
   assert.equal((await request(first.url, `/api/extension/${project.id}/runs`, 'POST', snapshot(1, rerun.createdAt, rerun.runId), first.token)).status, 201);
   assert.equal((await request(first.url, `/api/projects/${project.id}/runs/${rerun.runId}`)).data.revision, 1);
   await stop();
   const second = await start();
-  assert.equal((await request(second.url, `/api/projects/${project.id}/runs/${runId}`)).data.redline.payload.summary.red, 1);
+  assert.equal((await request(second.url, `/api/projects/${project.id}/runs/${runId}`)).data.witness.payload.summary.red, 1);
   const runs = await request(second.url, `/api/projects/${project.id}/runs`);
   assert.equal(runs.status, 200);
   assert.equal(runs.data.length, 2);
@@ -122,11 +122,11 @@ try {
     const browser = (await integration.startSession(vscode, opts)).dash.url;
     const report = await request(browser, `/api/projects/${identity.id}/runs/${initial.runId}`);
     assert.equal(report.status, 200);
-    for (const court of ['redline', 'splitbrain', 'warpath']) {
+    for (const court of ['witness', 'trustgap', 'triage']) {
       assert.equal(report.data[court].state, 'unavailable', `missing ${court} evidence must never pass`);
       assert.equal(report.data[court].payload, null);
     }
-    const rerun = await request(browser, `/api/projects/${identity.id}/run`, 'POST', { courts: ['redline'] });
+    const rerun = await request(browser, `/api/projects/${identity.id}/run`, 'POST', { courts: ['witness'] });
     assert.equal(rerun.status, 202);
     let completed;
     for (let n = 0; n < 100; n++) {
@@ -136,12 +136,12 @@ try {
     }
     assert(completed, 'shipped extension did not process browser rerun');
     assert.equal(completed.revision, 1);
-    assert.equal(completed.redline.state, 'unavailable');
-    assert.equal(completed.splitbrain.state, 'not_run');
+    assert.equal(completed.witness.state, 'unavailable');
+    assert.equal(completed.trustgap.state, 'not_run');
     await integration.stopAll();
     const reopened = await integration.runAndPublish(vscode, opts);
     const base = new URL(reopened.url).origin;
-    assert.equal((await request(base, `/api/projects/${identity.id}/runs/${initial.runId}`)).data.redline.state, 'unavailable');
+    assert.equal((await request(base, `/api/projects/${identity.id}/runs/${initial.runId}`)).data.witness.state, 'unavailable');
   } finally { await integration.stopAll(); }
   console.log('PASS: isolated VSIX server and shipped extension boot; auth, red/missing evidence, browser rerun and restart history work');
 } finally {
