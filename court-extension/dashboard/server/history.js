@@ -82,7 +82,7 @@ function legacyV2(old, project) {
     checkedOutCommit: old.checkedOutCommit ?? null, branch: null,
     workingTreeDirty: old.workingTreeDirty ?? null,
     producer: { name: 'northstar-legacy', version: '1' },
-    redline: old.redline, splitbrain: old.splitbrain, warpath: old.warpath,
+    witness: old.witness, trustgap: old.trustgap, triage: old.triage,
   };
 }
 

@@ -40,7 +40,7 @@ const server = app.listen(port, host, () => {
 
 if (ipc) {
   process.on('message', async (message) => {
-    if (!message || typeof message !== 'object') return;
+if (!message || typeof message !== 'object') return;
     // Live mutation progress relayed by the trusted editor host (Feature:
     // real-time TRUSTGAP execution stream). runKey is `${projectId}:${runId}`;
     // browser SSE subscribers see exactly what the mutation runner prints.

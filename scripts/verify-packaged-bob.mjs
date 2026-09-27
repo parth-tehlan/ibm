@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Exercise only the bytes of a staged VSIX, never the checkout or a real Bob profile.
-// Usage: node scripts/verify-packaged-bob.mjs court-extension/triumph-courts.vsix
+// Usage: node scripts/verify-packaged-bob.mjs court-extension/gaia-courts.vsix
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
@@ -10,14 +10,14 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const archive = path.resolve(process.argv[2] || path.join(here, '../court-extension/triumph-courts.vsix'));
+const archive = path.resolve(process.argv[2] || path.join(here, '../court-extension/gaia-courts.vsix'));
 // realpathSync: os.tmpdir() on macOS is under /var, itself a symlink to
 // /private/var. Node's own module resolution (require.resolve, __dirname)
 // canonicalizes symlinks, so comparing an un-resolved sandbox path against
 // resolved paths from inside the extension would spuriously fail on macOS.
 // Canonicalize the sandbox root itself, once, rather than loosening any
 // downstream identity check.
-const sandbox = realpathSync(mkdtempSync(path.join(tmpdir(), 'triumph-packaged-bob-')));
+const sandbox = realpathSync(mkdtempSync(path.join(tmpdir(), 'gaia-packaged-bob-')));
 const extension = path.join(sandbox, 'extension');
 const workspace = path.join(sandbox, 'disposable-workspace');
 const mcpPath = path.join(workspace, '.bob', 'mcp.json');
@@ -42,8 +42,8 @@ try {
 
   mkdirSync(path.dirname(mcpPath), { recursive: true });
   // A real user's unrelated MCP and mode must remain untouched. The disabled
-  // mode belongs to the user, not to TRIUMPH; the second install also checks a
-  // user-disabled TRIUMPH MCP and court mode survive upgrades.
+  // mode belongs to the user, not to gaia; the second install also checks a
+  // user-disabled gaia MCP and court mode survive upgrades.
   const userServer = { command: 'user-tool', args: ['--offline'], disabled: true };
   writeFileSync(mcpPath, JSON.stringify({ mcpServers: { 'my-server': userServer }, mySetting: 'keep' }, null, 2));
   const userMode = '  - slug: my-private-mode\n    name: My private mode\n    disabled: true\n    groups:\n      - read\n    customInstructions: user-owned\n';
@@ -61,12 +61,12 @@ try {
     assert.equal(countSlug(readModes(), slug), 1, `missing/duplicated bundled court mode ${slug}`);
   }
   const mcp = readMcp();
-  assert.deepEqual(mcp.mcpServers['triumph-courts'].args, [ENGINE_ENTRY, '--repo', workspace]);
+  assert.deepEqual(mcp.mcpServers['gaia-courts'].args, [ENGINE_ENTRY, '--repo', workspace]);
   assert.ok(existsSync(path.join(workspace, '.bob', 'agents', 'spec-witness.md')));
   assert.ok(existsSync(path.join(workspace, '.bob', 'rules-witness', '00-never-src.md')));
 
   // Simulate Bob user changes made after installation, before an upgrade.
-  mcp.mcpServers['triumph-courts'].disabled = true;
+  mcp.mcpServers['gaia-courts'].disabled = true;
   writeFileSync(mcpPath, JSON.stringify(mcp, null, 2));
   const firstModes = readModes();
   assert.match(firstModes, /^  - slug: witness\s*$/m);
@@ -75,8 +75,8 @@ try {
   const after = readMcp();
   assert.deepEqual(after.mcpServers['my-server'], userServer);
   assert.equal(after.mySetting, 'keep');
-  assert.equal(after.mcpServers['triumph-courts'].disabled, true, 'reinstall re-enabled a user-disabled TRIUMPH MCP');
-  assert.deepEqual(after.mcpServers['triumph-courts'].args, [ENGINE_ENTRY, '--repo', workspace]);
+  assert.equal(after.mcpServers['gaia-courts'].disabled, true, 'reinstall re-enabled a user-disabled gaia MCP');
+  assert.deepEqual(after.mcpServers['gaia-courts'].args, [ENGINE_ENTRY, '--repo', workspace]);
   const modes = readModes();
   assert.equal(countSlug(modes, 'my-private-mode'), 1);
   assert.ok(modes.includes(userMode), 'reinstall changed a user-owned mode');
