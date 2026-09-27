@@ -7,18 +7,18 @@ import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const output = path.resolve(process.argv[2] || path.join(root, '.runtime'));
-const marker = path.join(output, '.triumph-runtime-staging');
+const marker = path.join(output, '.gaia-runtime-staging');
 if (output === root || root.startsWith(`${output}${path.sep}`)) throw new Error('Refusing to stage over the dashboard source tree');
 try {
   await stat(output);
   const existing = await readFile(marker, 'utf8').catch(() => null);
-  if (existing !== 'TRIUMPH dashboard runtime\n') throw new Error(`Refusing to replace unmarked directory: ${output}`);
+  if (existing !== 'Gaia dashboard runtime\n') throw new Error(`Refusing to replace unmarked directory: ${output}`);
   await rm(output, { recursive: true, force: true });
 } catch (error) {
   if (error.code !== 'ENOENT') throw error;
 }
 await mkdir(output, { recursive: true });
-await writeFile(marker, 'TRIUMPH dashboard runtime\n');
+await writeFile(marker, 'Gaia dashboard runtime\n');
 for (const entry of [
   'dist', 'server/index.js', 'server/app.js', 'server/history.js', 'server/bridge.js',
   'server/mutation-bus.js', 'contracts/report.js', 'reports/export.js', 'package.json', 'package-lock.json',

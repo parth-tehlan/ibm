@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * lib/trustgap.js — SPLITBRAIN honesty math.
+ * lib/trustgap.js — TRUSTGAP honesty math.
  *
  * Falsifiable by construction: the trust gap is *derived* from a mutation
  * report, never asserted. Every surviving mutant maps to the test(s) that
@@ -11,7 +11,7 @@
  *   - Stryker JSON report (mutation-testing-report-schema) — full fidelity.
  *   - Generic JSON { mutants: [...] } — reduced fidelity.
  * Claimed coverage: jest coverage-summary.json totals.lines.pct, or an
- * explicit number in .triumph.yml / tool argument.
+ * explicit number in .gaia.yml / tool argument.
  */
 
 'use strict';

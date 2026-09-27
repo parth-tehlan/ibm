@@ -1,4 +1,4 @@
-# TRIUMPH — 3-Court Dev Tool: Final Architecture
+# Gaia — 3-Court Dev Tool: Final Architecture
 
 ## Decision (locked)
 - **Path 1 — Caller executes subagents we ship.** The caller's model runs the
@@ -27,9 +27,9 @@ subagents and wires the engine over MCP. The caller is the director.
 ### Role 2 — Tool + engine server (model-free MCP server)
 The extension runs the 3-court engine as an MCP server it registers with the
 above agents, exposing:
-- `redline_*`  — spec-witness verdicts per clause.
-- `splitbrain_*` — claimed coverage vs real mutation kill-rate.
-- `warpath_*` — incident/postmortem tooling.
+- `witness_*`  — spec-witness verdicts per clause.
+- `trustgap_*` — claimed coverage vs real mutation kill-rate.
+- `triage_*` — incident/postmortem tooling.
 - `courts_about` — meta.
 
 Model-free by construction: ships zero keys, calls no LLM, runs no subagents.
@@ -58,7 +58,7 @@ rendered from deterministic tool results, not model prose.
 User opens repo in VS Code
   └─ Extension: "Install courts" → writes .claude/, .bob/, codex, vscode config
         └─ Caller agent (Bob/Claude/Codex) runs court subagents with ITS model
-              └─ subagents call engine MCP tools (redline/splitbrain/warpath)
+              └─ subagents call engine MCP tools (witness/trustgap/triage)
                     └─ engine returns deterministic JSON
                           └─ Extension renders HTML report + MD report
 ```
@@ -67,9 +67,9 @@ User opens repo in VS Code
 **Legal. Honest. Survivable.**
 
 ## Build order
-1. **Engine** (model-free): refactor `court.js` — REDLINE/SPLITBRAIN/WARPATH
+1. **Engine** (model-free): refactor `court.js` — WITNESS/TRUSTGAP/TRIAGE
    tools over MCP, deterministic JSON out.
-2. **Repo adapter**: `.triumph.yml` + auto-detect (spec/test/mutation/fixtures).
+2. **Repo adapter**: `.gaia.yml` + auto-detect (spec/test/mutation/fixtures).
 3. **Subagent prompt pack**: spec-witness, test-author, mutant-analyst,
    war-room — written once, materialized per-host.
 4. **Setup orchestrator**: write config into .claude/.bob/codex/vscode.

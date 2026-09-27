@@ -9,12 +9,12 @@
  *
  * Execution model (zero-config, works with the repo's own jest.config):
  *
- *   .triumph/tmp/verify-<ts>/
+ *   .gaia/tmp/verify-<ts>/
  *     mirror/src/x.js          stripTypes(src/x.ts) with ONE mutant applied
  *     wrappers/<test>.test.js  jest.mock('<abs repo src>', () => require(mirror))
  *                              + require('<abs original test>')
  *
- *   jest --config <tmp>/jest.triumph.json <wrappers...>
+ *   jest --config <tmp>/jest.gaia.json <wrappers...>
  *     - rootDir stays the REPO (module resolution, ts-jest, harness intact)
  *     - testMatch pointed at the tmp wrappers only
  *     - setupFiles inherits the repo config (bind-seams installs globals
@@ -22,9 +22,9 @@
  *
  * Safety invariants:
  *   - repo src/ is never modified (mirror-only mutation)
- *   - the wall (assertNotWalled) applies to REDLINE only; SPLITBRAIN reads
+ *   - the wall (assertNotWalled) applies to WITNESS only; TRUSTGAP reads
  *     src/ by design — it is the honesty court, not the witness
- *   - every artifact lands under .triumph/tmp/ (gitignored, TTL-swept)
+ *   - every artifact lands under .gaia/tmp/ (gitignored, TTL-swept)
  *   - a run that errors mid-way never leaves the repo dirty
  */
 
@@ -37,7 +37,7 @@ const crypto = require('crypto');
 
 const runners = require('./runners');
 
-const TMP_DIR_NAME = path.join('.triumph', 'tmp');
+const TMP_DIR_NAME = path.join('.gaia', 'tmp');
 const TMP_TTL_MS = 60 * 60_000; // sweep verify dirs older than 1h
 
 // ---------------------------------------------------------------------------
@@ -109,7 +109,7 @@ function applyMutant(srcText, mutant) {
  */
 function mockSetupSource(absRepoSrc, absMirrorFile) {
   return `'use strict';
-// TRIUMPH generated — registers the mutant mirror in place of the repo src.
+// Gaia generated — registers the mutant mirror in place of the repo src.
 jest.mock(${JSON.stringify(absRepoSrc)}, () => require(${JSON.stringify(absMirrorFile)}));
 `;
 }
@@ -171,7 +171,7 @@ function extractPassingTitles(suites) {
 /**
  * Verify a set of planned mutants for ONE source file against impacted tests.
  *
- * @param cfg        resolved .triumph.yml config
+ * @param cfg        resolved .gaia.yml config
  * @param srcAbs     absolute path to the current source file
  * @param srcRel     repo-relative source path
  * @param mutants    planned mutants from lib/micro.planFileMutants
@@ -203,7 +203,7 @@ async function executeMutants(cfg, srcAbs, srcRel, mutants, testsAbs) {
     const mockSetupAbs = path.join(verifyDir, 'mock-setup.js');
     fs.writeFileSync(mockSetupAbs, mockSetupSource(srcAbs, mirrorAbs), 'utf8');
 
-    const cfgPath = path.join(verifyDir, 'jest.triumph.config.js');
+    const cfgPath = path.join(verifyDir, 'jest.gaia.config.js');
     fs.writeFileSync(cfgPath, jestConfigSource(cfg, verifyDir, mockSetupAbs), 'utf8');
 
     const wrapperFiles = [];

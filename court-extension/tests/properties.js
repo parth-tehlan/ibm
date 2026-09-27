@@ -56,7 +56,7 @@ function withEngine(repo, calls) {
 }
 
 (async () => {
-  console.log('TRIUMPH mandatory-property checks\n');
+  console.log('GAIA mandatory-property checks\n');
 
   // 1. PATH-1 CALLER EXECUTION — engine never calls a model, holds no keys.
   await t('Path-1: engine source contains no LLM/API-key calls', () => {
@@ -84,7 +84,7 @@ function withEngine(repo, calls) {
     // chain rejecting any symlinked component - an intentional anti-
     // traversal check on real repo paths, never relaxed here. Canonicalize
     // the test's own tmp root so it matches an ordinary repo path.
-    const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'triumph-prop-')));
+    const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'gaia-prop-')));
     const { installHost } = require('../lib/hosts');
     installHost('claude', dir);
     installHost('bob', dir);
@@ -94,8 +94,8 @@ function withEngine(repo, calls) {
   });
 
   // 3. EASY SETUP — detect produces a loadable config on a fresh repo.
-  await t('Easy setup: detect() on a bare jest repo yields a working .triumph.yml', () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'triumph-easy-'));
+  await t('Easy setup: detect() on a bare jest repo yields a working .gaia.yml', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gaia-easy-'));
     fs.mkdirSync(path.join(dir, 'docs'));
     fs.mkdirSync(path.join(dir, 'tests'));
     fs.mkdirSync(path.join(dir, 'src'));
@@ -104,15 +104,15 @@ function withEngine(repo, calls) {
     const { detect, toYaml } = require('../lib/detect');
     const { parseYamlSubset, loadConfig } = require('../lib/config');
     const { config } = detect(dir);
-    fs.writeFileSync(path.join(dir, '.triumph.yml'), toYaml(config));
+    fs.writeFileSync(path.join(dir, '.gaia.yml'), toYaml(config));
     const cfg = loadConfig(dir); // throws on invalid
     assert.strictEqual(cfg.tests.framework, 'jest');
     assert.ok(cfg.spec.absPath.endsWith('docs/api-spec.md'));
   });
 
   // 4. WALL-ENFORCING — engine refuses clause ids that escape the tests dir.
-  await t('Wall-enforcing: redline_clause rejects path escape + honors denyGlobs', async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'triumph-wall-'));
+  await t('Wall-enforcing: witness_clause rejects path escape + honors denyGlobs', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gaia-wall-'));
     try {
       fs.mkdirSync(path.join(dir, 'docs'));
       fs.mkdirSync(path.join(dir, 'tests'));
@@ -120,10 +120,10 @@ function withEngine(repo, calls) {
       fs.writeFileSync(path.join(dir, 'docs', 'spec.md'), '# S\n\n## W4 — safety\n\n1. x MUST y\n');
       fs.writeFileSync(path.join(dir, 'tests', 'clause-W4.test.js'), 'test("safety",()=>expect(1).toBe(1));');
       fs.writeFileSync(path.join(dir, 'jest.config.js'), 'module.exports={testEnvironment:"node",testMatch:["**/tests/**/*.test.js"]}');
-      fs.writeFileSync(path.join(dir, '.triumph.yml'), 'version: 1\nspec: { path: docs/spec.md, clausePattern: \'^## (W\\d+)\', clauseIdPattern: \'^W\\d+$\' }\ntests: { framework: jest, dir: tests, clauseTestPattern: \'clause-{{clause}}.test.js\' }\nmutation: { tool: custom, report: null, command: null }\nwall: { denyGlobs: [\'src/**\'] }\n');
+      fs.writeFileSync(path.join(dir, '.gaia.yml'), 'version: 1\nspec: { path: docs/spec.md, clausePattern: \'^## (W\\d+)\', clauseIdPattern: \'^W\\d+$\' }\ntests: { framework: jest, dir: tests, clauseTestPattern: \'clause-{{clause}}.test.js\' }\nmutation: { tool: custom, report: null, command: null }\nwall: { denyGlobs: [\'src/**\'] }\n');
       const { results } = await withEngine(dir, [
-        { name: 'redline_clause', arguments: { clause_id: '../../src/circuit' } },
-        { name: 'redline_clause', arguments: { clause_id: 'W4' } },
+        { name: 'witness_clause', arguments: { clause_id: '../../src/circuit' } },
+        { name: 'witness_clause', arguments: { clause_id: 'W4' } },
       ]);
       const escMsg = results[0].error ? results[0].error.message : JSON.parse(results[0].result.content[0].text).error || '';
       assert.ok(/invalid clause_id/.test(escMsg), 'escape not rejected: ' + escMsg);
@@ -136,7 +136,7 @@ function withEngine(repo, calls) {
   //    Generated Northstar reports are not versioned and may not exist on a fresh checkout.
   await t('Falsifiable: trustgap follows the report (kill a survivor → gap closes)', () => {
     const { computeTrustGap, loadMutationReport } = require('../lib/trustgap');
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'triumph-mutants-'));
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gaia-mutants-'));
     try {
       const file = path.join(dir, 'mutation.json');
       fs.writeFileSync(file, JSON.stringify({ mutants: [
@@ -161,7 +161,7 @@ function withEngine(repo, calls) {
     // this test's own (non-canonical, /var-symlinked) tmp root would never
     // match, reporting "no tests found" though real ones exist on disk.
     // Canonicalize the repo root so it matches what Jest itself will report.
-    const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'triumph-repo2-')));
+    const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'gaia-repo2-')));
     for (const d of ['docs', 'tests', 'src', 'fixtures', 'evidence']) fs.mkdirSync(path.join(dir, d));
     fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ devDependencies: { jest: '^29' } }));
     fs.writeFileSync(path.join(dir, 'docs', 'spec.md'), '# S\n\n## FR-1 — alpha\n\n1. x MUST y\n');
@@ -170,7 +170,7 @@ function withEngine(repo, calls) {
     fs.writeFileSync(path.join(dir, 'fixtures', 'metrics.json'), JSON.stringify({ metrics: { window: '2026-01-01T00:00:00Z..2026-01-01T01:00:00Z' } }));
     fs.writeFileSync(path.join(dir, 'fixtures', 'deploy.json'), JSON.stringify({ deploys: [{ id: 'd1', at: '2026-01-01T00:30:00Z', commit: 'x', service: 's' }] }));
     fs.writeFileSync(path.join(dir, 'fixtures', 'logs.json'), JSON.stringify({ log: [{ t: '2026-01-01T00:31:00Z', level: 'error', msg: 'boom' }] }));
-    fs.writeFileSync(path.join(dir, '.triumph.yml'), [
+    fs.writeFileSync(path.join(dir, '.gaia.yml'), [
       'version: 1',
       'spec: { path: docs/spec.md, clausePattern: \'^## (FR-\\d+)\', clauseIdPattern: \'^FR-\\d+$\' }',
       'tests: { framework: jest, dir: tests, clauseTestPattern: \'clause-{{clause}}.test.js\' }',
@@ -178,9 +178,9 @@ function withEngine(repo, calls) {
       'wall: { denyGlobs: [\'src/**\'] }',
     ].join('\n'));
     const { results } = await withEngine(dir, [
-      { name: 'redline_clauses', arguments: {} },
-      { name: 'redline_verdict_all', arguments: {} },
-      { name: 'warpath_triage', arguments: {} },
+      { name: 'witness_clauses', arguments: {} },
+      { name: 'witness_verdict_all', arguments: {} },
+      { name: 'triage_run', arguments: {} },
     ]);
     const body = (i) => results[i].error ? { error: results[i].error.message } : JSON.parse(results[i].result.content[0].text);
     const clauses = body(0);
@@ -194,10 +194,10 @@ function withEngine(repo, calls) {
   // 7. Live mutation is deliberately NOT in the default suite. Run
   //    `npm run test:live` explicitly to mutate the Northstar fixture.
 
-  // 7b. WARPATH on the canonical challenge schema (no metrics.window; uses
+  // 7b. TRIAGE on the canonical challenge schema (no metrics.window; uses
   //     errorRate.windowStart + breaker.consecutiveFailuresAtOpen).
-  await t('Repo-agnostic: WARPATH handles canonical fixture schema (no explicit window)', async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'triumph-canon-'));
+  await t('Repo-agnostic: TRIAGE handles canonical fixture schema (no explicit window)', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gaia-canon-'));
     for (const d of ['docs', 'tests', 'fixtures', 'evidence']) fs.mkdirSync(path.join(dir, d));
     fs.writeFileSync(path.join(dir, 'docs', 's.md'), '# S\n\n## W6 — breaker\n\n1. SHALL NOT trip below openThreshold\n');
     fs.writeFileSync(path.join(dir, 'tests', 'clause-W6.test.js'), 'test("x",()=>expect(1).toBe(1));');
@@ -206,8 +206,8 @@ function withEngine(repo, calls) {
     fs.writeFileSync(path.join(dir, 'fixtures', 'metrics.json'), JSON.stringify({ metrics: { errorRate: { windowStart: '2026-09-26T09:14:01Z' }, breaker: { state: 'open', consecutiveFailuresAtOpen: 1, openThreshold: 5 } } }));
     fs.writeFileSync(path.join(dir, 'fixtures', 'deploy.json'), JSON.stringify({ deploys: [{ id: 'd0', at: '2026-09-26T08:40:00Z', service: 'payments-api' }] }));
     fs.writeFileSync(path.join(dir, 'fixtures', 'logs.json'), JSON.stringify({ log: [{ t: '2026-09-26T09:14:02Z', level: 'error', message: 'breaker open', spec: 'docs/api-spec.md#W6', runbook: 'docs/runbook.md' }] }));
-    fs.writeFileSync(path.join(dir, '.triumph.yml'), 'version: 1\nspec: { path: docs/s.md, clausePattern: \'^## (W\\d+)\', clauseIdPattern: \'^W\\d+$\' }\ntests: { framework: jest, dir: tests, clauseTestPattern: \'clause-{{clause}}.test.js\' }\nmutation: { tool: custom, report: null, command: null }\nwall: { denyGlobs: [\'src/**\'] }\n');
-    const { results } = await withEngine(dir, [{ name: 'warpath_triage', arguments: {} }]);
+    fs.writeFileSync(path.join(dir, '.gaia.yml'), 'version: 1\nspec: { path: docs/s.md, clausePattern: \'^## (W\\d+)\', clauseIdPattern: \'^W\\d+$\' }\ntests: { framework: jest, dir: tests, clauseTestPattern: \'clause-{{clause}}.test.js\' }\nmutation: { tool: custom, report: null, command: null }\nwall: { denyGlobs: [\'src/**\'] }\n');
+    const { results } = await withEngine(dir, [{ name: 'triage_run', arguments: {} }]);
     const t2 = JSON.parse(results[0].result.content[0].text);
     assert.strictEqual(t2.suspect && t2.suspect.id, 'd0');
     assert.strictEqual(t2.breakerSnapshot.openThreshold, 5);
@@ -219,17 +219,17 @@ function withEngine(repo, calls) {
     const { renderMarkdown, renderHtml } = require('../lib/render');
     const input = {
       repo: 'isolated-fixture', generated: '2026-09-26T00:00:00.000Z',
-      redline: { summary: { total: 1, green: 0, red: 1, yellow: 0 }, results: [
+      witness: { summary: { total: 1, green: 0, red: 1, yellow: 0 }, results: [
         { clause: 'W1', status: 'red', passed: 0, failed: 1, total: 1, test: 'tests/clause-W1.test.js', failures: [{ title: 'counterexample', message: 'expected failure' }] },
       ] },
-      splitbrain: { status: 'not-run', note: 'No mutation report provided' },
-      warpath: { status: 'no-fixtures', detail: 'No incident evidence supplied' },
+      trustgap: { status: 'not-run', note: 'No mutation report provided' },
+      triage: { status: 'no-fixtures', detail: 'No incident evidence supplied' },
     };
     const md = renderMarkdown(input);
     const html = renderHtml(input);
     assert.strictEqual(md, renderMarkdown(input), 'md not deterministic');
     assert.strictEqual(html, renderHtml(input), 'html not deterministic');
-    assert.ok(md.includes('REDLINE') && html.includes('WARPATH'));
+    assert.ok(md.includes('WITNESS') && html.includes('TRIAGE'));
     assert.ok(md.includes('counterexample') && html.includes('counterexample'));
   });
 

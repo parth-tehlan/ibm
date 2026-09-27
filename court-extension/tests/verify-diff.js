@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * tests/verify-diff.js — integration test for the triumph_verify_diff tool.
+ * tests/verify-diff.js — integration test for the gaia_verify_diff tool.
  * Boots the real engine over stdio MCP against a scratch jest repo with a
  * planted diff, and asserts the killed/survived verdicts + repair hints.
  * Run: node tests/verify-diff.js
@@ -24,10 +24,10 @@ function t(name, fn) {
 
 // ---------------------------------------------------------------------------
 // Build a scratch repo: src/cart.ts + tests/cart.test.js (plain JS test so
-// no ts-jest dependency), jest config, .triumph.yml.
+// no ts-jest dependency), jest config, .gaia.yml.
 // ---------------------------------------------------------------------------
 function buildRepo() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'triumph-verify-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gaia-verify-'));
   fs.mkdirSync(path.join(dir, 'src'), { recursive: true });
   fs.mkdirSync(path.join(dir, 'tests'), { recursive: true });
   fs.mkdirSync(path.join(dir, 'docs'), { recursive: true });
@@ -68,7 +68,7 @@ test('no discount below the 500-cent minimum', () => {
 `);
 
   fs.writeFileSync(path.join(dir, 'docs', 'api-spec.md'), '## W1\nCart totals.\n');
-  fs.writeFileSync(path.join(dir, '.triumph.yml'), `version: 1
+  fs.writeFileSync(path.join(dir, '.gaia.yml'), `version: 1
 spec: { path: docs/api-spec.md, clausePattern: '^## (W\\\\d+)', clauseIdPattern: '^W\\\\d+$' }
 tests: { framework: jest, dir: tests, clauseTestPattern: 'clause-{{clause}}.test.js' }
 wall: { denyGlobs: ['src/**'] }
@@ -118,10 +118,10 @@ async function main() {
 
   await mcpCall(child, 1, 'initialize', {});
 
-  await t('tools/list advertises triumph_verify_diff', async () => {
+  await t('tools/list advertises gaia_verify_diff', async () => {
     const r = await mcpCall(child, 2, 'tools/list', {});
     const names = r.tools.map((x) => x.name);
-    assert.ok(names.includes('triumph_verify_diff'), 'missing tool');
+    assert.ok(names.includes('gaia_verify_diff'), 'missing tool');
   });
 
   // The diff: change the guard `if (sum < 500)` to `if (sum < 100)` — a real
@@ -154,12 +154,12 @@ function totalCents(items, discountCents) {
 module.exports = { totalCents };
 `);
 
-  await t('triumph_verify_diff kills the boundary mutant via the honest test', async () => {
+  await t('gaia_verify_diff kills the boundary mutant via the honest test', async () => {
     const r = await mcpCall(child, 3, 'tools/call', {
-      name: 'triumph_verify_diff', arguments: { diff },
+      name: 'gaia_verify_diff', arguments: { diff },
     });
     const payload = JSON.parse(r.content[0].text);
-    assert.strictEqual(payload.tool, 'triumph_verify_diff');
+    assert.strictEqual(payload.tool, 'gaia_verify_diff');
     assert.strictEqual(payload.diff.filesChanged, 1);
     assert.ok(payload.diff.mutantsGenerated >= 1, 'expected >=1 mutant');
     const file = payload.files[0];
@@ -185,7 +185,7 @@ test('above minimum gets a discount (never tests the boundary)', () => {
 });
 `);
     const r = await mcpCall(child, 4, 'tools/call', {
-      name: 'triumph_verify_diff', arguments: { diff },
+      name: 'gaia_verify_diff', arguments: { diff },
     });
     const payload = JSON.parse(r.content[0].text);
     assert.strictEqual(payload.status, 'failed');
@@ -199,14 +199,14 @@ test('above minimum gets a discount (never tests the boundary)', () => {
   });
 
   await t('no-git / empty diff errors honestly', async () => {
-    const r = await mcpCall(child, 5, 'tools/call', { name: 'triumph_verify_diff', arguments: {} });
+    const r = await mcpCall(child, 5, 'tools/call', { name: 'gaia_verify_diff', arguments: {} });
     const payload = JSON.parse(r.content[0].text);
     assert.strictEqual(payload.status, 'error');
   });
 
   await t('test-only diff is skipped, not silently green', async () => {
     const r = await mcpCall(child, 6, 'tools/call', {
-      name: 'triumph_verify_diff',
+      name: 'gaia_verify_diff',
       arguments: { diff: `diff --git a/tests/cart.test.js b/tests/cart.test.js
 --- a/tests/cart.test.js
 +++ b/tests/cart.test.js

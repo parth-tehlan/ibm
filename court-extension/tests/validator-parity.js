@@ -37,9 +37,9 @@ function valid() {
     runId: uuid(), createdAt: ISO, updatedAt: ISO, revision: 0, state: 'complete',
     checkedOutCommit: null, branch: null, workingTreeDirty: null,
     producer: { name: 'parity', version: '1' },
-    redline: { ...env('complete'), collectedAt: ISO, payload: { results: [{ clause: 'W1', status: 'red' }] } },
-    splitbrain: env('unavailable'),
-    warpath: env('not_run'),
+    witness: { ...env('complete'), collectedAt: ISO, payload: { results: [{ clause: 'W1', status: 'red' }] } },
+    trustgap: env('unavailable'),
+    triage: env('not_run'),
   };
 }
 
@@ -47,7 +47,7 @@ const cases = [
   ['valid: complete run', valid(), true],
   ['valid: running state', { ...valid(), state: 'running' }, true],
   ['valid: interrupted state', { ...valid(), state: 'interrupted' }, true],
-  ['valid: court state running', (() => { const s = valid(); s.redline = env('running'); return s; })(), true],
+  ['valid: court state running', (() => { const s = valid(); s.witness = env('running'); return s; })(), true],
   ['invalid: schemaVersion 1', { ...valid(), schemaVersion: 1 }, false],
   ['invalid: project.id not uuid', (() => { const s = valid(); s.project = { ...s.project, id: 'not-a-uuid' }; return s; })(), false],
   ['invalid: project.name empty', (() => { const s = valid(); s.project = { ...s.project, name: '' }; return s; })(), false],
@@ -56,10 +56,10 @@ const cases = [
   ['invalid: revision negative', { ...valid(), revision: -1 }, false],
   ['invalid: revision fractional', { ...valid(), revision: 1.5 }, false],
   ['invalid: bad run state', { ...valid(), state: 'exploded' }, false],
-  ['invalid: bad court state', (() => { const s = valid(); s.redline = env('bogus'); return s; })(), false],
-  ['invalid: collectedAt unparsable', (() => { const s = valid(); s.redline = { ...s.redline, collectedAt: 'zzz' }; return s; })(), false],
-  ['invalid: payload array', (() => { const s = valid(); s.redline = { ...s.redline, payload: [] }; return s; })(), false],
-  ['invalid: errors not array', (() => { const s = valid(); s.redline = { ...s.redline, errors: 'boom' }; return s; })(), false],
+  ['invalid: bad court state', (() => { const s = valid(); s.witness = env('bogus'); return s; })(), false],
+  ['invalid: collectedAt unparsable', (() => { const s = valid(); s.witness = { ...s.witness, collectedAt: 'zzz' }; return s; })(), false],
+  ['invalid: payload array', (() => { const s = valid(); s.witness = { ...s.witness, payload: [] }; return s; })(), false],
+  ['invalid: errors not array', (() => { const s = valid(); s.witness = { ...s.witness, errors: 'boom' }; return s; })(), false],
   ['invalid: missing producer version', (() => { const s = valid(); s.producer = { name: 'parity' }; return s; })(), false],
 ];
 
@@ -87,9 +87,9 @@ const cases = [
   const built = toSnapshot(
     { projectId: projectId('file:///repo/parity'), projectName: 'parity-project', runId: uuid(),
       createdAt: now, revision: 0, state: 'complete', producer: { name: 'parity', version: '1' } },
-    { redline: { kind: 'complete', payload: { summary: 'ok' } },
-      splitbrain: { kind: 'unavailable', errors: ['no report'] },
-      warpath: { kind: 'not_run' } },
+    { witness: { kind: 'complete', payload: { summary: 'ok' } },
+      trustgap: { kind: 'unavailable', errors: ['no report'] },
+      triage: { kind: 'not_run' } },
     now);
   try { normalizeReport(built); console.log(`ok ${n} toSnapshot output accepted by dashboard schema`); }
   catch (e) { failures++; console.error(`not ok ${n} toSnapshot output rejected by dashboard schema: ${e.message}`); }

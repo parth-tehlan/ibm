@@ -18,16 +18,16 @@ function wait(child, type, requestId) {
   });
 }
 async function spawn(data) {
-  const child = fork(entry, [], { execArgv: [], env: { ...process.env, PORT: '0', XDG_DATA_HOME: data, TRIUMPH_HOST: '127.0.0.1', TRIUMPH_LEGACY_DIR: path.join(data, 'absent') }, stdio: ['ignore', 'ignore', 'pipe', 'ipc'] });
-  return { child, url: (await wait(child, 'triumph.ready')).url };
+  const child = fork(entry, [], { execArgv: [], env: { ...process.env, PORT: '0', XDG_DATA_HOME: data, GAIA_HOST: '127.0.0.1', GAIA_LEGACY_DIR: path.join(data, 'absent') }, stdio: ['ignore', 'ignore', 'pipe', 'ipc'] });
+  return { child, url: (await wait(child, 'gaia.ready')).url };
 }
 async function run(server) {
   const project = { id: randomUUID(), name: 'window' };
   const requestId = randomUUID();
-  const registered = wait(server.child, 'triumph.registered', requestId);
-  server.child.send({ type: 'triumph.register', requestId, project });
+  const registered = wait(server.child, 'gaia.registered', requestId);
+  server.child.send({ type: 'gaia.register', requestId, project });
   assert.match((await registered).token, /^[0-9a-f]{64}$/);
-  const response = await fetch(`${server.url}/api/projects/${project.id}/run`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"courts":["warpath"]}' });
+  const response = await fetch(`${server.url}/api/projects/${project.id}/run`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"courts":["triage"]}' });
   assert.equal(response.status, 202);
   return { project, runId: (await response.json()).runId };
 }
@@ -38,7 +38,7 @@ async function stop(child) {
   child.kill('SIGTERM'); await exited;
 }
 test('graceful stop interrupts only its own unfinished runs; sibling window keeps running', async (t) => {
-  const data = await mkdtemp(path.join(os.tmpdir(), 'triumph-graceful-'));
+  const data = await mkdtemp(path.join(os.tmpdir(), 'gaia-graceful-'));
   const servers = [];
   t.after(async () => { await Promise.all(servers.map(({ child }) => stop(child))); await rm(data, { recursive: true, force: true }); });
   const first = await spawn(data); servers.push(first);

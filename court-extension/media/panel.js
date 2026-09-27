@@ -14,7 +14,7 @@
  * state: existing snapshot plus workspace.{id,root,name,trusted}, capabilities
  * (boolean keys matching new message names; cancelRun MUST mean verified process
  * cancellation, publishRun MUST publish persisted evidence without execution),
- * readiness:{courts:{REDLINE:{ready,reason},...},timeoutSeconds,timeoutSource},
+ * readiness:{courts:{WITNESS:{ready,reason},...},timeoutSeconds,timeoutSource},
  * activeRun/selectedRun/recentRuns[] (RunRecord or lightweight summaries),
  * recentRunsHasMore, config.{exists,path,valid,revision,notes},
  * hosts.{available,labels,configured,detected}, configPreview/installPreview,
@@ -34,9 +34,9 @@
 (function () {
   const vscode = acquireVsCodeApi();
   const COURTS = [
-    ['REDLINE', 'Verify spec requirements'],
-    ['SPLITBRAIN', 'Test assertion strength · slower'],
-    ['WARPATH', 'Investigate incident evidence'],
+    ['WITNESS', 'Verify spec requirements'],
+    ['TRUSTGAP', 'Test assertion strength · slower'],
+    ['TRIAGE', 'Investigate incident evidence'],
   ];
   const ids = COURTS.map(c => c[0]);
   let saved;
@@ -137,7 +137,7 @@
         if (saved.timeoutSeconds) prefs.timeout = String(saved.timeoutSeconds);
         if (saved.host) prefs.host = saved.host;
       }
-      if (!Array.isArray(prefs.courts)) prefs.courts = readiness('REDLINE').ready ? ['REDLINE'] : [];
+      if (!Array.isArray(prefs.courts)) prefs.courts = readiness('WITNESS').ready ? ['WITNESS'] : [];
       prefs.publishToDashboard = prefs.publishToDashboard === true;
       persist();
     }
@@ -189,11 +189,11 @@
     const headerActions = secondary
       ? [button('Back', 'back-nav', () => navigate(backScreen))]
       : [button('Dashboard', 'dashboard-nav', () => navigate('dashboard')), button('Setup', 'setup-nav', () => navigate('setup'))];
-    const header = node('header', { className: 'header' }, [heading('TRIUMPH', 1), row(headerActions)]);
+    const header = node('header', { className: 'header' }, [heading('GAIA', 1), row(headerActions)]);
     root.appendChild(header);
     root.appendChild(node('div', { className: 'workspace-line' }, [text(state.workspace && state.workspace.name || 'No workspace', 'workspace-name'), text(configLabel(), 'muted')]));
     if (error) root.appendChild(node('div', { role: 'alert', className: 'notice error' }, [text(error), button('Dismiss', 'dismiss-error', () => { error = ''; render(); }), button('Refresh status', 'refresh-error', () => post('ready'))]));
-    const tabs = node('nav', { role: 'tablist', 'aria-label': 'TRIUMPH sections', className: 'tabs', hidden: secondary });
+    const tabs = node('nav', { role: 'tablist', 'aria-label': 'Gaia sections', className: 'tabs', hidden: secondary });
     const tabIds = ['run', 'evidence'];
     tabIds.forEach((id, index) => {
       const b = button(id === 'run' ? 'Run' : 'Evidence', 'tab-' + id, () => navigate(id));
@@ -362,20 +362,20 @@
     if (execution === 'error' || c.kind === 'error') { verdict = 'error'; label = label || message(c.error) || 'Execution error'; }
     else if (execution === 'not_run') { verdict = 'unknown'; label = 'Not run'; }
     else if (['queued', 'running', 'cancelled', 'unavailable'].includes(execution)) { verdict = execution === 'unavailable' || execution === 'cancelled' ? 'inconclusive' : 'unknown'; label = label || ({ cancelled: 'Stopped · partial evidence', unavailable: 'Inputs unavailable', queued: 'Queued', running: 'Running' })[execution]; }
-    else if (id === 'REDLINE') {
+    else if (id === 'WITNESS') {
       const s = p.summary || {}, red = m.failed ?? s.red, yellow = m.incomplete ?? s.yellow;
       if (tests === 0) { verdict = 'inconclusive'; label = 'Inconclusive · zero tests executed'; }
       else if (red > 0) { verdict = 'findings'; label = label || red + ' failed' + (yellow > 0 ? ' · ' + yellow + ' incomplete' : ''); }
       else if (yellow > 0) { verdict = 'inconclusive'; label = label || yellow + ' incomplete'; }
       else if (!label) { label = verdict === 'pass' ? 'Passed · verified by host' : 'Inconclusive · test execution not verified'; if (verdict !== 'pass') verdict = 'inconclusive'; }
-    } else if (id === 'SPLITBRAIN') {
+    } else if (id === 'TRUSTGAP') {
       if (p.trustGap !== undefined && m.trustGap === undefined) m.trustGap = p.trustGap;
       if (p.claimedCoverage !== undefined && m.claimedCoverage === undefined) m.claimedCoverage = p.claimedCoverage;
       if (p.mutationScore !== undefined && m.mutationScore === undefined) m.mutationScore = p.mutationScore;
       if (p.survivors !== undefined && m.survivors === undefined && typeof p.survivors === 'number') m.survivors = p.survivors;
       label = label || (Number.isFinite(m.trustGap) ? 'Trust gap ' + number(m.trustGap) + ' pp' : 'Inconclusive · mutation evidence unavailable');
       if (!Number.isFinite(m.trustGap) && verdict === 'unknown') verdict = 'inconclusive';
-    } else if (id === 'WARPATH' && !label) {
+    } else if (id === 'TRIAGE' && !label) {
       if (p.incidentWindow) { label = 'Incident detected'; verdict = 'findings'; }
       else { label = 'Inconclusive · insufficient incident signal'; verdict = 'inconclusive'; }
     }

@@ -1,19 +1,19 @@
 ---
-name: warpath-postmortem
+name: triage-postmortem
 description: Write the structured postmortem from the triage + forensics evidence, and stop the MTTR clock. Activate to close the war room.
 user-invocable: true
 ---
 
-# warpath-postmortem (WARPATH)
+# triage-postmortem (TRIAGE)
 
 You close the war room with a postmortem that is blameless, timestamped, and
 traceable.
 
 ## Method
 
-1. Gather the triage output (`warpath_triage`), the RCAC
+1. Gather the triage output (`triage_run`), the RCAC
    (`incident/rcac.md`), and the patch report from the surgeon.
-2. Call `warpath_postmortem` with:
+2. Call `triage_postmortem` with:
    - `incident_id` (e.g. `SEV1-2026-09-26-payments-500s`),
    - `suspect_sha` / deploy id from triage,
    - a real `timeline` (timestamps from the log evidence),

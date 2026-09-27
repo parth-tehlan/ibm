@@ -1,9 +1,9 @@
 {
-  "name": "triumph-courts",
-  "displayName": "TRIUMPH 3-Court Dev Tool",
-  "description": "REDLINE / SPLITBRAIN / WARPATH courts for any repo and any model — spec-witness tests, honest coverage, incident forensics. Path-1: installs court subagents into the agent hosts you already have; never calls a model itself.",
-  "version": "0.3.0",
-  "publisher": "triumph",
+"name": "gaia-courts",
+  "displayName": "Gaia 3-Court Dev Tool",
+  "description": "WITNESS / TRUSTGAP / TRIAGE courts for any repo and any model — spec-witness tests, honest coverage, incident forensics. Path-1: installs court subagents into the agent hosts you already have; never calls a model itself.",
+  "version": "0.2.4",
+  "publisher": "gaia",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/parth-tehlan/ibm.git"
@@ -33,65 +33,65 @@
   "contributes": {
     "commands": [
       {
-        "command": "triumph.installCourts",
-        "title": "TRIUMPH: Install courts for this repo",
-        "category": "TRIUMPH"
+        "command": "gaia.installCourts",
+        "title": "Gaia: Install courts for this repo",
+        "category": "Gaia"
       },
       {
-        "command": "triumph.detectConfig",
-        "title": "TRIUMPH: Auto-detect .triumph.yml",
-        "category": "TRIUMPH"
+        "command": "gaia.detectConfig",
+        "title": "Gaia: Auto-detect .gaia.yml",
+        "category": "Gaia"
       },
       {
-        "command": "triumph.runCourt",
-        "title": "TRIUMPH: Run a court (REDLINE/SPLITBRAIN/WARPATH)",
-        "category": "TRIUMPH"
+        "command": "gaia.runCourt",
+        "title": "Gaia: Run a court (WITNESS/TRUSTGAP/TRIAGE)",
+        "category": "Gaia"
       },
       {
-        "command": "triumph.generateReport",
-        "title": "TRIUMPH: Generate 3-court report (HTML + MD)",
-        "category": "TRIUMPH"
+        "command": "gaia.generateReport",
+        "title": "Gaia: Generate 3-court report (HTML + MD)",
+        "category": "Gaia"
       },
       {
-        "command": "triumph.openReport",
-        "title": "TRIUMPH: Open last report",
-        "category": "TRIUMPH"
+        "command": "gaia.openReport",
+        "title": "Gaia: Open last report",
+        "category": "Gaia"
       },
       {
-        "command": "triumph.dashboardRun",
-        "title": "TRIUMPH: Run courts and publish to dashboard",
-        "category": "TRIUMPH"
+        "command": "gaia.dashboardRun",
+        "title": "Gaia: Run courts and publish to dashboard",
+        "category": "Gaia"
       },
       {
-        "command": "triumph.statusBarAction",
-        "title": "TRIUMPH: Status bar quick-action menu",
-        "category": "TRIUMPH"
+        "command": "gaia.statusBarAction",
+        "title": "Gaia: Status bar quick-action menu",
+        "category": "Gaia"
       }
     ],
     "menus": {
       "commandPalette": [
         {
-          "command": "triumph.installCourts"
+          "command": "gaia.installCourts"
         },
         {
-          "command": "triumph.detectConfig"
+          "command": "gaia.detectConfig"
         },
         {
-          "command": "triumph.runCourt"
+          "command": "gaia.runCourt"
         },
         {
-          "command": "triumph.generateReport"
+          "command": "gaia.generateReport"
         },
         {
-          "command": "triumph.openReport"
+          "command": "gaia.openReport"
         },
         {
-          "command": "triumph.dashboardRun"
+          "command": "gaia.dashboardRun"
         }
       ],
       "statusBar/windowIndicator": [
         {
-          "command": "triumph.statusBarAction",
+          "command": "gaia.statusBarAction",
           "group": "navigation"
         }
       ]
@@ -99,25 +99,25 @@
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "triumph",
-          "title": "TRIUMPH",
-          "icon": "media/triumph.svg"
+          "id": "gaia",
+          "title": "Gaia",
+          "icon": "media/gaia.svg"
         }
       ]
     },
     "views": {
-      "triumph": [
+      "gaia": [
         {
           "type": "webview",
-          "id": "triumph.panel",
+          "id": "gaia.panel",
           "name": "3-Court"
         }
       ]
     },
     "configuration": {
-      "title": "TRIUMPH 3-Court",
+      "title": "Gaia 3-Court",
       "properties": {
-        "triumph.defaultHost": {
+        "gaia.defaultHost": {
           "type": "string",
           "enum": [
             "vscode",
@@ -130,7 +130,7 @@
           "default": "all",
           "description": "Agent host(s) the 'Install courts' command targets."
         },
-        "triumph.enginePath": {
+        "gaia.enginePath": {
           "type": "string",
           "default": "",
           "description": "Override path to court.js (defaults to the bundled engine)."
@@ -139,8 +139,8 @@
     }
   },
   "scripts": {
-    "setup": "node bin/triumph-setup.js",
-    "report": "node bin/triumph-report.js",
+    "setup": "node bin/gaia-setup.js",
+    "report": "node bin/gaia-report.js",
     "stage:dashboard": "node bin/stage-dashboard.js",
 "test": "node tests/runners-safety.js && node tests/webstorage-flag-safety.js && node tests/mutation-safety.js && node tests/toolenv.js && node tests/run.js && node tests/properties.js && node tests/hosts-safety.js && node tests/wall-strength.js && node tests/extension.js && node tests/run-summary.js && node tests/run-coordinator.js && node tests/panel.js && node tests/panel-ui.js && node tests/dashboard.js && node tests/dashboard-integration.js && node tests/mcp-client.js && node tests/validator-parity.js && node tests/diff.js && node tests/micro.js && node tests/verify-diff.js",
     "test:live": "node tests/properties-live.js",

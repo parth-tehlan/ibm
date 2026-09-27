@@ -1,5 +1,5 @@
-# TRIUMPH 3-court adapter for the northstar payments repo.
-# Schema: court-extension/schemas/triumph-config.schema.json
+# Gaia 3-court adapter for the northstar payments repo.
+# Schema: court-extension/schemas/gaia-config.schema.json
 version: 1
 repo:
   name: northstar
@@ -26,7 +26,7 @@ evidence:
   dir: evidence
   trustgap: trustgap/TrustGap.json
   incidentDir: incident
-  reportsDir: reports/triumph
+  reportsDir: reports/gaia
 wall:
   denyGlobs:
     - src/**

@@ -1,16 +1,16 @@
 ---
-name: warpath-forensics
+name: triage-forensics
 description: Correlate deploy/metrics/log fixtures, isolate the suspect deploy, and separate trigger from root cause. Activate to diagnose the incident.
 user-invocable: true
 ---
 
-# warpath-forensics (WARPATH)
+# triage-forensics (TRIAGE)
 
 You prove trigger and root cause, with timestamps.
 
 ## Method
 
-1. Call `warpath_triage`. It correlates by timestamp: the incident window,
+1. Call `triage_run`. It correlates by timestamp: the incident window,
    the suspect deploy (latest inside the window, else last before it), the
    breaker snapshot, and the error/warn evidence lines.
 2. **Trigger** = whatever upstream flakiness opened the window (from the warn

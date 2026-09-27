@@ -145,7 +145,7 @@ t('planner output is byte-applying: lineBefore + span -> lineAfter', () => {
 
 // --- impacted-test selection ---------------------------------------------
 t('selectImpactedTests: static-import match beats basename, clause files excluded', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'triumph-micro-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gaia-micro-'));
   const testsDir = path.join(dir, 'tests');
   fs.mkdirSync(testsDir, { recursive: true });
   const direct = path.join(testsDir, 'unit-x.test.ts');
@@ -168,7 +168,7 @@ t('selectImpactedTests: static-import match beats basename, clause files exclude
 });
 
 t('selectImpactedTests: harness-seam binding discovered via bind() call', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'triumph-micro-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gaia-micro-'));
   const testsDir = path.join(dir, 'tests');
   const harnessDir = path.join(dir, 'harness');
   fs.mkdirSync(testsDir, { recursive: true });

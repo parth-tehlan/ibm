@@ -12,7 +12,7 @@ import { normalizeReport, snapshotSchema } from '../contracts/report.js';
 // they can become path components; every on-disk snapshot is immutable.
 export function defaultHistoryDir() {
   const base = process.env.XDG_DATA_HOME || path.join(os.homedir(), '.local', 'share');
-  return path.join(base, 'triumph-dashboard');
+  return path.join(base, 'gaia-dashboard');
 }
 const uuid = (value) => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 function validId(id) { if (!uuid(id)) throw new TypeError('Expected UUID'); return id.toLowerCase(); }
@@ -82,7 +82,7 @@ function legacyV2(old, project) {
     checkedOutCommit: old.checkedOutCommit ?? null, branch: null,
     workingTreeDirty: old.workingTreeDirty ?? null,
     producer: { name: 'northstar-legacy', version: '1' },
-    redline: old.redline, splitbrain: old.splitbrain, warpath: old.warpath,
+    witness: old.witness, trustgap: old.trustgap, triage: old.triage,
   };
 }
 
@@ -272,7 +272,7 @@ export function createHistory({ dir = defaultHistoryDir(), legacyDir = fileURLTo
           if (!force && (await ownership(project.id, run.runId))?.alive) break;
           const updatedAt = new Date(Math.max(Date.now(), Date.parse(run.updatedAt))).toISOString();
           const next = { ...run, revision: run.revision + 1, updatedAt, state: 'interrupted' };
-          for (const court of ['redline', 'splitbrain', 'warpath']) {
+          for (const court of ['witness', 'trustgap', 'triage']) {
             if (next[court].state === 'running') next[court] = {
               state: 'error', collectedAt: updatedAt, sourceGeneratedAt: null, payload: null,
               errors: ['Extension connection lost on server restart.'],

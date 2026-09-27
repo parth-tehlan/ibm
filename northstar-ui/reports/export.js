@@ -1,6 +1,6 @@
 import { normalizeReport } from '../contracts/report.js';
 
-const COURTS = ['redline', 'splitbrain', 'warpath'];
+const COURTS = ['witness', 'trustgap', 'triage'];
 const text = (value) => value == null ? '—' : typeof value === 'string' ? value : JSON.stringify(value, null, 2) ?? '—';
 const html = (value) => text(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 // Inline Markdown cannot contain raw HTML, new headings, lists, or code fences.

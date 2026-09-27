@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * lib/runners.js — pluggable test-runners for the REDLINE court.
+ * lib/runners.js — pluggable test-runners for the WITNESS court.
  *
  * A runner turns a test-file selector into the engine's normalized verdict
  * shape. Jest gets a first-class JSON runner; everything else can be wired
@@ -374,7 +374,7 @@ async function runPytest(cfg, clauseId) {
   // pytest-json-report writes to a file path ('-' is a literal filename, not
   // stdout); use a temp file and read it back. Honor an optional python bin.
   const os = require('os');
-  const tmpReport = path.join(os.tmpdir(), 'triumph-pytest-' + Date.now() + '.json');
+  const tmpReport = path.join(os.tmpdir(), 'gaia-pytest-' + Date.now() + '.json');
   const python = (cfg.tests && cfg.tests.python) || 'python3';
   const r = await spawnCollect(python, ['-m', 'pytest', '--json-report', '--json-report-file=' + tmpReport, target], {
     cwd: cfg.repoRoot,
@@ -425,7 +425,7 @@ async function runCustom(cfg, clauseId) {
     ? path.join(cfg.tests.absDir, cfg.tests.clauseTestPattern.replace('{{clause}}', clauseId))
     : null;
   const tpl = clauseId ? cfg.tests.runClause : (cfg.tests.runAll || cfg.tests.runClause);
-  if (!tpl) throw new Error('custom framework requires tests.runAll or tests.runClause in .triumph.yml');
+  if (!tpl) throw new Error('custom framework requires tests.runAll or tests.runClause in .gaia.yml');
   const cmd = tpl.replace(/\{clause\}/g, clauseId || '').replace(/\{file\}/g, file || '');
   const r = await spawnCollect(cmd, [], { cwd: cfg.repoRoot, timeoutMs: 180_000, shell: true });
   const parsed = extractJson(r.stdout);
@@ -441,7 +441,7 @@ async function runTests(cfg, clauseId) {
     case 'vitest':
     case 'mocha':
       // No dedicated runner yet: drive them through the custom path by
-      // declaring tests.runAll/runClause in .triumph.yml. Without those, fail
+      // declaring tests.runAll/runClause in .gaia.yml. Without those, fail
       // loudly with a steer rather than guessing a JSON reporter shape.
       if (cfg.tests.runClause || cfg.tests.runAll) return runCustom(cfg, clauseId);
       throw new Error(`${cfg.tests.framework}: set tests.runClause (with {clause}/{file} placeholders) printing normalized JSON, or switch tests.framework to jest`);

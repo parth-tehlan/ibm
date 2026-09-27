@@ -1,4 +1,4 @@
-# TRIUMPH 3-Court Dev Tool — VS Code Extension
+# Gaia 3-Court Dev Tool — VS Code Extension
 
 Build tests, review coverage honestly, and debug incidents using the
 **3-court method** — for *any* repository and *any* model the user wants,
@@ -13,16 +13,16 @@ including IBM Bob's chat.
   brain is always the caller's model (Claude, GPT, DeepSeek, IBM
   watsonx/Granite, Bob's chat).
 
-See **`BUILD-PROMPT.md`** for the full build spec and **`TRIUMPH-DESIGN.md`**
+See **`BUILD-PROMPT.md`** for the full build spec and **`GAIA-DESIGN.md`**
 for the locked architecture.
 
 ## The three courts
 
 | Court | What it does | Tool prefix |
 |-------|--------------|-------------|
-| **REDLINE** | Spec-witness: verdicts from test suites authored from the spec contract alone; wall-enforced (never reads implementation). | `redline_*` |
-| **SPLITBRAIN** | Honesty audit: claimed coverage vs real mutation kill-rate; names tautologies. Slow runs are async (`splitbrain_mutate` → `splitbrain_status`). | `splitbrain_*` |
-| **WARPATH** | Incident forensics: correlates deploy/metrics/log fixtures, isolates the suspect deploy, renders the postmortem. | `warpath_*` |
+| **WITNESS** | Spec-witness: verdicts from test suites authored from the spec contract alone; wall-enforced (never reads implementation). | `witness_*` |
+| **TRUSTGAP** | Honesty audit: claimed coverage vs real mutation kill-rate; names tautologies. Slow runs are async (`trustgap_mutate` → `trustgap_status`). | `trustgap_*` |
+| **TRIAGE** | Incident forensics: correlates deploy/metrics/log fixtures, isolates the suspect deploy, renders the postmortem. | `triage_*` |
 
 Manifesto: **Legal. Honest. Survivable.**
 
@@ -31,21 +31,21 @@ Manifesto: **Legal. Honest. Survivable.**
 ```
 court.js                 ← the model-free MCP engine (Role 2), repo-agnostic
 lib/
-  config.js              ← .triumph.yml loader (zero-dep YAML subset + validation)
-  detect.js              ← workspace auto-detector (fills .triumph.yml)
+  config.js              ← .gaia.yml loader (zero-dep YAML subset + validation)
+  detect.js              ← workspace auto-detector (fills .gaia.yml)
   runners.js             ← jest / pytest / custom test runners → normalized verdicts
-  trustgap.js            ← SPLITBRAIN honesty math (gap derived, never asserted)
+  trustgap.js            ← TRUSTGAP honesty math (gap derived, never asserted)
   hosts.js               ← Role 1: per-host subagent + MCP writers
   render.js              ← Role 3: engine JSON → interactive HTML + agent MD
 agents/                  ← the subagent prompt pack (write-once, per-host)
   spec-witness.md  test-author.md  mutant-analyst.md  war-room.md
-schemas/triumph-config.schema.json
+schemas/gaia-config.schema.json
 bin/
-  triumph-setup.js       ← "Install courts for this repo" (CLI form of Role 1)
-  triumph-report.js      ← collect engine JSON over MCP, render both reports
+  gaia-setup.js          ← "Install courts for this repo" (CLI form of Role 1)
+  gaia-report.js         ← collect engine JSON over MCP, render both reports
 src/extension.js         ← VS Code extension host (activation, MCP provider, status bar)
-src/panel.js             ← TRIUMPH panel: WebviewViewProvider for the "3-Court"
-                           Activity Bar view (triumph.panel) — Config / Run /
+src/panel.js             ← Gaia panel: WebviewViewProvider for the "3-Court"
+                           Activity Bar view (gaia.panel) — Config / Run /
                            Last report / Dashboard / Install courts sections
 src/actions.js           ← action handlers the panel (and the commands) dispatch
                            into — detect config, run a court, generate report,
@@ -55,13 +55,13 @@ tests/run.js             ← zero-dep smoke tests
 tests/panel.js           ← panel provider + message-routing tests
 ```
 
-## VS Code: the TRIUMPH panel
+## VS Code: the Gaia panel
 
-The primary interface is the **TRIUMPH** view in the Activity Bar (webview
-view `triumph.panel`, labeled "3-Court"). It has five sections:
+The primary interface is the **Gaia** view in the Activity Bar (webview
+view `gaia.panel`, labeled "3-Court"). It has five sections:
 
-- **Config** — auto-detect `.triumph.yml`, or open it.
-- **Run** — pick a court (REDLINE / SPLITBRAIN / WARPATH) and run it, or
+- **Config** — auto-detect `.gaia.yml`, or open it.
+- **Run** — pick a court (WITNESS / TRUSTGAP / TRIAGE) and run it, or
   generate the full report; a live log and job indicator show progress (one
   job runs at a time).
 - **Last report** — summary of the most recent run, with buttons to open the
@@ -78,44 +78,44 @@ The six commands below still work, but they now just reveal the panel and
 either run the action directly or focus the relevant section for you to
 finish there:
 
-- `triumph.detectConfig`, `triumph.generateReport`, `triumph.openReport`,
-  `triumph.dashboardRun` — reveal the panel and run the action immediately.
-- `triumph.installCourts`, `triumph.runCourt` — reveal the panel at the
+- `gaia.detectConfig`, `gaia.generateReport`, `gaia.openReport`,
+  `gaia.dashboardRun` — reveal the panel and run the action immediately.
+- `gaia.installCourts`, `gaia.runCourt` — reveal the panel at the
   Install courts / Run section, with the host preselected from
-  `triumph.defaultHost` where applicable; no quickpick — pick in the panel.
+  `gaia.defaultHost` where applicable; no quickpick — pick in the panel.
 
 ## Quick start (CLI, host-agnostic)
 
 ```bash
 # In any repo:
-node court-extension/bin/triumph-setup.js --repo .          # detect + install all hosts
-node court-extension/bin/triumph-setup.js --repo . --host claude --host bob
+node court-extension/bin/gaia-setup.js --repo .          # detect + install all hosts
+node court-extension/bin/gaia-setup.js --repo . --host claude --host bob
 
 # Run the courts + render the report:
-node court-extension/bin/triumph-report.js --repo .
-#   → reports/triumph/triumph-report.html  (interactive: R/Y/G clauses,
+node court-extension/bin/gaia-report.js --repo .
+#   → reports/gaia/gaia-report.html  (interactive: R/Y/G clauses,
 #     mutation gutter, evidence timeline, click-to-jump vscode:// links)
-#   → reports/triumph/triumph-report.md    (agent-friendly, re-runnable)
-#   → reports/triumph/triumph-input.json   (raw engine output for audit)
+#   → reports/gaia/gaia-report.md    (agent-friendly, re-runnable)
+#   → reports/gaia/gaia-input.json   (raw engine output for audit)
 ```
 
 ## Quick start (VS Code)
 
-1. Open a repo. Click the **TRIUMPH** icon in the Activity Bar to open the
+1. Open a repo. Click the **Gaia** icon in the Activity Bar to open the
    3-Court panel.
-2. **Config** section: auto-detect `.triumph.yml`.
+2. **Config** section: auto-detect `.gaia.yml`.
 3. **Install courts** section: pick a host and install — this writes the
    court subagents + MCP wiring into your host (`.claude/`, `.bob/`,
    `.codex/`, `.vscode/mcp.json` + `.github/chatmodes/`, or generic
-   `.triumph/`).
+   `.gaia/`).
 4. The extension also registers the engine as an MCP server with VS Code, so
-   agent-mode chat can call `redline_*` / `splitbrain_*` / `warpath_*` with
+   agent-mode chat can call `witness_*` / `trustgap_*` / `triage_*` with
    VS Code's own model. The caller is the director.
-5. **Run** section: pick REDLINE/SPLITBRAIN/WARPATH and run it, or generate
+5. **Run** section: pick WITNESS/TRUSTGAP/TRIAGE and run it, or generate
    the full report — progress streams into the panel's log, and **Last
    report** opens the resulting HTML/Markdown.
 
-The six `triumph.*` commands (Command Palette) remain as shortcuts into the
+The six `gaia.*` commands (Command Palette) remain as shortcuts into the
 same panel — see "Commands (back-compat entry points)" above.
 
 ## The engine standalone (any MCP host)
@@ -126,14 +126,14 @@ node court-extension/court.js --repo /path/to/repo
 # JSON-RPC 2.0 over stdio (MCP 2024-11-05):
 {"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}
 {"jsonrpc":"2.0","id":2,"method":"tools/list"}
-{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"redline_verdict_all","arguments":{}}}
+{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"witness_verdict_all","arguments":{}}}
 ```
 
-## .triumph.yml (the repo adapter)
+## .gaia.yml (the repo adapter)
 
 One per repo; auto-detected on install. Repo-agnostic: every path, pattern,
 and runner is config — never assumption. See
-`schemas/triumph-config.schema.json`. Minimal jest+Stryker example:
+`schemas/gaia-config.schema.json`. Minimal jest+Stryker example:
 
 ```yaml
 version: 1
@@ -178,14 +178,14 @@ If no jest is found anywhere, the error names exactly what was searched.
 - **Easy setup** — one command per repo; auto-detection for jest+Stryker,
   pytest, mutmut, and a custom escape hatch.
 - **Wall-enforcing** — `assertNotWalled` in `court.js`; the engine itself
-  refuses REDLINE reads under `wall.denyGlobs`.
+  refuses WITNESS reads under `wall.denyGlobs`.
 - **Falsifiable** — the trust gap is *derived* from the mutation report;
   dishonest tests are named from per-test `coveredBy` attribution (or
   explicitly `unresolved` — never guessed).
 - **Repo-agnostic** — validated on `northstar/` (TS+jest+Stryker) and a
   second scratch repo (JS+jest) in this workspace.
-- **Incremental for chat** — `splitbrain_mutate` returns a `job_id`
-  immediately; `splitbrain_status` polls. A chat conversation never blocks.
+- **Incremental for chat** — `trustgap_mutate` returns a `job_id`
+  immediately; `trustgap_status` polls. A chat conversation never blocks.
 
 ## Tests
 

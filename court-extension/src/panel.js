@@ -1,7 +1,7 @@
 'use strict';
 /**
- * src/panel.js — TriumphPanelProvider: persistent Webview View for the
- * TRIUMPH activity-bar container (`triumph.panel`).
+ * src/panel.js — GaiaPanelProvider: persistent Webview View for the
+ * Gaia activity-bar container (`gaia.panel`).
  *
  * The provider owns state, logging, the single-flight job slot and message
  * plumbing. `handleMessage` dispatches job-type messages into src/actions.js
@@ -23,7 +23,7 @@ const { summarizeRun, summarizeCourt } = require('../lib/run-summary');
 
 const LOG_LIMIT = 200;
 const STEP_LIMIT = 200;
-const FALLBACK_COURTS = ['REDLINE', 'SPLITBRAIN', 'WARPATH'];
+const FALLBACK_COURTS = ['WITNESS', 'TRUSTGAP', 'TRIAGE'];
 
 const WHITELIST = new Set(Object.keys(TYPES));
 
@@ -54,12 +54,12 @@ function hostLabels() {
 /** Best-effort call: never let a host-API quirk crash panel bookkeeping. */
 function safe(fn, fallback) {
   try { return fn(); } catch (e) {
-    console.error('[triumph] safe(): swallowed exception:', e && e.message ? e.message : e);
+    console.error('[gaia] safe(): swallowed exception:', e && e.message ? e.message : e);
     return fallback;
   }
 }
 
-class TriumphPanelProvider {
+class GaiaPanelProvider {
   /**
    * @param {object} deps
    * @param {object} [deps.actions] src/actions.js module (subtask 4). May be
@@ -91,7 +91,7 @@ class TriumphPanelProvider {
     this._reportPanel = null;
     this._requests = new Map();
     this._historyLimit = 10;
-    this._output = safe(() => vscode.window.createOutputChannel('TRIUMPH'), null);
+    this._output = safe(() => vscode.window.createOutputChannel('GAIA'), null);
 
     this.state = {
       workspace: { root: null, name: null },
@@ -156,7 +156,7 @@ class TriumphPanelProvider {
   }
 
   _refreshHostsDefault() {
-    const def = safe(() => vscode.workspace.getConfiguration('triumph').get('defaultHost'), null);
+    const def = safe(() => vscode.workspace.getConfiguration('gaia').get('defaultHost'), null);
     this.state.hosts.default = def && (def === 'all' || HOSTS[def]) ? def : null;
   }
 
@@ -274,7 +274,7 @@ class TriumphPanelProvider {
     };
   }
 
-  /** Open (or reuse) the singleton 'triumphReport' WebviewPanel. */
+  /** Open (or reuse) the singleton 'gaiaReport' WebviewPanel. */
   _openReportPanel(htmlPath) {
     const html = fs.readFileSync(htmlPath, 'utf8');
     if (this._reportPanel) {
@@ -287,7 +287,7 @@ class TriumphPanelProvider {
       this._reportPanel = null; // stale reference (panel disposed without firing onDidDispose)
     }
     const panel = vscode.window.createWebviewPanel(
-      'triumphReport', 'TRIUMPH 3-Court Report', vscode.ViewColumn.One, { enableScripts: false, localResourceRoots: [] }
+      'gaiaReport', 'Gaia 3-Court Report', vscode.ViewColumn.One, { enableScripts: false, localResourceRoots: [] }
     );
     panel.webview.html = html;
     this._reportPanel = panel;
@@ -369,7 +369,7 @@ class TriumphPanelProvider {
 <meta http-equiv="Content-Security-Policy" content="${csp}">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="stylesheet" href="${cssHref}">
-<title>TRIUMPH</title>
+<title>Gaia</title>
 </head>
 <body>
 <div id="root"></div>
@@ -438,7 +438,7 @@ class TriumphPanelProvider {
     return entry;
   }
 
-  /** Live mutation progress from an action's SPLITBRAIN status polling.
+  /** Live mutation progress from an action's TRUSTGAP status polling.
    *  Updates the metrics state (pushed lazily with the next state post) and
    *  mirrors every event into the activity feed as a step. */
   _onMutationEvent(event, signal) {
@@ -492,8 +492,8 @@ class TriumphPanelProvider {
   reveal(opts = {}) {
     safe(() => {
       if (vscode.commands && typeof vscode.commands.executeCommand === 'function') {
-        Promise.resolve(vscode.commands.executeCommand('triumph.panel.focus')).catch((e) => {
-          console.error('[triumph] executeCommand triumph.panel.focus failed:', e && e.message ? e.message : e);
+        Promise.resolve(vscode.commands.executeCommand('gaia.panel.focus')).catch((e) => {
+          console.error('[gaia] executeCommand gaia.panel.focus failed:', e && e.message ? e.message : e);
         });
       }
     }, undefined);
@@ -518,7 +518,7 @@ class TriumphPanelProvider {
    */
   async runJob(kind, label, fn) {
     if (this.state.job || this.state.activeRun?.lifecycle === 'running') {
-      this.postError(`A TRIUMPH job is already running (${this.state.job?.label || this.state.activeRun.runId}).`);
+      this.postError(`A Gaia job is already running (${this.state.job?.label || this.state.activeRun.runId}).`);
       return undefined;
     }
     // New run: clear the activity feed (append-only *during* a run) and reset
@@ -549,16 +549,16 @@ function resultSummary(court, result) {
   if (result.kind === 'error') return result.error || 'failed';
   const payload = result.kind === 'complete' ? result.payload : result; // accept raw engine payloads too
   if (!payload) return 'no evidence';
-  if (court === 'REDLINE' && payload.summary) {
+  if (court === 'WITNESS' && payload.summary) {
     const s = payload.summary;
     return `${s.green} green / ${s.red} red / ${s.yellow} yellow of ${s.total}`;
   }
-  if (court === 'SPLITBRAIN') {
+  if (court === 'TRUSTGAP') {
     if (payload.status === 'started') return `mutation job ${payload.job_id} started`;
     if (payload.trustGap != null) return `trust gap ${payload.trustGap}`;
     return payload.status || 'done';
   }
-  if (court === 'WARPATH') {
+  if (court === 'TRIAGE') {
     return payload.incidentWindow ? `incident window ${payload.incidentWindow}` : (payload.status || 'done');
   }
   return 'done';
@@ -572,7 +572,7 @@ function resultSummary(court, result) {
  * provider.reveal({dispatch})) go through the same whitelist and validation.
  *
  * @param {{type: string, [k: string]: any}} msg
- * @param {{provider: TriumphPanelProvider, actions?: object, repoRoot?: Function,
+ * @param {{provider: GaiaPanelProvider, actions?: object, repoRoot?: Function,
  *   enginePath?: Function, dashboardCmd?: object, context?: object}} deps
  */
 async function dispatchMessage(msg, deps) {
@@ -604,8 +604,8 @@ async function dispatchMessage(msg, deps) {
     params = { host: msg.host };
   } else if (type === 'runCourt') {
     const courts = (deps.actions && Array.isArray(deps.actions.COURTS)) ? deps.actions.COURTS : FALLBACK_COURTS;
-    // Accept either the legacy single-court form ({court: 'REDLINE'}) or the
-    // multi-select panel form ({courts: ['REDLINE', ...]}). Both normalize to
+    // Accept either the legacy single-court form ({court: 'WITNESS'}) or the
+    // multi-select panel form ({courts: ['WITNESS', ...]}). Both normalize to
     // params.courts (array, panel order).
     let selected;
     if (Array.isArray(msg.courts)) {
@@ -701,13 +701,13 @@ async function dispatchMessage(msg, deps) {
         // generateReport runs all three courts — notify with the input payload.
         if (deps.onCourtResult && result) {
           const input = safe(() => {
-            const p = require('path').join(ctx.root, 'reports', 'triumph', 'triumph-input.json');
+            const p = require('path').join(ctx.root, 'reports', 'gaia', 'gaia-input.json');
             return JSON.parse(require('fs').readFileSync(p, 'utf8'));
           }, null);
           if (input) {
-            safe(() => deps.onCourtResult('redline', input.redline), undefined);
-            safe(() => deps.onCourtResult('splitbrain', input.splitbrain), undefined);
-            safe(() => deps.onCourtResult('warpath', input.warpath), undefined);
+            safe(() => deps.onCourtResult('witness', input.witness), undefined);
+            safe(() => deps.onCourtResult('trustgap', input.trustgap), undefined);
+            safe(() => deps.onCourtResult('triage', input.triage), undefined);
           }
         }
         return result;
@@ -719,7 +719,7 @@ async function dispatchMessage(msg, deps) {
       // A dashboard run collects all three courts — surface their outcomes
       // to the ambient status bar the same way a local run does.
       if (deps.onCourtResult && result && result.outcomes) {
-        for (const c of ['redline', 'splitbrain', 'warpath']) {
+        for (const c of ['witness', 'trustgap', 'triage']) {
           const o = result.outcomes[c];
           if (o && o.kind === 'complete' && o.payload) safe(() => deps.onCourtResult(c, o.payload), undefined);
         }
@@ -736,7 +736,7 @@ async function dispatchMessage(msg, deps) {
   if (type === 'openConfig') {
     if (!ctx.root) { provider.postError('Open a workspace folder first.'); return; }
     const status = actions.configStatus(ctx.root);
-    if (!status.exists) { provider.postError('TRIUMPH: no config found — run "Detect config" first.'); return; }
+    if (!status.exists) { provider.postError('Gaia: no config found — run "Detect config" first.'); return; }
     provider.state.config = status;
     const doc = await vscode.workspace.openTextDocument(status.path);
     await vscode.window.showTextDocument(doc);
@@ -747,7 +747,7 @@ async function dispatchMessage(msg, deps) {
   if (type === 'openLastReport') {
     if (!ctx.root) { provider.postError('Open a workspace folder first.'); return; }
     const report = actions.findLastReport(ctx.root);
-    if (!report) { provider.postError('TRIUMPH: no report yet — run "Generate report".'); return; }
+    if (!report) { provider.postError('Gaia: no report yet — run "Generate report".'); return; }
     provider.state.lastReport = report;
     if (params.format === 'html') {
       provider._openReportPanel(report.htmlPath);
@@ -761,7 +761,7 @@ async function dispatchMessage(msg, deps) {
 
   if (type === 'dashboardOpen') {
     const url = provider.state.dashboard.url;
-    if (!url) { provider.postError('TRIUMPH: no dashboard run yet.'); return; }
+    if (!url) { provider.postError('Gaia: no dashboard run yet.'); return; }
     await ctx.openExternal(url);
     return;
   }
@@ -846,4 +846,4 @@ async function handleMessage(raw, deps) {
   } catch (e) { provider.postError(e.message || String(e)); response('rejected', undefined, e); }
 }
 
-module.exports = { TriumphPanelProvider, handleMessage };
+module.exports = { GaiaPanelProvider, handleMessage };

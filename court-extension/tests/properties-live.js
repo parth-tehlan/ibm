@@ -43,7 +43,7 @@ function engineSession(repo) {
   const sess = engineSession(NORTHSTAR);
   try {
     const t0 = Date.now();
-    const start = await sess.call('splitbrain_mutate', { claimed_coverage: 91.66 });
+    const start = await sess.call('trustgap_mutate', { claimed_coverage: 91.66 });
     const elapsed = Date.now() - t0;
     assert.equal(start.status, 'started');
     assert.ok(start.job_id, 'no job_id');
@@ -51,7 +51,7 @@ function engineSession(repo) {
     let st, tries = 0;
     do {
       await new Promise((r) => setTimeout(r, 1500));
-      st = await sess.call('splitbrain_status', { job_id: start.job_id });
+      st = await sess.call('trustgap_status', { job_id: start.job_id });
       tries++;
     } while (st.status === 'running' && tries < 90);
     assert.equal(st.status, 'done', 'job did not finish: ' + JSON.stringify(st).slice(0, 200));

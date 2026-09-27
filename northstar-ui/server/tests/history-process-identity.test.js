@@ -18,7 +18,7 @@ test('live process identity remains available through Linux procfs', { skip: pro
 });
 
 test('claim and ownership validation succeed with macOS process identity', async (t) => {
-  const dir = await mkdtemp(path.join(os.tmpdir(), 'triumph-macos-ownership-'));
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'gaia-macos-ownership-'));
   t.after(() => rm(dir, { recursive: true, force: true }));
   const history = createHistory({ dir, processPlatform: 'darwin' });
   const projectId = randomUUID();

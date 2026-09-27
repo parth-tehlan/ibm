@@ -5,7 +5,7 @@ const os = require('os');
 const path = require('path');
 const { McpClient } = require('../src/mcp-client');
 (async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'triumph-mcp-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gaia-mcp-'));
   const engine = path.join(dir, 'engine.js');
   try {
     fs.writeFileSync(engine, `const r = require('readline').createInterface({input:process.stdin});

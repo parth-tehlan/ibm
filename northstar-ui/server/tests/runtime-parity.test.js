@@ -6,11 +6,11 @@ import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 
-// Run with TRIUMPH_RUNTIME_DIR=... after npm run package:runtime. The ordinary
+// Run with GAIA_RUNTIME_DIR=... after npm run package:runtime. The ordinary
 // source test suite does not silently use an old ignored staging directory.
 test('opt-in packaged runtime has the same server, schema, lockfile and browser assets as source build', async (t) => {
-  if (!process.env.TRIUMPH_RUNTIME_DIR) { t.skip('stage the runtime and set TRIUMPH_RUNTIME_DIR to verify parity'); return; }
-  const staged = path.resolve(process.env.TRIUMPH_RUNTIME_DIR);
+if (!process.env.GAIA_RUNTIME_DIR) { t.skip('stage the runtime and set GAIA_RUNTIME_DIR to verify parity'); return; }
+  const staged = path.resolve(process.env.GAIA_RUNTIME_DIR);
   const files = ['package.json', 'package-lock.json', 'server/index.js', 'server/app.js', 'server/bridge.js', 'server/history.js', 'server/mutation-bus.js', 'contracts/report.js', 'reports/export.js', 'dist/index.html'];
   const assets = await readdir(path.join(root, 'dist/assets'));
   assert.ok(assets.some((asset) => asset.endsWith('.js')));
@@ -25,11 +25,11 @@ test('opt-in packaged runtime has the same server, schema, lockfile and browser 
 });
 
 test('opt-in copied extension runtime matches staged browser and server artifacts', async (t) => {
-  if (!process.env.TRIUMPH_RUNTIME_DIR || !process.env.TRIUMPH_COPIED_RUNTIME_DIR) {
-    t.skip('set TRIUMPH_RUNTIME_DIR and TRIUMPH_COPIED_RUNTIME_DIR after extension re-staging'); return;
+  if (!process.env.GAIA_RUNTIME_DIR || !process.env.GAIA_COPIED_RUNTIME_DIR) {
+    t.skip('set GAIA_RUNTIME_DIR and GAIA_COPIED_RUNTIME_DIR after extension re-staging'); return;
   }
-  const source = path.resolve(process.env.TRIUMPH_RUNTIME_DIR);
-  const target = path.resolve(process.env.TRIUMPH_COPIED_RUNTIME_DIR);
+const source = path.resolve(process.env.GAIA_RUNTIME_DIR);
+  const target = path.resolve(process.env.GAIA_COPIED_RUNTIME_DIR);
   const files = ['package.json', 'package-lock.json', 'server/index.js', 'server/app.js', 'server/history.js', 'server/bridge.js', 'server/mutation-bus.js', 'contracts/report.js', 'reports/export.js', 'dist/index.html'];
   const assets = await readdir(path.join(source, 'dist/assets'));
   files.push(...assets.map((file) => `dist/assets/${file}`));

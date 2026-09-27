@@ -17,7 +17,7 @@
  * multi-project startSession/stopAll so the extension host's status bar and
  * clean-shutdown paths keep working unchanged.
  *
- * Raw offline artifacts (triumph-input.json/html/md) are untouched — the
+ * Raw offline artifacts (gaia-input.json/html/md) are untouched — the
  * dashboard run is an additional, separate artifact.
  */
 
@@ -30,8 +30,8 @@ const { projectId, toSnapshot } = require('../lib/convert');
 const { loadConfig, findConfigFile } = require('../lib/config');
 const { McpClient } = require('./mcp-client');
 
-const PRODUCER = { name: 'triumph-courts', version: require('../package.json').version };
-const ALL = ['redline', 'splitbrain', 'warpath'];
+const PRODUCER = { name: 'gaia-courts', version: require('../package.json').version };
+const ALL = ['witness', 'trustgap', 'triage'];
 
 // --- shared child + per-project sessions -------------------------------------
 let sharedServer = null; // one DashboardServer child serves every project
@@ -79,8 +79,8 @@ async function execute(session, requested, existingRun, openExternal) {
       const child = sharedServer && sharedServer.child;
       try {
         if (child?.connected) child.send(signal === 'done'
-          ? {type: 'triumph.mutationDone', runKey, status: 'done', error: null}
-          : {type: 'triumph.mutationProgress', runKey, event});
+          ? {type: 'gaia.mutationDone', runKey, status: 'done', error: null}
+          : {type: 'gaia.mutationProgress', runKey, event});
         if (session.historyDir) {
           const dir = path.join(session.historyDir, 'mutation-events');
           fs.mkdirSync(dir, {recursive: true});
@@ -243,7 +243,7 @@ async function runAndPublish(vscode, opts) {
   const selected = opts.requested || ALL;
   if (!Array.isArray(selected) || !selected.length || selected.some((c) => !ALL.includes(c)) || new Set(selected).size !== selected.length) throw new Error('Invalid court selection');
   const session = await startSession(vscode, opts);
-  if (session.busy) throw new Error('TRIUMPH run already in progress');
+  if (session.busy) throw new Error('Gaia run already in progress');
   session.busy = true;
   try { return await execute(session, selected, opts.existingRun, opts.openExternal); }
   finally { session.busy = false; }

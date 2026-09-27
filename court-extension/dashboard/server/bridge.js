@@ -2,7 +2,7 @@ import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { normalizeReport, snapshotSchema } from '../contracts/report.js';
 
 const uuid = (id) => typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
-const courts = new Set(['redline', 'splitbrain', 'warpath']);
+const courts = new Set(['witness', 'trustgap', 'triage']);
 function error(message, code = 'FORBIDDEN') { const err = new Error(message); err.code = code; return err; }
 function authenticate(connection, token) {
   if (typeof token !== 'string' || !/^[0-9a-f]{64}$/.test(token)) throw error('Invalid extension credentials');
@@ -14,7 +14,7 @@ function validateProject(project) {
   return { id: project.id.toLowerCase(), name: project.name };
 }
 function validateCourts(selected) {
-  if (!Array.isArray(selected) || selected.length < 1 || selected.length > 3 || new Set(selected).size !== selected.length || selected.some((court) => !courts.has(court))) throw new TypeError('Expected distinct redline, splitbrain, or warpath courts');
+  if (!Array.isArray(selected) || selected.length < 1 || selected.length > 3 || new Set(selected).size !== selected.length || selected.some((court) => !courts.has(court))) throw new TypeError('Expected distinct witness, trustgap, or triage courts');
 }
 
 /** createBridge({history, heartbeatTimeoutMs?, now?}) is PROCESS-LOCAL.

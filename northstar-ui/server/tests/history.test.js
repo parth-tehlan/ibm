@@ -10,7 +10,7 @@ const envelope = () => ({ state: 'not_run', collectedAt: null, sourceGeneratedAt
 export const fixture = (project = { id: randomUUID(), name: 'A' }, runId = randomUUID()) => ({
   schemaVersion: 2, project, runId, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
   revision: 0, state: 'running', checkedOutCommit: null, branch: null, workingTreeDirty: null,
-  producer: { name: 'test', version: '1' }, redline: envelope(), splitbrain: envelope(), warpath: envelope(),
+  producer: { name: 'test', version: '1' }, witness: envelope(), trustgap: envelope(), triage: envelope(),
 });
 async function setup(t) {
   const dir = await mkdtemp(path.join(os.tmpdir(), 'dashboard-history-'));
@@ -84,12 +84,12 @@ test('imports remain detached; invalid IDs and symlink tricks cannot escape stor
 
 test('restart recovery interrupts only running runs with a new durable revision', async (t) => {
   const { dir, history } = await setup(t);
-  const run = { ...fixture(), redline: { ...envelope(), state: 'running' } };
+  const run = { ...fixture(), witness: { ...envelope(), state: 'running' } };
   await history.save(run);
   const afterRestart = createHistory({ dir });
   const recovered = await afterRestart.recoverInterrupted();
   assert.equal(recovered.length, 1);
-  assert.equal(recovered[0].redline.state, 'error');
+  assert.equal(recovered[0].witness.state, 'error');
   assert.equal((await history.load(run.project.id, run.runId)).revision, 1);
   assert.deepEqual(await afterRestart.recoverInterrupted(), []);
 });
@@ -100,7 +100,7 @@ test('non-destructive explicit legacy migration and configurable default', async
   const run = fixture();
   const v1 = { schemaVersion: 1, repository: 'northstar', runId: run.runId,
     checkedOutCommit: null, workingTreeDirty: false, createdAt: run.createdAt, state: 'running',
-    redline: run.redline, splitbrain: run.splitbrain, warpath: run.warpath };
+    witness: run.witness, trustgap: run.trustgap, triage: run.triage };
   const original = JSON.stringify(v1);
   await writeFile(path.join(legacyDir, `${run.runId}.json`), original);
   const history = createHistory({ dir: path.join(dir, 'new'), legacyDir });
@@ -108,6 +108,6 @@ test('non-destructive explicit legacy migration and configurable default', async
   assert.equal((await history.listProjects())[0].lastRun.state, 'interrupted');
   assert.equal(await readFile(path.join(legacyDir, `${run.runId}.json`), 'utf8'), original);
   const prior = process.env.XDG_DATA_HOME;
-  try { process.env.XDG_DATA_HOME = dir; assert.equal(defaultHistoryDir(), path.join(dir, 'triumph-dashboard')); }
+  try { process.env.XDG_DATA_HOME = dir; assert.equal(defaultHistoryDir(), path.join(dir, 'gaia-dashboard')); }
   finally { if (prior === undefined) delete process.env.XDG_DATA_HOME; else process.env.XDG_DATA_HOME = prior; }
 });

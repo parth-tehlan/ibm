@@ -265,8 +265,8 @@ function planFileMutants(relPath, srcText, addedLines) {
 //      for sources bound this way (northstar's bind-seams.cjs pattern).
 //   3. Basename heuristic — discounts.ts <-> discounts.test.ts.
 // Clause witness suites are ALWAYS excluded: micro-mutation measures the
-// honesty of the repo's regular suite, not REDLINE's wall-enforced witnesses
-// (consistent with splitbrain attribution exclusions in court.js).
+// honesty of the repo's regular suite, not WITNESS's wall-enforced witnesses
+// (consistent with trustgap attribution exclusions in court.js).
 // ---------------------------------------------------------------------------
 
 function isClauseTest(cfg, absFile) {

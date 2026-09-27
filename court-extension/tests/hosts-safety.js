@@ -17,7 +17,7 @@ function test(name, fn) {
   // this same canonicalized root). Canonicalize the test's own tmp root so
   // it matches an ordinary, non-symlinked repo path instead of tripping
   // that check on the OS's own plumbing.
-  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'triumph-host-safety-')));
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'gaia-host-safety-')));
   try { fn(root); console.log(`ok ${++count} - ${name}`); }
   finally { fs.rmSync(root, { recursive: true, force: true }); }
 }
@@ -47,12 +47,12 @@ function snapshot(root) {
   const yaml = `# user comment\ncustomModes:\n  - slug: witness\n    name: My edited witness\n    groups: [read]\n  - slug: my-mode\n    name: Private mode\n    groups: [execute]\notherSetting: retained\n`;
   const modes = put(root, '.bob/custom_modes.yaml', yaml, 0o600);
   const config = put(root, '.bob/mcp.json', JSON.stringify({ mcpServers: {
-    'triumph-courts': { disabled: true, alwaysAllow: ['my-tool'], env: { PRIVATE: 'kept' }, command: 'old' },
+    'gaia-courts': { disabled: true, alwaysAllow: ['my-tool'], env: { PRIVATE: 'kept' }, command: 'old' },
     personal: { command: 'personal' },
   }, extra: { untouched: true } }), 0o640);
   const agent = put(root, '.bob/agents/spec-witness.md', 'user-customized agent\n');
   const rule = put(root, '.bob/rules-witness/00-never-src.md', 'customized rule\n');
-  const skill = put(root, '.bob/skills/redline-test/SKILL.md', 'customized skill\n');
+  const skill = put(root, '.bob/skills/witness-test/SKILL.md', 'customized skill\n');
   const { files, backups } = installHost('bob', root);
   assert.ok(files.includes(modes));
   assert.equal(backups.length, 2, 'preserve backups of both changed user configs');
@@ -71,12 +71,12 @@ function snapshot(root) {
   assert.equal(fs.readFileSync(rule, 'utf8'), 'customized rule\n');
   assert.equal(fs.readFileSync(skill, 'utf8'), 'customized skill\n');
   const parsed = JSON.parse(fs.readFileSync(config));
-  assert.equal(parsed.mcpServers['triumph-courts'].disabled, true);
-  assert.deepEqual(parsed.mcpServers['triumph-courts'].alwaysAllow, ['my-tool']);
-  assert.deepEqual(parsed.mcpServers['triumph-courts'].env, { PRIVATE: 'kept' });
+  assert.equal(parsed.mcpServers['gaia-courts'].disabled, true);
+  assert.deepEqual(parsed.mcpServers['gaia-courts'].alwaysAllow, ['my-tool']);
+  assert.deepEqual(parsed.mcpServers['gaia-courts'].env, { PRIVATE: 'kept' });
   assert.deepEqual(parsed.mcpServers.personal, { command: 'personal' });
   assert.deepEqual(parsed.extra, { untouched: true });
-  assert.deepEqual(parsed.mcpServers['triumph-courts'].args.slice(-2), ['--repo', root]);
+  assert.deepEqual(parsed.mcpServers['gaia-courts'].args.slice(-2), ['--repo', root]);
   assert.equal(fs.statSync(modes).mode & 0o777, 0o600);
   assert.equal(fs.statSync(config).mode & 0o777, 0o640);
   const before = snapshot(root);
@@ -87,14 +87,14 @@ function snapshot(root) {
 test('new Bob install creates valid defaults', (root) => {
   installHost('bob', root);
   const conf = JSON.parse(fs.readFileSync(path.join(root, '.bob/mcp.json')));
-  assert.equal(conf.mcpServers['triumph-courts'].disabled, false);
-  assert.deepEqual(conf.mcpServers['triumph-courts'].alwaysAllow, ENGINE_TOOL_NAMES);
+  assert.equal(conf.mcpServers['gaia-courts'].disabled, false);
+  assert.deepEqual(conf.mcpServers['gaia-courts'].alwaysAllow, ENGINE_TOOL_NAMES);
   assert.match(fs.readFileSync(path.join(root, '.bob/custom_modes.yaml'), 'utf8'), /slug: witness/);
 });
 
 test('malformed JSON fails before any host writes, for every host', (root) => {
   const paths = { bob: '.bob/mcp.json', claude: '.mcp.json', codex: '.codex/config.json',
-    vscode: '.vscode/mcp.json', generic: '.triumph/mcp.json' };
+    vscode: '.vscode/mcp.json', generic: '.gaia/mcp.json' };
   for (const [host, relative] of Object.entries(paths)) {
     const dir = path.join(root, host);
     fs.mkdirSync(dir);
@@ -121,7 +121,7 @@ test('malformed YAML and duplicate slugs fail before any Bob writes', (root) => 
 });
 
 test('symlinks and suspicious targets are refused before writing', (root) => {
-  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'triumph-outside-'));
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'gaia-outside-'));
   try {
     put(outside, 'canary', 'do not change');
     fs.symlinkSync(outside, path.join(root, '.bob'));
@@ -174,21 +174,21 @@ test('late failure rolls back an already overwritten config', (root) => {
 
 test('other hosts preserve unrelated servers, custom entry settings, and permissions', (root) => {
   const configs = { claude: ['.mcp.json', 'mcpServers'], codex: ['.codex/config.json', 'mcp_servers'],
-    vscode: ['.vscode/mcp.json', 'servers'], generic: ['.triumph/mcp.json', 'mcpServers'] };
+    vscode: ['.vscode/mcp.json', 'servers'], generic: ['.gaia/mcp.json', 'mcpServers'] };
   for (const [host, [relative, key]] of Object.entries(configs)) {
     const repo = path.join(root, host);
     fs.mkdirSync(repo);
     const fp = put(repo, relative, JSON.stringify({ theme: 'keep', [key]: {
       personal: { command: 'custom' },
-      'triumph-courts': { disabled: true, alwaysAllow: ['limited'], env: { HOME: 'user' } },
+      'gaia-courts': { disabled: true, alwaysAllow: ['limited'], env: { HOME: 'user' } },
     } }), 0o600);
     installHost(host, repo);
     const config = JSON.parse(fs.readFileSync(fp, 'utf8'));
     assert.equal(config.theme, 'keep');
     assert.deepEqual(config[key].personal, { command: 'custom' });
-    assert.equal(config[key]['triumph-courts'].disabled, true);
-    assert.deepEqual(config[key]['triumph-courts'].alwaysAllow, ['limited']);
-    assert.deepEqual(config[key]['triumph-courts'].env, { HOME: 'user' });
+    assert.equal(config[key]['gaia-courts'].disabled, true);
+    assert.deepEqual(config[key]['gaia-courts'].alwaysAllow, ['limited']);
+    assert.deepEqual(config[key]['gaia-courts'].env, { HOME: 'user' });
     assert.equal(fs.statSync(fp).mode & 0o777, 0o600);
     const before = snapshot(repo);
     installHost(host, repo);

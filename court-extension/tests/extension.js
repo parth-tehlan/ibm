@@ -172,7 +172,7 @@ function fakeWebviewView(posted) {
   const activateContext = { subscriptions: [] };
   await t('activate registers all commands including statusBarAction', () => {
     ext.activate(activateContext);
-    for (const c of ['triumph.installCourts', 'triumph.detectConfig', 'triumph.runCourt', 'triumph.generateReport', 'triumph.openReport', 'triumph.dashboardRun', 'triumph.statusBarAction']) {
+    for (const c of ['gaia.installCourts', 'gaia.detectConfig', 'gaia.runCourt', 'gaia.generateReport', 'gaia.openReport', 'gaia.dashboardRun', 'gaia.statusBarAction']) {
       assert.ok(registered.commands.includes(c), 'missing command ' + c);
     }
   });
@@ -218,11 +218,11 @@ function fakeWebviewView(posted) {
     const provider = rec.webviewProviders[0].provider;
     const bar = rec.statusBar;
     assert.ok(bar, 'status bar item must exist');
-    assert.ok(/TRIUMPH/.test(bar.text), 'idle state shows the TRIUMPH brand');
+    assert.ok(/GAIA/.test(bar.text), 'idle state shows the GAIA brand');
     assert.ok(!/sync~spin/.test(bar.text), 'no running indicator while idle');
 
     // Job start → active-court indicator spins on the bar.
-    provider.state.job = { kind: 'runCourt', label: 'runCourt {"courts":["REDLINE"]}', startedAt: new Date().toISOString() };
+    provider.state.job = { kind: 'runCourt', label: 'runCourt {"courts":["WITNESS"]}', startedAt: new Date().toISOString() };
     if (provider.onJobChange) provider.onJobChange(provider.state.job);
     assert.ok(/sync~spin/.test(bar.text), 'running job must show the spinner segment, got: ' + bar.text);
     assert.ok(/running/i.test(bar.text), 'the active court is named, got: ' + bar.text);
@@ -240,8 +240,8 @@ function fakeWebviewView(posted) {
     assert.ok(!/sync~spin/.test(bar.text), 'job clear removes the running indicator');
 
     // Court results recolor the bar: red clauses → error background.
-    if (provider.onCourtResult) provider.onCourtResult('redline', { summary: { green: 2, red: 1, yellow: 0, total: 3 } });
-    assert.match(bar.text, /TRIUMPH: findings/, 'the status bar names the outcome without cryptic glyphs');
+    if (provider.onCourtResult) provider.onCourtResult('witness', { summary: { green: 2, red: 1, yellow: 0, total: 3 } });
+    assert.match(bar.text, /GAIA: findings/, 'the status bar names the outcome without cryptic glyphs');
     assert.ok(bar.backgroundColor && bar.backgroundColor.id === 'statusBarItem.errorBackground', 'red clauses tint the bar red');
   });
 
@@ -258,8 +258,8 @@ function fakeWebviewView(posted) {
     // run the command's core: writeReports on collected input.
     const { writeReports } = require('../lib/render');
     const os = require('os');
-    const out = fs.mkdtempSync(path.join(os.tmpdir(), 'triumph-ext-'));
-    const input = { repo: 'n', repoRootAbs: '/r', generated: 'g', redline: { summary: { green: 0, red: 1, yellow: 0, total: 1 }, results: [{ clause: 'W1', status: 'red', passed: 0, failed: 1, total: 1, test: 't', spec_anchor: 's', failures: [] }] } };
+    const out = fs.mkdtempSync(path.join(os.tmpdir(), 'gaia-ext-'));
+    const input = { repo: 'n', repoRootAbs: '/r', generated: 'g', witness: { summary: { green: 0, red: 1, yellow: 0, total: 1 }, results: [{ clause: 'W1', status: 'red', passed: 0, failed: 1, total: 1, test: 't', spec_anchor: 's', failures: [] }] } };
     const { mdPath, htmlPath } = writeReports(input, out);
     assert.ok(fs.existsSync(mdPath) && fs.existsSync(htmlPath));
   });
@@ -268,7 +268,7 @@ function fakeWebviewView(posted) {
     const os = require('os');
     const base = path.join(os.homedir(), '.local', 'share', 'code-server', 'extensions');
     if (!fs.existsSync(base)) { console.log('     (skipped: no code-server extensions dir)'); return; }
-    const installs = fs.readdirSync(base).filter((d) => d.startsWith('triumph.triumph-courts-'));
+    const installs = fs.readdirSync(base).filter((d) => d.startsWith('gaia.gaia-courts-'));
     if (!installs.length) { console.log('     (skipped: extension not installed)'); return; }
     // Newest install dir.
     const newest = installs.map((d) => path.join(base, d)).sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs)[0];
@@ -281,34 +281,34 @@ function fakeWebviewView(posted) {
     const instHosts = fs.readFileSync(path.join(newest, 'lib', 'hosts.js'), 'utf8');
     assert.strictEqual(instHosts, srcHosts, 'installed lib/hosts.js is stale — reinstall + reload the host');
     // 3. Skills + custom_modes present in the installed bundle.
-    assert.ok(fs.existsSync(path.join(newest, 'agents', 'skills', 'redline-extract', 'SKILL.md')), 'skills missing from installed bundle');
+    assert.ok(fs.existsSync(path.join(newest, 'agents', 'skills', 'witness-extract', 'SKILL.md')), 'skills missing from installed bundle');
     const cm = fs.readFileSync(path.join(newest, 'agents', 'bob', 'custom_modes.yaml'), 'utf8');
     assert.ok(/^customModes:/m.test(cm), 'installed custom_modes.yaml must be object-shaped');
   });
 
   // --- persistent panel: registration (subtask 6, contract A/G) -----------
 
-  await t('registerWebviewViewProvider is called with "triumph.panel" and a resolveWebviewView provider', () => {
+  await t('registerWebviewViewProvider is called with "gaia.panel" and a resolveWebviewView provider', () => {
     const { vscode: v2, rec } = mkVscode();
     const ext2 = freshExtension(v2);
     ext2.activate({ subscriptions: [] });
     assert.strictEqual(rec.webviewProviders.length, 1, 'expected exactly one webview view provider registration');
-    assert.strictEqual(rec.webviewProviders[0].id, 'triumph.panel');
+    assert.strictEqual(rec.webviewProviders[0].id, 'gaia.panel');
     assert.strictEqual(typeof rec.webviewProviders[0].provider.resolveWebviewView, 'function');
   });
 
-  await t('package.json contributes the triumph activitybar container + triumph.panel webview view; icon exists', () => {
+  await t('package.json contributes the gaia activitybar container + gaia.panel webview view; icon exists', () => {
     const pkg = require('../package.json');
     const containers = pkg.contributes.viewsContainers && pkg.contributes.viewsContainers.activitybar;
     assert.ok(Array.isArray(containers), 'contributes.viewsContainers.activitybar must be an array');
-    const triumphContainer = containers.find((c) => c.id === 'triumph');
-    assert.ok(triumphContainer, 'missing activitybar container with id "triumph"');
-    assert.ok(triumphContainer.icon, 'activitybar container must declare an icon');
-    assert.ok(fs.existsSync(path.join(EXT, triumphContainer.icon)), 'icon file must exist on disk: ' + triumphContainer.icon);
-    const views = pkg.contributes.views && pkg.contributes.views.triumph;
-    assert.ok(Array.isArray(views), 'contributes.views.triumph must be an array');
-    assert.ok(views.some((v) => v.id === 'triumph.panel' && v.type === 'webview'),
-      'contributes.views.triumph must contain a webview view with id "triumph.panel"');
+    const gaiaContainer = containers.find((c) => c.id === 'gaia');
+    assert.ok(gaiaContainer, 'missing activitybar container with id "gaia"');
+    assert.ok(gaiaContainer.icon, 'activitybar container must declare an icon');
+    assert.ok(fs.existsSync(path.join(EXT, gaiaContainer.icon)), 'icon file must exist on disk: ' + gaiaContainer.icon);
+    const views = pkg.contributes.views && pkg.contributes.views.gaia;
+    assert.ok(Array.isArray(views), 'contributes.views.gaia must be an array');
+    assert.ok(views.some((v) => v.id === 'gaia.panel' && v.type === 'webview'),
+      'contributes.views.gaia must contain a webview view with id "gaia.panel"');
   });
 
   // --- persistent panel: old commands still invoke the right logic (contract G) ---
@@ -316,18 +316,18 @@ function fakeWebviewView(posted) {
   await t('palette commands select courts and preview integrations without silent writes', async () => {
     const calls = [];
     const fakeActions = {
-      COURTS: ['REDLINE', 'SPLITBRAIN', 'WARPATH'],
+      COURTS: ['WITNESS', 'TRUSTGAP', 'TRIAGE'],
       configStatus: () => ({ exists: false, path: null, notes: [] }),
-      detectConfig: async () => { calls.push('detectConfig'); return { path: '/repo/.triumph.yml', notes: [] }; },
+      detectConfig: async () => { calls.push('detectConfig'); return { path: '/repo/.gaia.yml', notes: [] }; },
       installCourts: async () => { throw new Error('installCourts must require confirmation'); },
       previewInstall: (_ctx, {host}) => { calls.push('previewInstall:' + host); return {previewId: 'preview-1', host, files: []}; },
-      runCourt: async (_ctx, {courts}) => { calls.push('runCourt:' + courts.join(',')); return {runId: 'run-1', courts: {REDLINE: {execution: 'complete'}}}; },
+      runCourt: async (_ctx, {courts}) => { calls.push('runCourt:' + courts.join(',')); return {runId: 'run-1', courts: {WITNESS: {execution: 'complete'}}}; },
       generateReport: async () => { calls.push('generateReport'); return { htmlPath: 'h', mdPath: 'm', generatedAt: 'now' }; },
       findLastReport: () => { calls.push('findLastReport'); return null; },
       dashboardRun: async () => { calls.push('dashboardRun'); return { url: 'http://dash/1' }; },
     };
     const { vscode: v2, rec } = mkVscode({
-      configGet: (section, key) => (section === 'triumph' && key === 'defaultHost' ? 'claude' : undefined),
+      configGet: (section, key) => (section === 'gaia' && key === 'defaultHost' ? 'claude' : undefined),
     });
     const ext2 = freshExtension(v2, (request, parent) => {
       if (request === './actions' && parent && parent.filename && /extension\.js$/.test(parent.filename)) return fakeActions;
@@ -341,40 +341,40 @@ function fakeWebviewView(posted) {
     provider.markReady(); // simulate the webview having sent `ready`
 
     calls.length = 0; posted.length = 0;
-    await rec.commandFns['triumph.detectConfig']();
+    await rec.commandFns['gaia.detectConfig']();
     await waitForJobClear(provider);
-    assert.ok(calls.includes('detectConfig'), 'triumph.detectConfig must reach actions.detectConfig');
-    assert.ok(rec.executed.some((e) => e.id === 'triumph.panel.focus'), 'triumph.detectConfig must execute triumph.panel.focus');
+    assert.ok(calls.includes('detectConfig'), 'gaia.detectConfig must reach actions.detectConfig');
+    assert.ok(rec.executed.some((e) => e.id === 'gaia.panel.focus'), 'gaia.detectConfig must execute gaia.panel.focus');
 
     calls.length = 0; posted.length = 0;
-    await rec.commandFns['triumph.installCourts']();
+await rec.commandFns['gaia.installCourts']();
     await waitForJobClear(provider);
-    assert.ok(rec.executed.some((e) => e.id === 'triumph.panel.focus'));
+    assert.ok(rec.executed.some((e) => e.id === 'gaia.panel.focus'));
     assert.ok(calls.some(c => c.startsWith('previewInstall:')), 'installation opens an actual preview');
     assert.ok(!calls.includes('installCourts'), 'preview does not write files');
     assert.ok(posted.some(m => m.type === 'focus' && m.section === 'install'));
 
     calls.length = 0; posted.length = 0;
-    await rec.commandFns['triumph.runCourt']();
+    await rec.commandFns['gaia.runCourt']();
     await waitForJobClear(provider);
     assert.ok(rec.quickPicks.some(p => p.opts && p.opts.canPickMany), 'court subset is selected explicitly');
-    assert.ok(calls.includes('runCourt:REDLINE'), 'chosen court reaches the shared run path');
+    assert.ok(calls.includes('runCourt:WITNESS'), 'chosen court reaches the shared run path');
     assert.ok(posted.some(m => m.type === 'focus' && m.section === 'run'));
 
     calls.length = 0; posted.length = 0;
-    await rec.commandFns['triumph.generateReport']();
+    await rec.commandFns['gaia.generateReport']();
     await waitForJobClear(provider);
-    assert.ok(calls.includes('generateReport'), 'triumph.generateReport must reach actions.generateReport');
+    assert.ok(calls.includes('generateReport'), 'gaia.generateReport must reach actions.generateReport');
 
     calls.length = 0; posted.length = 0;
-    await rec.commandFns['triumph.openReport']();
+    await rec.commandFns['gaia.openReport']();
     await waitForJobClear(provider);
-    assert.ok(calls.includes('findLastReport'), 'triumph.openReport must reach actions.findLastReport');
+    assert.ok(calls.includes('findLastReport'), 'gaia.openReport must reach actions.findLastReport');
 
     calls.length = 0; posted.length = 0;
-    await rec.commandFns['triumph.dashboardRun']();
+    await rec.commandFns['gaia.dashboardRun']();
     await waitForJobClear(provider);
-    assert.ok(calls.includes('dashboardRun'), 'triumph.dashboardRun must reach actions.dashboardRun');
+    assert.ok(calls.includes('dashboardRun'), 'gaia.dashboardRun must reach actions.dashboardRun');
   });
 
   console.log(`\n${passed} passed, ${failed} failed`);

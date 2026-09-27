@@ -42,10 +42,10 @@ function previewConfig(ctx) {
   const root = rootFor(ctx);
   const {detect, toYaml} = require('../lib/detect');
   const {config, notes} = detect(root);
-  const dest = configPath(root) || path.join(root, '.triumph.yml');
+  const dest = configPath(root) || path.join(root, '.gaia.yml');
   if (path.dirname(dest) !== root) throw fail('INVALID_REQUEST', 'Configuration outside the workspace is read-only in Setup.');
   const expectedConfigRevision = revision(dest);
-  const content = dest.endsWith('.json') ? JSON.stringify(config, null, 2) + '\n' : '# TRIUMPH repo adapter. Review before applying.\n' + toYaml(config) + '\n';
+  const content = dest.endsWith('.json') ? JSON.stringify(config, null, 2) + '\n' : '# Gaia repo adapter. Review before applying.\n' + toYaml(config) + '\n';
   return remember({kind: 'config', previewId: crypto.randomUUID(), root, path: dest, content, notes,
     expectedConfigRevision, replace: expectedConfigRevision !== null, files: [dest], createdAt: Date.now()});
 }
@@ -53,7 +53,7 @@ function applyConfig(ctx, {previewId, expectedConfigRevision, confirmReplace = f
   const root = rootFor(ctx, true);
   const preview = previews.get(previewId);
   if (!preview || preview.kind !== 'config' || preview.root !== root || Date.now() - preview.createdAt > 15 * 60_000) throw fail('STALE_PREVIEW', 'Create a fresh configuration preview first.');
-  if (expectedConfigRevision !== preview.expectedConfigRevision || revision(preview.path) !== preview.expectedConfigRevision || (configPath(root) || path.join(root, '.triumph.yml')) !== preview.path) throw fail('STALE_PREVIEW', 'Configuration changed since the preview; nothing was written.');
+  if (expectedConfigRevision !== preview.expectedConfigRevision || revision(preview.path) !== preview.expectedConfigRevision || (configPath(root) || path.join(root, '.gaia.yml')) !== preview.path) throw fail('STALE_PREVIEW', 'Configuration changed since the preview; nothing was written.');
   if (preview.replace && !confirmReplace) throw fail('INVALID_REQUEST', 'Explicit replacement confirmation is required.');
   let backupPath = null;
   if (preview.replace) {
@@ -72,8 +72,8 @@ async function detectConfig(ctx) {
 }
 function hostFiles(root, host) {
   const {AGENTS, EXT_DIR} = require('../lib/hosts');
-  const base = host === 'claude' ? '.claude' : host === 'bob' ? '.bob' : host === 'codex' ? '.codex' : '.triumph';
-  const files = host === 'vscode' ? AGENTS.map(n => path.join(root, '.github', 'chatmodes', `triumph-${n}.chatmode.md`)) : AGENTS.map(n => path.join(root, base, 'agents', n + '.md'));
+  const base = host === 'claude' ? '.claude' : host === 'bob' ? '.bob' : host === 'codex' ? '.codex' : '.gaia';
+  const files = host === 'vscode' ? AGENTS.map(n => path.join(root, '.github', 'chatmodes', `gaia-${n}.chatmode.md`)) : AGENTS.map(n => path.join(root, base, 'agents', n + '.md'));
   files.push(path.join(root, host === 'claude' ? '.mcp.json' : host === 'vscode' ? '.vscode/mcp.json' : base + (host === 'codex' ? '/config.json' : '/mcp.json')));
   if (host === 'bob') {
     const walk = (source, target) => { for (const item of fs.readdirSync(source, {withFileTypes: true})) {
@@ -125,16 +125,16 @@ function findLastReport(root) {
   if (!run) return legacyLastReport(root);
   const result = coordinator.resultFor(run);
   const payload = c => run.courts[c].payload;
-  return {...result.report, runId: run.runId, run, runRecord: run, summary: payload('REDLINE')?.summary || null,
-    redline: payload('REDLINE'), splitbrain: payload('SPLITBRAIN'), warpath: payload('WARPATH'),
+  return {...result.report, runId: run.runId, run, runRecord: run, summary: payload('WITNESS')?.summary || null,
+    witness: payload('WITNESS'), trustgap: payload('TRUSTGAP'), triage: payload('TRIAGE'),
     evidenceFreshness: 'run-owned'};
 }
 function legacyLastReport(root) {
   if (!root) return null;
-  const outDir = path.join(root, 'reports', 'triumph');
-  const htmlPath = path.join(outDir, 'triumph-report.html');
-  const inputPath = path.join(outDir, 'triumph-input.json');
-  const mdPath = path.join(outDir, 'triumph-report.md');
+  const outDir = path.join(root, 'reports', 'gaia');
+  const htmlPath = path.join(outDir, 'gaia-report.html');
+  const inputPath = path.join(outDir, 'gaia-input.json');
+  const mdPath = path.join(outDir, 'gaia-report.md');
   const htmlExists = fs.existsSync(htmlPath);
   const inputExists = fs.existsSync(inputPath);
   if (!htmlExists && !inputExists) return null;
@@ -142,18 +142,18 @@ function legacyLastReport(root) {
   // local target writes it last); the HTML mtime otherwise.
   const stat = fs.statSync(inputExists ? inputPath : htmlPath);
   let summary = null;
-  let redline = null;
-  let splitbrain = null;
-  let warpath = null;
+  let witness = null;
+  let trustgap = null;
+  let triage = null;
   try {
     const raw = JSON.parse(fs.readFileSync(inputPath, 'utf8'));
     if (raw && typeof raw === 'object') {
-      redline = raw.redline || null;
-      splitbrain = raw.splitbrain || null;
-      warpath = raw.warpath || null;
-      if (redline && redline.summary) summary = redline.summary;
+      witness = raw.witness || null;
+      trustgap = raw.trustgap || null;
+      triage = raw.triage || null;
+      if (witness && witness.summary) summary = witness.summary;
     }
-  } catch { /* no triumph-input.json, or unparsable — per-court data stays null */ }
+  } catch { /* no gaia-input.json, or unparsable — per-court data stays null */ }
   return {
     htmlPath: htmlExists ? htmlPath : null,
     mdPath: fs.existsSync(mdPath) ? mdPath : null,
@@ -162,9 +162,9 @@ function legacyLastReport(root) {
     evidenceFreshness: 'unknown',
     evidenceSource: 'imported',
     summary,
-    redline,
-    splitbrain,
-    warpath,
+    witness,
+    trustgap,
+    triage,
   };
 }
 
