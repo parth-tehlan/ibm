@@ -56,13 +56,14 @@ class TriumphPanelProvider {
    *   job settles (success or failure), regardless of trigger, so the
    *   extension host's status bar stays in sync (contract H4).
    */
-  constructor({ actions, repoRoot, enginePath, dashboardCmd, context, onDashboardChange } = {}) {
+  constructor({ actions, repoRoot, enginePath, dashboardCmd, context, onDashboardChange, onCourtResult } = {}) {
     this.actions = actions || null;
     this.repoRoot = repoRoot;
     this.enginePath = enginePath;
     this.dashboardCmd = dashboardCmd || null;
     this.context = context || null;
     this.onDashboardChange = typeof onDashboardChange === 'function' ? onDashboardChange : null;
+    this.onCourtResult = typeof onCourtResult === 'function' ? onCourtResult : null;
     this.extensionUri = this.context && this.context.extensionUri;
 
     this._view = null;
@@ -228,6 +229,7 @@ class TriumphPanelProvider {
       enginePath: this.enginePath,
       dashboardCmd: this.dashboardCmd,
       context: this.context,
+      onCourtResult: this.onCourtResult,
     };
   }
 
@@ -459,11 +461,24 @@ async function handleMessage(msg, deps) {
         const doc = await vscode.workspace.openTextDocument({ content: JSON.stringify(result, null, 2), language: 'json' });
         await vscode.window.showTextDocument(doc, { preview: true });
         provider.log('info', `${params.court}: ${resultSummary(params.court, result)}`);
+        if (deps.onCourtResult) safe(() => deps.onCourtResult(params.court, result), undefined);
         return result;
       }
       if (type === 'generateReport') {
         const result = await actions.generateReport(ctx);
         provider.state.lastReport = actions.findLastReport(ctx.root);
+        // generateReport runs all three courts — notify with the input payload.
+        if (deps.onCourtResult && result) {
+          const input = safe(() => {
+            const p = require('path').join(ctx.root, 'reports', 'triumph', 'triumph-input.json');
+            return JSON.parse(require('fs').readFileSync(p, 'utf8'));
+          }, null);
+          if (input) {
+            safe(() => deps.onCourtResult('redline', input.redline), undefined);
+            safe(() => deps.onCourtResult('splitbrain', input.splitbrain), undefined);
+            safe(() => deps.onCourtResult('warpath', input.warpath), undefined);
+          }
+        }
         return result;
       }
       // type === 'dashboardRun'

@@ -44,6 +44,7 @@ const trustgapLib = require('./lib/trustgap');
 const diffLib = require('./lib/diff');
 const microLib = require('./lib/micro');
 const verifyLib = require('./lib/verify');
+const { parseMutationLine } = require('./lib/mutation-progress');
 
 const PKG = (() => { try { return require('./package.json'); } catch { return { version: '0.0.0' }; } })();
 const SERVER_INFO = { name: 'triumph-courts', version: PKG.version };
@@ -234,14 +235,82 @@ async function courtRedlineClauses() {
 // ---------------------------------------------------------------------------
 // SPLITBRAIN court — async job registry for slow mutation runs
 // ---------------------------------------------------------------------------
-const JOBS = new Map(); // jobId -> {status, startedAt, finishedAt, error, result}
+const JOBS = new Map(); // jobId -> {status, startedAt, finishedAt, error, result, progress[]}
 const JOB_TTL_MS = 30 * 60_000;
+const PROGRESS_LIMIT = 500; // max events stored per job
 
 function sweepJobs() {
   const now = Date.now();
   for (const [id, j] of JOBS) {
     if (now - j.startedAt > JOB_TTL_MS) JOBS.delete(id);
   }
+}
+
+/**
+ * Push a progress event onto job.progress and notify IPC listeners.
+ * Caps the ring at PROGRESS_LIMIT so long runs don't leak memory.
+ */
+function emitProgress(job, jobId, event) {
+  if (job.progress.length >= PROGRESS_LIMIT) job.progress.shift();
+  job.progress.push(event);
+  // Forward to the dashboard server over IPC when running as a forked child.
+  if (process.send) {
+    try { process.send({ type: 'triumph.mutationProgress', jobId, event }); } catch { /* IPC gone */ }
+  }
+}
+
+/**
+ * Streaming variant of spawnCollect: spawns the command, pipes stdout/stderr
+ * line-by-line through parseMutationLine, and resolves with the same shape
+ * as spawnCollect once the process exits. All buffering logic is identical to
+ * spawnCollect — we just add a per-line hook.
+ */
+function spawnStream(cmd, args, opts, onLine) {
+  const { spawn } = require('child_process');
+  return new Promise((resolve) => {
+    const child = spawn(cmd, args, { cwd: opts.cwd, env: process.env, shell: !!opts.shell });
+    let out = '';
+    let err = '';
+    let outBuf = '';
+    let errBuf = '';
+    const timer = setTimeout(() => {
+      child.kill('SIGKILL');
+      resolve({ ok: false, error: 'timeout', stdout: out, stderr: err, code: null });
+    }, opts.timeoutMs || 120_000);
+
+    function processLines(buf, newData, isSterr) {
+      const combined = buf + newData;
+      const lines = combined.split('\n');
+      const remainder = lines.pop(); // last incomplete line
+      for (const l of lines) {
+        const parsed = parseMutationLine(l);
+        if (parsed) onLine(parsed);
+      }
+      return remainder;
+    }
+
+    child.stdout.on('data', (d) => {
+      const chunk = String(d);
+      out += chunk;
+      outBuf = processLines(outBuf, chunk, false);
+    });
+    child.stderr.on('data', (d) => {
+      const chunk = String(d);
+      err += chunk;
+      errBuf = processLines(errBuf, chunk, true);
+    });
+    child.on('error', (e) => {
+      clearTimeout(timer);
+      resolve({ ok: false, error: 'spawn-failed: ' + e.message, stdout: out, stderr: err, code: null });
+    });
+    child.on('close', (code) => {
+      clearTimeout(timer);
+      // Flush any remaining partial line
+      if (outBuf) { const p = parseMutationLine(outBuf); if (p) onLine(p); }
+      if (errBuf) { const p = parseMutationLine(errBuf); if (p) onLine(p); }
+      resolve({ ok: code === 0, code, stdout: out, stderr: err });
+    });
+  });
 }
 
 async function runMutationJob(cfg, jobId, claimedOverride) {
@@ -251,11 +320,15 @@ async function runMutationJob(cfg, jobId, claimedOverride) {
     const before = cfg.mutation.absReport && fs.existsSync(cfg.mutation.absReport)
       ? fs.statSync(cfg.mutation.absReport) : null;
     const startedAt = Date.now();
-    const r = await runners.spawnCollect(cfg.mutation.command, [], {
+
+    // Stream stdout/stderr through parseMutationLine so progress events are
+    // available immediately, before the process exits.
+    const r = await spawnStream(cfg.mutation.command, [], {
       cwd: cfg.repoRoot,
       timeoutMs: (cfg.mutation.timeoutSeconds || 900) * 1000,
       shell: true,
-    });
+    }, (event) => emitProgress(job, jobId, { ...event, ts: Date.now() }));
+
     const after = cfg.mutation.absReport && fs.existsSync(cfg.mutation.absReport)
       ? fs.statSync(cfg.mutation.absReport) : null;
     const diagnostic = [
@@ -283,6 +356,10 @@ async function runMutationJob(cfg, jobId, claimedOverride) {
     job.error = String(e && e.message ? e.message : e);
   } finally {
     job.finishedAt = Date.now();
+    // Notify IPC that the job has a terminal status.
+    if (process.send) {
+      try { process.send({ type: 'triumph.mutationDone', jobId, status: job.status, error: job.error || null }); } catch { /* IPC gone */ }
+    }
   }
 }
 
@@ -482,7 +559,7 @@ async function courtSplitMutate(args) {
   if (running) return { court: 'SPLITBRAIN', status: 'busy', error: `mutation job ${running[0]} is already running`, job_id: running[0] };
   const claimed = args && typeof args.claimed_coverage === 'number' ? args.claimed_coverage : null;
   const jobId = 'mut-' + crypto.randomBytes(4).toString('hex');
-  JOBS.set(jobId, { status: 'running', startedAt: Date.now(), finishedAt: null, error: null, result: null, command: c.mutation.command, claimedCoverage: claimed });
+  JOBS.set(jobId, { status: 'running', startedAt: Date.now(), finishedAt: null, error: null, result: null, progress: [], command: c.mutation.command, claimedCoverage: claimed });
   // Fire and forget; chat polls splitbrain_status.
   runMutationJob(c, jobId, claimed);
   return {
@@ -511,11 +588,24 @@ async function courtSplitStatus(args) {
     job_id: jobId,
     status: job.status,
     elapsedSeconds: Math.round(((job.finishedAt || Date.now()) - job.startedAt) / 1000),
+    // Include last 20 progress events so callers can display live metrics
+    // without a separate SSE connection (polling fallback).
+    progress: (job.progress || []).slice(-20),
   };
   if (job.error) out.error = job.error;
   if (job.commandResult) out.commandResult = job.commandResult;
   if (job.result) out.result = job.result;
   return out;
+}
+
+/**
+ * Return the full progress log for a running or recently-finished job.
+ * Used by the dashboard SSE endpoint — not exposed as an MCP tool.
+ */
+function getJobProgress(jobId) {
+  const job = JOBS.get(jobId);
+  if (!job) return null;
+  return { status: job.status, progress: job.progress || [], startedAt: job.startedAt, finishedAt: job.finishedAt || null };
 }
 
 // ---------------------------------------------------------------------------

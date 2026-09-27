@@ -225,17 +225,112 @@ function registerMcpProvider(context) {
   }));
 }
 
-/** Status bar: shows dashboard connection state (browser Run-again live). */
+// ---------------------------------------------------------------------------
+// Court state — populated whenever a court job settles so the status bar can
+// show a live summary without polling. Keyed by lower-case court name.
+// ---------------------------------------------------------------------------
+const _courtState = {
+  redline: null,   // { green, red, yellow, total } | null
+  splitbrain: null, // { trustGap, honestMutationScore } | null
+  warpath: null,   // { hasIncident: bool } | null
+};
+
+/**
+ * Called from the panel's job completion hook (injected via onCourtResult) or
+ * after cmdRunCourt / cmdGenerateReport settle. Updates the ambient court
+ * summary and refreshes the status bar immediately.
+ */
+function notifyCourtResult(court, result) {
+  if (!court || !result) return;
+  const c = court.toLowerCase();
+  if (c === 'redline' && result.summary) {
+    _courtState.redline = { ...result.summary };
+  } else if (c === 'splitbrain') {
+    if (result.honestMutationScore != null || result.trustGap != null) {
+      _courtState.splitbrain = {
+        trustGap: result.trustGap,
+        honestMutationScore: result.honestMutationScore,
+      };
+    }
+  } else if (c === 'warpath') {
+    _courtState.warpath = { hasIncident: Boolean(result.incidentWindow) };
+  }
+  updateStatusBar();
+}
+
+/** Build a compact status bar label from the current court state. */
+function buildStatusText() {
+  const parts = [];
+
+  if (_courtState.redline) {
+    const r = _courtState.redline;
+    const icon = r.red > 0 ? '$(error)' : r.yellow > 0 ? '$(warning)' : '$(pass)';
+    parts.push(`${icon} R:${r.green}↑${r.red}↓`);
+  }
+
+  if (_courtState.splitbrain) {
+    const sb = _courtState.splitbrain;
+    const score = sb.honestMutationScore != null ? Math.round(sb.honestMutationScore * 100) : null;
+    const gap = sb.trustGap != null ? sb.trustGap : null;
+    if (score != null) {
+      const icon = score >= 80 ? '$(shield)' : score >= 50 ? '$(warning)' : '$(error)';
+      parts.push(`${icon} SB:${score}%`);
+    }
+    if (gap != null && gap > 0) parts.push(`$(diff) gap:${gap}`);
+  }
+
+  if (_courtState.warpath) {
+    const icon = _courtState.warpath.hasIncident ? '$(flame)' : '$(check)';
+    parts.push(`${icon} WP`);
+  }
+
+  if (dashboardCmd.isConnected()) parts.push('$(radio-tower)');
+
+  if (parts.length === 0) return '$(shield) TRIUMPH';
+  return '$(shield) ' + parts.join('  ');
+}
+
+/** Build tooltip text from current court state. */
+function buildStatusTooltip() {
+  const lines = ['TRIUMPH 3-Court Audit'];
+  if (_courtState.redline) {
+    const r = _courtState.redline;
+    lines.push(`REDLINE: ${r.green} green · ${r.red} red · ${r.yellow} yellow of ${r.total}`);
+  }
+  if (_courtState.splitbrain) {
+    const sb = _courtState.splitbrain;
+    const score = sb.honestMutationScore != null ? `${Math.round(sb.honestMutationScore * 100)}%` : 'n/a';
+    lines.push(`SPLITBRAIN: mutation score ${score}${sb.trustGap != null ? `  trust gap ${sb.trustGap}` : ''}`);
+  }
+  if (_courtState.warpath) {
+    lines.push(`WARPATH: ${_courtState.warpath.hasIncident ? 'incident window active' : 'clear'}`);
+  }
+  if (dashboardCmd.isConnected()) lines.push('Dashboard connected — browser "Run again" is live.');
+  if (lines.length === 1) lines.push('Click to run courts or open dashboard.');
+  return lines.join('\n');
+}
+
+/** Status bar: shows persistent audit health summary, always visible once
+ *  the extension activates. Color codes red/amber/green by audit state. */
 let _status = null;
 function updateStatusBar() {
   if (!_status) return;
-  if (dashboardCmd.isConnected()) {
-    _status.text = '$(radio-tower) TRIUMPH dashboard';
-    _status.tooltip = 'Dashboard connected — browser "Run again" is live.';
-    _status.show();
+  _status.text = buildStatusText();
+  _status.tooltip = buildStatusTooltip();
+
+  // Color coding: red if any REDLINE failures or critical trust gap.
+  const hasRed = _courtState.redline && _courtState.redline.red > 0;
+  const hasBadGap = _courtState.splitbrain && _courtState.splitbrain.trustGap > 20;
+  const hasWarn = _courtState.redline && (_courtState.redline.red === 0 && _courtState.redline.yellow > 0);
+  if (hasRed || hasBadGap) {
+    _status.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground');
+  } else if (hasWarn) {
+    _status.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
   } else {
-    _status.hide();
+    _status.backgroundColor = undefined;
   }
+
+  _status.show();
 }
 
 /** Construct + register the persistent panel's WebviewViewProvider, if this
@@ -252,6 +347,9 @@ function registerPanel(context) {
     // dashboardRun job settles, regardless of whether it was triggered from
     // the webview or from the triumph.dashboardRun command.
     onDashboardChange: updateStatusBar,
+    // Update the ambient status bar metrics whenever a court result arrives
+    // via the panel's runCourt or generateReport job.
+    onCourtResult: notifyCourtResult,
   });
   // Releases the provider's dashboard onConnectionChange listener on deactivate.
   context.subscriptions.push(provider);
@@ -294,11 +392,51 @@ function activate(context) {
   );
   if (vscode.window.createStatusBarItem) {
     _status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 50);
+    _status.command = 'triumph.statusBarAction';
     context.subscriptions.push(_status);
   }
+
+  // Register the status bar click handler.
+  context.subscriptions.push(
+    vscode.commands.registerCommand('triumph.statusBarAction', async () => {
+      const dashConnected = dashboardCmd.isConnected();
+      const dashUrl = provider.state && provider.state.dashboard && provider.state.dashboard.url;
+
+      const items = [
+        { label: '$(run) Run REDLINE',    action: 'redline' },
+        { label: '$(beaker) Run SPLITBRAIN', action: 'splitbrain' },
+        { label: '$(warning) Run WARPATH',  action: 'warpath' },
+        dashConnected && dashUrl
+          ? { label: '$(radio-tower) Open Dashboard', action: 'openDashboard' }
+          : { label: '$(graph) Open Dashboard (not connected)', action: 'dashboardRun' },
+        { label: '$(preview) Open Last Report', action: 'report' },
+      ].filter(Boolean);
+
+      const pick = await vscode.window.showQuickPick(items, { placeHolder: 'TRIUMPH: choose an action' });
+      if (!pick) return;
+
+      if (pick.action === 'redline' || pick.action === 'splitbrain' || pick.action === 'warpath') {
+        provider.reveal({
+          section: 'run',
+          dispatch: () => handleMessage({ type: 'runCourt', court: pick.action.toUpperCase() }, provider._deps()),
+        });
+      } else if (pick.action === 'openDashboard') {
+        if (dashUrl) vscode.env.openExternal(vscode.Uri.parse(dashUrl));
+      } else if (pick.action === 'dashboardRun') {
+        provider.reveal({ section: 'dashboard', dispatch: () => handleMessage({ type: 'dashboardRun' }, provider._deps()) });
+      } else if (pick.action === 'report') {
+        provider.reveal({ section: 'report', dispatch: () => handleMessage({ type: 'openLastReport', format: 'html' }, provider._deps()) });
+      }
+    })
+  );
+
   // No polling: dashboard.js notifies on session start / server exit /
   // stopAll, so the status bar reflects connection drops immediately.
   context.subscriptions.push(dashboardCmd.onConnectionChange(updateStatusBar));
+
+  // Show idle state immediately on activation (before any court has run).
+  updateStatusBar();
+
   registerMcpProvider(context);
 }
 

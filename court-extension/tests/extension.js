@@ -37,6 +37,7 @@ const vscode = {
   ProgressLocation: { Notification: 1 },
   ViewColumn: { One: 1 },
   StatusBarAlignment: { Left: 1, Right: 2 },
+  ThemeColor: class { constructor(id) { this.id = id; } },
 };
 
 // Intercept require('vscode') inside extension.js.
@@ -96,6 +97,7 @@ function mkVscode(opts = {}) {
     ProgressLocation: { Notification: 1 },
     ViewColumn: { One: 1 },
     StatusBarAlignment: { Left: 1, Right: 2 },
+    ThemeColor: class { constructor(id) { this.id = id; } },
   };
   return { vscode, rec };
 }
@@ -168,9 +170,9 @@ function fakeWebviewView(posted) {
   const ext = require('../src/extension.js');
 
   const activateContext = { subscriptions: [] };
-  await t('activate registers all 5 commands', () => {
+  await t('activate registers all commands including statusBarAction', () => {
     ext.activate(activateContext);
-    for (const c of ['triumph.installCourts', 'triumph.detectConfig', 'triumph.runCourt', 'triumph.generateReport', 'triumph.openReport', 'triumph.dashboardRun']) {
+    for (const c of ['triumph.installCourts', 'triumph.detectConfig', 'triumph.runCourt', 'triumph.generateReport', 'triumph.openReport', 'triumph.dashboardRun', 'triumph.statusBarAction']) {
       assert.ok(registered.commands.includes(c), 'missing command ' + c);
     }
   });
@@ -203,9 +205,10 @@ function fakeWebviewView(posted) {
     assert.ok(!/process\.env\.[A-Z_]*API_KEY/.test(src));
   });
 
-  await t('status bar item created and hidden when dashboard disconnected', () => {
+  await t('status bar item created and always visible (ambient audit health indicator)', () => {
     assert.ok(registered.statusBar, 'a status bar item should be created on activate');
-    assert.ok(!registered.statusBar.visible, 'hidden while dashboard is not connected');
+    assert.ok(registered.statusBar.visible, 'always shown — idle state shown before first court run');
+    assert.ok(registered.statusBar.text, 'status bar text must be non-empty');
   });
 
   await t('deactivate() resolves and stopSession is safe + idempotent', async () => {
