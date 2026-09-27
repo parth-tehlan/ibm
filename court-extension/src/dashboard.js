@@ -39,6 +39,25 @@ let closingServer = null; // in-flight stop of a replaced child
 let stopping = false; // set while stopAll drains everything
 const sessions = new Map(); // projectId -> Promise<session>
 
+// --- connection-change notification (no polling; contract D) ----------------
+const connectionListeners = new Set();
+
+/** Register a listener called with isConnected()'s current value whenever
+ *  the dashboard connection state may have changed. Never throws into
+ *  dashboard control flow — each listener runs in its own try/catch. */
+function onConnectionChange(fn) {
+  connectionListeners.add(fn);
+  return { dispose() { connectionListeners.delete(fn); } };
+}
+
+function notifyConnection() {
+  let connected;
+  try { connected = isConnected(); } catch { return; }
+  for (const fn of connectionListeners) {
+    try { fn(connected); } catch { /* listener errors must never propagate */ }
+  }
+}
+
 /** Canonical workspace URI → stable project {id,name}.
  *  Uses the actual selected folder (realpath'd), never workspaceFolders[0]
  *  by accident in a multi-root window. */
@@ -208,6 +227,7 @@ async function startSession(vscode, { root, enginePath, historyDir, onError, pol
           if (!s.stopping && !stopping) s.onError?.(new Error('Dashboard server exited; run the command again to reconnect'));
         }, () => { if (sessions.get(id) === pending) sessions.delete(id); });
       }
+      notifyConnection();
     };
     // A broken IPC channel is as fatal as a process exit for registration.
     server.start().then(() => {
@@ -253,6 +273,7 @@ async function startSession(vscode, { root, enginePath, historyDir, onError, pol
            if (!session.controller.signal.aborted) await dash.abandonRun();
          }).finally(() => { session.busy = false; });
       }, pollIntervalMs);
+      notifyConnection();
       return session;
     } catch (e) { await dash.stop(); if (sessions.get(project.id) === promise) sessions.delete(project.id); throw e; }
   })();
@@ -280,6 +301,7 @@ async function stopAll() {
   } finally {
     try { await server?.stop(); await closingServer; } finally { stopping = false; }
   }
+  notifyConnection();
 }
 const stopSession = stopAll;
 
@@ -303,4 +325,4 @@ async function runAndPublish(vscode, opts) {
 }
 
 module.exports = { runAndPublish, startSession, ensureSession, stopAll, stopSession,
-  isConnected, preflight, projectFor, collectCourts, outcome, gitProvenance };
+  isConnected, onConnectionChange, preflight, projectFor, collectCourts, outcome, gitProvenance };

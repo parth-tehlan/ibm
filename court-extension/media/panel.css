@@ -1,0 +1,395 @@
+/* media/panel.css — TRIUMPH webview panel styling.
+ * Colors are exclusively var(--vscode-*) theme tokens; no hardcoded colors.
+ * Designed to remain usable at narrow (sidebar) widths.
+ */
+
+html, body {
+  margin: 0;
+  padding: 0;
+  color: var(--vscode-foreground);
+  background-color: var(--vscode-editor-background, var(--vscode-sideBar-background));
+  font-family: var(--vscode-font-family, sans-serif);
+  font-size: var(--vscode-font-size, 13px);
+}
+
+body {
+  padding: 8px 10px 16px;
+  box-sizing: border-box;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 100%;
+}
+
+/* ------------------------------------------------------------------ notice/banner */
+
+.notice {
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  border: 1px solid var(--vscode-inputValidation-errorBorder, var(--vscode-panel-border));
+  border-radius: 3px;
+  font-size: 0.95em;
+}
+
+.notice-warning {
+  border-color: var(--vscode-editorWarning-foreground);
+  color: var(--vscode-foreground);
+}
+
+.banner {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  border: 1px solid var(--vscode-inputValidation-errorBorder, var(--vscode-errorForeground));
+  background-color: var(--vscode-inputValidation-errorBackground, transparent);
+  border-radius: 3px;
+}
+
+.banner-text {
+  color: var(--vscode-errorForeground);
+  word-break: break-word;
+  flex: 1 1 auto;
+}
+
+.banner-dismiss {
+  flex: 0 0 auto;
+}
+
+/* ------------------------------------------------------------------ cards */
+
+.card {
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 4px;
+  padding: 10px 12px;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.card > h2 {
+  margin: 0 0 8px;
+  font-size: 1.05em;
+  font-weight: 600;
+  color: var(--vscode-foreground);
+}
+
+.card > h3 {
+  margin: 10px 0 6px;
+  font-size: 0.95em;
+  font-weight: 600;
+}
+
+.section-highlight {
+  border-color: var(--vscode-focusBorder);
+  box-shadow: 0 0 0 1px var(--vscode-focusBorder);
+}
+
+/* ------------------------------------------------------------------ fields */
+
+.field-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: baseline;
+  margin-bottom: 4px;
+  min-width: 0;
+}
+
+.field-label {
+  color: var(--vscode-descriptionForeground);
+  flex: 0 0 auto;
+}
+
+.field-value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.field-mono {
+  font-family: var(--vscode-editor-font-family, monospace);
+}
+
+.value-ok {
+  color: var(--vscode-testing-iconPassed, var(--vscode-foreground));
+}
+
+.value-warn {
+  color: var(--vscode-editorWarning-foreground);
+}
+
+.notes-list, .summary-list {
+  margin: 4px 0 8px;
+  padding-left: 18px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.notes-list li, .summary-list li {
+  margin-bottom: 2px;
+  overflow-wrap: anywhere;
+}
+
+.summary-key {
+  color: var(--vscode-descriptionForeground);
+}
+
+.summary-value {
+  color: var(--vscode-foreground);
+  font-weight: 600;
+}
+
+.empty-state {
+  color: var(--vscode-descriptionForeground);
+  font-style: italic;
+  margin: 4px 0 8px;
+}
+
+/* ------------------------------------------------------------------ buttons */
+
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.btn {
+  appearance: none;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  padding: 4px 12px;
+  font-family: inherit;
+  font-size: inherit;
+  cursor: pointer;
+  color: var(--vscode-button-foreground);
+  background-color: var(--vscode-button-background);
+  min-height: 26px;
+}
+
+.btn:hover:not(:disabled) {
+  background-color: var(--vscode-button-hoverBackground);
+}
+
+.btn-secondary {
+  color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
+  background-color: var(--vscode-button-secondaryBackground, transparent);
+  border-color: var(--vscode-panel-border);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background-color: var(--vscode-button-secondaryHoverBackground, var(--vscode-button-secondaryBackground));
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn:focus-visible,
+input:focus-visible,
+select:focus-visible,
+summary:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 2px;
+}
+
+/* ------------------------------------------------------------------ run / court selector */
+
+.court-fieldset {
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 3px;
+  padding: 8px 10px 10px;
+  margin: 0 0 8px;
+}
+
+.court-fieldset > legend {
+  padding: 0 4px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.radio-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 3px 0;
+}
+
+.radio-option label {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.radio-title {
+  font-weight: 600;
+}
+
+.radio-desc {
+  color: var(--vscode-descriptionForeground);
+}
+
+/* ------------------------------------------------------------------ job indicator */
+
+.job-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 3px;
+}
+
+.job-label {
+  font-weight: 600;
+}
+
+.job-elapsed {
+  color: var(--vscode-descriptionForeground);
+}
+
+.spinner {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid var(--vscode-descriptionForeground);
+  border-top-color: var(--vscode-focusBorder);
+  animation: triumph-spin 0.8s linear infinite;
+  flex: 0 0 auto;
+}
+
+@keyframes triumph-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ------------------------------------------------------------------ log */
+
+.log-heading {
+  color: var(--vscode-foreground);
+}
+
+.log-container {
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 3px;
+  background-color: var(--vscode-editor-background, transparent);
+}
+
+.log-list {
+  list-style: none;
+  margin: 0;
+  padding: 4px 6px;
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 0.9em;
+}
+
+.log-entry {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 2px 0;
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.log-entry:last-child {
+  border-bottom: none;
+}
+
+.log-ts {
+  color: var(--vscode-descriptionForeground);
+  flex: 0 0 auto;
+}
+
+.log-level {
+  flex: 0 0 auto;
+  font-weight: 600;
+}
+
+.log-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  flex: 1 1 200px;
+}
+
+.log-info .log-level {
+  color: var(--vscode-descriptionForeground);
+}
+
+.log-warn .log-level,
+.log-warn .log-text {
+  color: var(--vscode-editorWarning-foreground);
+}
+
+.log-error .log-level,
+.log-error .log-text {
+  color: var(--vscode-errorForeground);
+}
+
+/* ------------------------------------------------------------------ dashboard badge */
+
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 0.85em;
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+
+.badge-connected {
+  color: var(--vscode-testing-iconPassed, var(--vscode-foreground));
+  border-color: var(--vscode-testing-iconPassed, var(--vscode-panel-border));
+}
+
+.badge-disconnected {
+  color: var(--vscode-descriptionForeground);
+  border-color: var(--vscode-panel-border);
+}
+
+/* ------------------------------------------------------------------ inputs */
+
+.dropdown {
+  color: var(--vscode-dropdown-foreground);
+  background-color: var(--vscode-dropdown-background);
+  border: 1px solid var(--vscode-dropdown-border, var(--vscode-panel-border));
+  border-radius: 2px;
+  padding: 3px 6px;
+  font-family: inherit;
+  font-size: inherit;
+  min-width: 0;
+  max-width: 100%;
+}
+
+input[type="radio"] {
+  accent-color: var(--vscode-focusBorder);
+  margin-top: 2px;
+  flex: 0 0 auto;
+}
+
+/* ------------------------------------------------------------------ narrow widths */
+
+@media (max-width: 360px) {
+  .button-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .btn {
+    width: 100%;
+  }
+
+  .field-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

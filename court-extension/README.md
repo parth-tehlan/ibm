@@ -43,9 +43,46 @@ schemas/triumph-config.schema.json
 bin/
   triumph-setup.js       ← "Install courts for this repo" (CLI form of Role 1)
   triumph-report.js      ← collect engine JSON over MCP, render both reports
-src/extension.js         ← VS Code extension host (commands + MCP provider)
+src/extension.js         ← VS Code extension host (activation, MCP provider, status bar)
+src/panel.js             ← TRIUMPH panel: WebviewViewProvider for the "3-Court"
+                           Activity Bar view (triumph.panel) — Config / Run /
+                           Last report / Dashboard / Install courts sections
+src/actions.js           ← action handlers the panel (and the commands) dispatch
+                           into — detect config, run a court, generate report,
+                           open report, install courts, dashboard run
+media/                   ← panel webview assets (panel.js, styles, icon)
 tests/run.js             ← zero-dep smoke tests
+tests/panel.js           ← panel provider + message-routing tests
 ```
+
+## VS Code: the TRIUMPH panel
+
+The primary interface is the **TRIUMPH** view in the Activity Bar (webview
+view `triumph.panel`, labeled "3-Court"). It has five sections:
+
+- **Config** — auto-detect `.triumph.yml`, or open it.
+- **Run** — pick a court (REDLINE / SPLITBRAIN / WARPATH) and run it, or
+  generate the full report; a live log and job indicator show progress (one
+  job runs at a time).
+- **Last report** — summary of the most recent run, with buttons to open the
+  HTML report (reused webview tab) or the Markdown report.
+- **Dashboard** — connection badge, run courts straight to the dashboard,
+  open the dashboard, refresh.
+- **Install courts** — pick a host and install.
+
+Progress streams into the panel's log instead of notification toasts.
+
+## Commands (back-compat entry points)
+
+The six commands below still work, but they now just reveal the panel and
+either run the action directly or focus the relevant section for you to
+finish there:
+
+- `triumph.detectConfig`, `triumph.generateReport`, `triumph.openReport`,
+  `triumph.dashboardRun` — reveal the panel and run the action immediately.
+- `triumph.installCourts`, `triumph.runCourt` — reveal the panel at the
+  Install courts / Run section, with the host preselected from
+  `triumph.defaultHost` where applicable; no quickpick — pick in the panel.
 
 ## Quick start (CLI, host-agnostic)
 
@@ -64,15 +101,22 @@ node court-extension/bin/triumph-report.js --repo .
 
 ## Quick start (VS Code)
 
-1. Open a repo. Run **TRIUMPH: Install courts for this repo**.
-2. The extension auto-detects `.triumph.yml`, then writes the court subagents
-   + MCP wiring into your host (`.claude/`, `.bob/`, `.codex/`,
-   `.vscode/mcp.json` + `.github/chatmodes/`, or generic `.triumph/`).
-3. The extension also registers the engine as an MCP server with VS Code, so
+1. Open a repo. Click the **TRIUMPH** icon in the Activity Bar to open the
+   3-Court panel.
+2. **Config** section: auto-detect `.triumph.yml`.
+3. **Install courts** section: pick a host and install — this writes the
+   court subagents + MCP wiring into your host (`.claude/`, `.bob/`,
+   `.codex/`, `.vscode/mcp.json` + `.github/chatmodes/`, or generic
+   `.triumph/`).
+4. The extension also registers the engine as an MCP server with VS Code, so
    agent-mode chat can call `redline_*` / `splitbrain_*` / `warpath_*` with
    VS Code's own model. The caller is the director.
-4. **TRIUMPH: Generate 3-court report** runs all courts and opens the
-   interactive HTML report.
+5. **Run** section: pick REDLINE/SPLITBRAIN/WARPATH and run it, or generate
+   the full report — progress streams into the panel's log, and **Last
+   report** opens the resulting HTML/Markdown.
+
+The six `triumph.*` commands (Command Palette) remain as shortcuts into the
+same panel — see "Commands (back-compat entry points)" above.
 
 ## The engine standalone (any MCP host)
 

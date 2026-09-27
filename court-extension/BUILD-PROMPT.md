@@ -31,8 +31,12 @@ recognized location, so the caller runs them with its own model:
 - **IBM Bob** → `.bob/` config + `.bob/mcp.json`
 - **Other MCP/agent hosts** → their format (behind a per-host adapter)
 
-One user command ("Install courts for this repo") does the drop-in for whichever
-host the user is currently in. The caller — not us — is the director.
+The primary interface is the TRIUMPH Activity Bar panel (webview view
+"3-Court"), with an "Install courts" section (host dropdown + Install) that
+does the drop-in for whichever host the user picks. The six `triumph.*`
+commands (e.g. "Install courts for this repo") remain as back-compat entry
+points that reveal the panel at that section. The caller — not us — is the
+director.
 
 ### 2. Tool + engine server (model-free MCP server)
 Runs the 3-court engine as an MCP server wired into the above agents:
