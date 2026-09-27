@@ -112,6 +112,14 @@ async function main() {
   const repo = buildRepo();
   console.log('  scratch repo:', repo);
 
+  // gaia_verify_diff runs a real jest against the scratch repo. The repo has
+  // no node_modules and the extension dir ships none, so point GAIA_TOOL_PATH
+  // at the sibling northstar repo's node_modules (which carries a real jest).
+  // The engine subprocess inherits this env; toolenv resolves jest from it.
+  const nsToolDir = path.resolve(ROOT, '..', 'northstar', 'node_modules');
+  const prevToolPath = process.env.GAIA_TOOL_PATH;
+  if (fs.existsSync(nsToolDir)) process.env.GAIA_TOOL_PATH = nsToolDir;
+
   const child = spawn('node', [path.join(ROOT, 'court.js'), '--repo', repo], {
     stdio: ['pipe', 'pipe', 'inherit'],
   });
@@ -222,6 +230,9 @@ test('above minimum gets a discount (never tests the boundary)', () => {
 
   child.kill();
   fs.rmSync(repo, { recursive: true, force: true });
+  // Restore the caller's GAIA_TOOL_PATH so nothing leaks beyond this test.
+  if (prevToolPath === undefined) delete process.env.GAIA_TOOL_PATH;
+  else process.env.GAIA_TOOL_PATH = prevToolPath;
   console.log(`\nverify-diff: ${passed} passed, ${failed} failed`);
   process.exit(failed ? 1 : 0);
 }

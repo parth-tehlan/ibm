@@ -24,9 +24,9 @@ export const snapshotSchema = z.object({
   branch: z.string().nullable(),
   workingTreeDirty: z.boolean().nullable(),
   producer: z.object({ name: z.string().min(1), version: z.string().min(1) }).strict(),
-  redline: courtResultSchema,
-  splitbrain: courtResultSchema,
-  warpath: courtResultSchema,
+  witness: courtResultSchema,
+  trustgap: courtResultSchema,
+  triage: courtResultSchema,
 }).strict();
 
 // The v1 contract is kept local: no dependency on the server's repository-specific
@@ -74,8 +74,8 @@ export function normalizeReport(input) {
     branch: null,
     workingTreeDirty: old.workingTreeDirty,
     producer: { name: 'legacy-snapshot', version: '1' },
-    redline: old.redline,
-    splitbrain: old.splitbrain,
-    warpath: old.warpath,
+    witness: old.redline,
+    trustgap: old.splitbrain,
+    triage: old.warpath,
   });
 }
