@@ -30,7 +30,7 @@ const WHITELIST = new Set([
 ]);
 
 // The single job slot is shared by these five message types (section D).
-const JOB_TYPES = new Set(['detectConfig', 'installCourts', 'runCourt', 'generateReport', 'dashboardRun']);
+const JOB_TYPES = new Set(['detectConfig', 'installCourts', 'runCourt', 'generateReport', 'dashboardRun', 'createSpec']);
 
 /** Map a raw mutation-runner progress event (lib/mutation-progress.js shape)
  *  to an agent-feed step status. Kills are successes, survivors/no-coverage
@@ -586,6 +586,15 @@ async function handleMessage(msg, deps) {
         }
         return result;
       }
+      if (type === 'createSpec') {
+        const result = await actions.createSpec(ctx);
+        provider.state.config = safe(() => actions.configStatus(ctx.root), provider.state.config);
+        if (result && result.specPath) {
+          const doc = await vscode.workspace.openTextDocument(result.specPath);
+          await vscode.window.showTextDocument(doc);
+        }
+        return result;
+      }
       if (type === 'runCourt') {
         const result = await actions.runCourt(ctx, params);
         if (result && result.dashboardUrl) provider.state.dashboard.url = result.dashboardUrl;
@@ -681,21 +690,6 @@ async function handleMessage(msg, deps) {
     return;
   }
 
-  if (type === 'createSpec') {
-    const choice = await vscode.window.showInformationMessage(
-      'No spec file found. Use the spec-author skill to generate one for this repo.',
-      'Open spec-author instructions',
-      'Dismiss'
-    );
-    if (choice === 'Open spec-author instructions') {
-      const skillPath = require('path').join(provider.extensionUri.fsPath, '..', '..', '.bob', 'skills', 'spec-author', 'SKILL.md');
-      safe(async () => {
-        const doc = await vscode.workspace.openTextDocument(skillPath);
-        await vscode.window.showTextDocument(doc);
-      }, undefined);
-    }
-    return;
-  }
 }
 
 module.exports = { TriumphPanelProvider, handleMessage };

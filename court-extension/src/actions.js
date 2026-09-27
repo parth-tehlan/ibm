@@ -476,12 +476,90 @@ async function dashboardRun(ctx) {
   return { url };
 }
 
+/**
+ * Generate a spec file for a repo that doesn't have one.
+ * Reads the configured spec.path from .triumph.yml (falls back to docs/spec.md),
+ * scans the repo for signals, and writes a draft RFC 2119 spec document.
+ * Returns { specPath, clauseCount }.
+ */
+async function createSpec(ctx) {
+  const root = requireRoot(ctx);
+  const specAuthor = require('../lib/spec-author');
+
+  // Determine where the spec should go — use the path already in .triumph.yml
+  // if it's readable, otherwise default to docs/spec.md.
+  let specPath = path.join(root, 'docs', 'spec.md');
+  try {
+    const cfgFile = findConfigPath(root);
+    if (cfgFile) {
+      const text = fs.readFileSync(cfgFile, 'utf8');
+      const m = /spec:\s*\n\s+path:\s*(.+)/.exec(text) || /spec:\s*\{[^}]*path:\s*([^\s,}]+)/.exec(text);
+      if (m) specPath = path.join(root, m[1].trim());
+    }
+  } catch { /* fall back to default */ }
+
+  step(ctx, 'running', `Starting spec-author agent for ${path.relative(root, specPath)}…`);
+
+  const vscodeApi = ctx && ctx.vscode;
+  if (!vscodeApi || !vscodeApi.lm || typeof vscodeApi.lm.selectChatModels !== 'function') {
+    throw new Error('No VS Code language model is available. Sign in to GitHub Copilot, then try Create spec again.');
+  }
+
+  const scan = specAuthor.scanRepo(root);
+  const configPath = findConfigPath(root);
+  const existingConfig = configPath ? fs.readFileSync(configPath, 'utf8') : null;
+  const prompt = [
+    'You are the spec-author agent. Create a truthful first-draft RFC 2119 specification for the repository described below.',
+    'Use only the supplied evidence. Do not invent capabilities. Produce 5-15 clauses when evidence supports them, fewer when it does not.',
+    'Return ONLY valid JSON with this shape: {"specContent":"...","configContent":"..."}.',
+    `Write the specification to ${path.relative(root, specPath)}. It must contain a title, Overview, Clause index, and Clauses with headings like "### S1 — Title" and explicit MUST/SHOULD/MUST NOT levels.`,
+    configPath
+      ? `A config already exists at ${path.relative(root, configPath)}. Set configContent to an empty string; do not replace or rewrite that file.`
+      : 'No config exists. Include a complete .triumph.yml in configContent, with spec.path set to the requested spec path and clausePattern/clauseIdPattern matching S-numbered clauses.',
+    'Do not include markdown fences around the JSON and do not include commentary outside the JSON.',
+    `Evidence:\n${JSON.stringify(scan, null, 2)}`,
+    existingConfig ? `Existing config (read-only context):\n${existingConfig}` : '',
+  ].filter(Boolean).join('\n\n');
+
+  const models = await vscodeApi.lm.selectChatModels({ vendor: 'copilot' });
+  if (!models || !models.length) {
+    throw new Error('No Copilot language model is available. Sign in to GitHub Copilot, then try Create spec again.');
+  }
+  const message = vscodeApi.LanguageModelChatMessage && vscodeApi.LanguageModelChatMessage.User
+    ? vscodeApi.LanguageModelChatMessage.User(prompt)
+    : { role: 'user', content: prompt };
+  const token = vscodeApi.CancellationTokenSource ? new vscodeApi.CancellationTokenSource().token : undefined;
+  const response = await models[0].sendRequest([message], {}, token);
+  let raw = '';
+  for await (const fragment of response.text) raw += fragment;
+  const jsonText = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
+  let generated;
+  try { generated = JSON.parse(jsonText); } catch (e) {
+    throw new Error(`Spec-author agent returned invalid JSON: ${e.message}`);
+  }
+  if (!generated || typeof generated.specContent !== 'string' || !/###\s+S\d+\s+[—-]/.test(generated.specContent)) {
+    throw new Error('Spec-author agent returned no usable specification. Try Create spec again.');
+  }
+
+  fs.mkdirSync(path.dirname(specPath), { recursive: true });
+  fs.writeFileSync(specPath, generated.specContent, 'utf8');
+  if (!configPath && typeof generated.configContent === 'string' && generated.configContent.trim()) {
+    fs.writeFileSync(path.join(root, '.triumph.yml'), generated.configContent.trimEnd() + '\n', 'utf8');
+  }
+  const written = specPath;
+  const clauseCount = (generated.specContent.match(/^###\s+S\d+\s+/gm) || []).length;
+  step(ctx, 'success', `Spec written — ${clauseCount} clauses at ${path.relative(root, written)}`);
+  emit(ctx, 'info', `spec-author agent: wrote ${written} (${clauseCount} clauses)`);
+  return { specPath: written, clauseCount };
+}
+
 module.exports = {
   COURTS,
   REPORT_FORMATS,
   configStatus,
   detectConfig,
   installCourts,
+  createSpec,
   runCourt,
   generateReport,
   findLastReport,
