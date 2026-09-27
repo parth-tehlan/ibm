@@ -1,5 +1,5 @@
-# TRIUMPH — Custom Modes (org chart / personas)
-# Three courts (REDLINE / SPLITBRAIN / WARPATH). Each mode's tool groups and
+# Gaia — Custom Modes (org chart / personas)
+# Three courts (WITNESS / TRUSTGAP / TRIAGE). Each mode's tool groups and
 # edit fence enforce the wall declaratively — no scripts.
 #
 # HOW THE WALL IS ENFORCED (declarative Bob configuration):
@@ -14,23 +14,23 @@
 # HONEST LIMITS: `read` is a flat group and is not path-scoped in Bob's
 # documented schema; the witness claim is "structurally unable to EDIT src/,
 # and instructed never to open it." The engine enforces the read wall for
-# REDLINE tooling.
+# WITNESS tooling.
 
 # Bob/Roo custom modes schema: top-level OBJECT with a `customModes` array.
 # (A bare top-level array is rejected: "expected object, received array".)
 customModes:
   - slug: witness
-    name: REDLINE Witness
+    name: WITNESS Witness
     roleDefinition: Spec-witness. Authors tests from the spec contract alone; never reads the implementation.
     groups:
       - read
       - - edit
-        - fileRegex: "^(?!.*\\.\\.)tests/(clause-|policy-|redline-)|^evidence/"
+        - fileRegex: "^(?!.*\\.\\.)tests/(clause-|policy-|witness-)|^evidence/"
       - mcp
     customInstructions: .bob/rules-witness/00-never-src.md
 
   - slug: isolate
-    name: SPLITBRAIN Isolate
+    name: TRUSTGAP Isolate
     roleDefinition: Honesty auditor. Scores the test suite via mutation kill-rate; never reads the implementation.
     groups:
       - read
@@ -40,7 +40,7 @@ customModes:
     customInstructions: .bob/rules-isolate/00-never-src.md
 
   - slug: surgeon
-    name: WARPATH Surgeon
+    name: TRIAGE Surgeon
     roleDefinition: Applies the minimal fix to the root-cause seam, guarded by rollback.
     groups:
       - read
@@ -51,7 +51,7 @@ customModes:
     customInstructions: .bob/rules-surgeon/00-minimal-fixes.md
 
   - slug: incident-commander
-    name: WARPATH Incident Commander
+    name: TRIAGE Incident Commander
     roleDefinition: Opens/closes the war room; writes the postmortem from triage + forensics evidence.
     groups:
       - read

@@ -1,4 +1,4 @@
-/* media/panel.css — TRIUMPH webview panel styling.
+/* media/panel.css — Gaia webview panel styling.
  * Colors are exclusively var(--vscode-*) theme tokens; no hardcoded colors.
  * Designed to remain usable at narrow (sidebar) widths.
  */
@@ -263,11 +263,11 @@ summary:focus-visible {
   border-radius: 50%;
   border: 2px solid var(--vscode-descriptionForeground);
   border-top-color: var(--vscode-focusBorder);
-  animation: triumph-spin 0.8s linear infinite;
+  animation: gaia-spin 0.8s linear infinite;
   flex: 0 0 auto;
 }
 
-@keyframes triumph-spin {
+@keyframes gaia-spin {
   to { transform: rotate(360deg); }
 }
 

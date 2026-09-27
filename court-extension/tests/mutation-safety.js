@@ -6,7 +6,7 @@ const path = require('node:path');
 const { McpClient } = require('../src/mcp-client');
 
 (async () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'triumph-mutation-safety-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gaia-mutation-safety-'));
   const client = new McpClient(path.resolve(__dirname, '..', 'court.js'), root);
   try {
     fs.mkdirSync(path.join(root, 'reports', 'mutation'), { recursive: true });
@@ -14,7 +14,7 @@ const { McpClient } = require('../src/mcp-client');
     fs.mkdirSync(path.join(root, 'tests'));
     fs.writeFileSync(path.join(root, 'docs', 'spec.md'), '## W1 — sample\n');
     fs.writeFileSync(path.join(root, 'reports', 'mutation', 'mutation.json'), '{"old":"not evidence"}\n');
-    fs.writeFileSync(path.join(root, '.triumph.yml'), [
+    fs.writeFileSync(path.join(root, '.gaia.yml'), [
       'version: 1',
       'spec: { path: docs/spec.md, clausePattern: "^## (W\\d+)", clauseIdPattern: "^W\\d+$" }',
       'tests: { framework: jest, dir: tests, clauseTestPattern: "clause-{{clause}}.test.ts" }',
@@ -23,14 +23,14 @@ const { McpClient } = require('../src/mcp-client');
     ].join('\n') + '\n');
     fs.writeFileSync(path.join(root, 'mutation.cjs'), 'setTimeout(() => { console.error("stryker dry-run failed"); process.exit(42) }, 250)\n');
     await client.start();
-    const started = await client.call('splitbrain_mutate');
+    const started = await client.call('trustgap_mutate');
     assert.equal(started.status, 'started');
-    const busy = await client.call('splitbrain_mutate');
+    const busy = await client.call('trustgap_mutate');
     assert.equal(busy.status, 'busy');
     assert.equal(busy.job_id, started.job_id);
     let status;
     for (let i = 0; i < 30; i++) {
-      status = await client.call('splitbrain_status', { job_id: started.job_id });
+      status = await client.call('trustgap_status', { job_id: started.job_id });
       if (status.status !== 'running') break;
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
@@ -42,10 +42,10 @@ const { McpClient } = require('../src/mcp-client');
     assert.equal(status.result, undefined, 'historical report must not certify a failed command');
 
     fs.writeFileSync(path.join(root, 'mutation.cjs'), 'console.log("no report written")\n');
-    const second = await client.call('splitbrain_mutate');
+    const second = await client.call('trustgap_mutate');
     assert.equal(second.status, 'started');
     for (let i = 0; i < 30; i++) {
-      status = await client.call('splitbrain_status', { job_id: second.job_id });
+      status = await client.call('trustgap_status', { job_id: second.job_id });
       if (status.status !== 'running') break;
       await new Promise((resolve) => setTimeout(resolve, 100));
     }

@@ -1,23 +1,23 @@
 ---
-name: redline-audit
-description: Grade REDLINE completeness — verify every clause-wall entry has a spec-legal test, check coverage, and publish the clause-wall status to evidence/. Activate for a REDLINE coverage audit.
+name: witness-audit
+description: Grade WITNESS completeness — verify every clause-wall entry has a spec-legal test, check coverage, and publish the clause-wall status to evidence/. Activate for a WITNESS coverage audit.
 user-invocable: true
 ---
 
-# redline-audit (REDLINE)
+# witness-audit (WITNESS)
 
 Grade the lane: confirm every clause got a spec-legal test, that tests stayed
 honest (derived from the document), and record the wall status.
 
 ## Wall
 
-Like the rest of REDLINE, you do not read `src/`. You audit the *tests* and
+Like the rest of WITNESS, you do not read `src/`. You audit the *tests* and
 the *clause wall*, not the implementation.
 
 ## Method
 
 1. Load the wall (`evidence/clauses.json`) and the test→clause mapping
-   (`tests/redline-coverage.json`). If either is missing, record a hard gap
+   (`tests/witness-coverage.json`). If either is missing, record a hard gap
    and stop.
 2. Build the coverage matrix: for each clause ID, which test file(s) claim
    coverage. Mark `testCovered: true/false`.

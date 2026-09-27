@@ -73,9 +73,9 @@ function freshPanel(vscodeMock) {
 
 function makeFakeActions(overrides) {
   return Object.assign({
-    COURTS: ['REDLINE', 'SPLITBRAIN', 'WARPATH'],
-    configStatus: (root) => ({ exists: !!root, path: root ? root + '/.triumph.yml' : null, notes: [] }),
-    detectConfig: async (ctx) => { ctx.emit({ level: 'info', text: 'detect done' }); return { path: ctx.root + '/.triumph.yml', notes: ['note1'] }; },
+    COURTS: ['WITNESS', 'TRUSTGAP', 'TRIAGE'],
+    configStatus: (root) => ({ exists: !!root, path: root ? root + '/.gaia.yml' : null, notes: [] }),
+    detectConfig: async (ctx) => { ctx.emit({ level: 'info', text: 'detect done' }); return { path: ctx.root + '/.gaia.yml', notes: ['note1'] }; },
     installCourts: async (ctx, { host }) => { ctx.emit({ level: 'info', text: `installed ${host}` }); return { hosts: [host], files: ['a.md'], errors: [] }; },
     runCourt: async (ctx, { court }) => { ctx.emit({ level: 'info', text: `${court} running` }); return { summary: { green: 1, red: 0, yellow: 0, total: 1 } }; },
     generateReport: async (ctx) => { ctx.emit({ level: 'info', text: 'report written: h, m' }); return { htmlPath: 'h.html', mdPath: 'm.md', generatedAt: 'now' }; },
@@ -93,8 +93,8 @@ function makeFakeActions(overrides) {
 
   await t('resolveWebviewView: CSP default-src none, script nonce matches, no inline script bodies, links panel.css/panel.js', () => {
     const { vscode } = mkVscode();
-    const { TriumphPanelProvider } = freshPanel(vscode);
-    const provider = new TriumphPanelProvider({
+    const { GaiaPanelProvider } = freshPanel(vscode);
+    const provider = new GaiaPanelProvider({
       repoRoot: () => null, enginePath: () => '/e.js',
       context: { extensionUri: { fsPath: '/ext' } },
     });
@@ -132,10 +132,10 @@ function makeFakeActions(overrides) {
 
   await t('`ready` posts a `state` message whose shape matches the contract D snapshot', async () => {
     const { vscode } = mkVscode({ workspaceFolders: [{ uri: { fsPath: '/repo' } }] });
-    const { TriumphPanelProvider } = freshPanel(vscode);
+    const { GaiaPanelProvider } = freshPanel(vscode);
     const actions = makeFakeActions();
     const posted = [];
-    const provider = new TriumphPanelProvider({
+    const provider = new GaiaPanelProvider({
       actions, repoRoot: () => '/repo', enginePath: () => '/e.js',
       dashboardCmd: { isConnected: () => false },
       context: { extensionUri: { fsPath: '/ext' } },
@@ -166,14 +166,14 @@ function makeFakeActions(overrides) {
   // =========================================================================
 
   const { vscode: routerVscode, rec: routerRec } = mkVscode();
-  const { TriumphPanelProvider, handleMessage } = freshPanel(routerVscode);
+  const { GaiaPanelProvider, handleMessage } = freshPanel(routerVscode);
 
   await t('detectConfig job: calls actions.detectConfig, opens doc, updates state.config, clears job', async () => {
     const actions = makeFakeActions();
-    const provider = new TriumphPanelProvider({ actions, repoRoot: () => '/repo', enginePath: () => '/e.js' });
+    const provider = new GaiaPanelProvider({ actions, repoRoot: () => '/repo', enginePath: () => '/e.js' });
     routerRec.opened.length = 0;
     await handleMessage({ type: 'detectConfig' }, { provider, actions });
-    assert.strictEqual(provider.state.config.path, '/repo/.triumph.yml');
+    assert.strictEqual(provider.state.config.path, '/repo/.gaia.yml');
     assert.deepStrictEqual(provider.state.config.notes, ['note1']);
     assert.strictEqual(routerRec.opened.length, 1, 'should open the written config in an editor');
     assert.ok(provider.state.log.some((l) => l.text === 'detect done'));
@@ -182,7 +182,7 @@ function makeFakeActions(overrides) {
 
   await t('installCourts job: valid host reaches actions.installCourts, refreshes config', async () => {
     const actions = makeFakeActions();
-    const provider = new TriumphPanelProvider({ actions, repoRoot: () => '/repo', enginePath: () => '/e.js' });
+    const provider = new GaiaPanelProvider({ actions, repoRoot: () => '/repo', enginePath: () => '/e.js' });
     await handleMessage({ type: 'installCourts', host: 'all' }, { provider, actions });
     assert.ok(provider.state.log.some((l) => l.text === 'installed all'));
     assert.strictEqual(provider.state.config.exists, true);
@@ -190,38 +190,38 @@ function makeFakeActions(overrides) {
 
   await t('installCourts: invalid host -> error message, action never called', async () => {
     const actions = makeFakeActions({ installCourts: async () => { throw new Error('should not be called'); } });
-    const provider = new TriumphPanelProvider({ actions, repoRoot: () => '/repo', enginePath: () => '/e.js' });
+    const provider = new GaiaPanelProvider({ actions, repoRoot: () => '/repo', enginePath: () => '/e.js' });
     await handleMessage({ type: 'installCourts', host: 'bogus-host' }, { provider, actions });
     assert.ok(provider.state.log.some((l) => l.level === 'error' && /host must be one of/.test(l.text)));
   });
 
   await t('runCourt job: valid court opens JSON result doc + logs one-line summary', async () => {
     const actions = makeFakeActions();
-    const provider = new TriumphPanelProvider({ actions, repoRoot: () => '/repo', enginePath: () => '/e.js' });
+    const provider = new GaiaPanelProvider({ actions, repoRoot: () => '/repo', enginePath: () => '/e.js' });
     routerRec.opened.length = 0;
-    await handleMessage({ type: 'runCourt', court: 'REDLINE' }, { provider, actions });
+    await handleMessage({ type: 'runCourt', court: 'WITNESS' }, { provider, actions });
     assert.strictEqual(routerRec.opened.length, 1);
-    assert.ok(provider.state.log.some((l) => l.text.includes('REDLINE: 1 green / 0 red / 0 yellow of 1')));
+    assert.ok(provider.state.log.some((l) => l.text.includes('WITNESS: 1 green / 0 red / 0 yellow of 1')));
   });
 
   await t('runCourt: invalid court -> error message, action never called', async () => {
     const actions = makeFakeActions({ runCourt: async () => { throw new Error('should not be called'); } });
-    const provider = new TriumphPanelProvider({ actions, repoRoot: () => '/repo', enginePath: () => '/e.js' });
+    const provider = new GaiaPanelProvider({ actions, repoRoot: () => '/repo', enginePath: () => '/e.js' });
     await handleMessage({ type: 'runCourt', court: 'NOPE' }, { provider, actions });
     assert.ok(provider.state.log.some((l) => l.level === 'error' && /court must be one of/.test(l.text)));
   });
 
   await t('generateReport job: updates state.lastReport via findLastReport', async () => {
     const actions = makeFakeActions();
-    const provider = new TriumphPanelProvider({ actions, repoRoot: () => '/repo', enginePath: () => '/e.js' });
+    const provider = new GaiaPanelProvider({ actions, repoRoot: () => '/repo', enginePath: () => '/e.js' });
     await handleMessage({ type: 'generateReport' }, { provider, actions });
     assert.strictEqual(provider.state.lastReport.htmlPath, '/repo/h.html');
     assert.ok(provider.state.log.some((l) => l.text === 'report written: h, m'));
   });
 
-  await t('openLastReport html: opens/reuses the singleton triumphReport WebviewPanel', async () => {
+  await t('openLastReport html: opens/reuses the singleton gaiaReport WebviewPanel', async () => {
     const actions = makeFakeActions();
-    const provider = new TriumphPanelProvider({ actions, repoRoot: () => '/repo', enginePath: () => '/e.js' });
+    const provider = new GaiaPanelProvider({ actions, repoRoot: () => '/repo', enginePath: () => '/e.js' });
     const origRead = fs.readFileSync;
     fs.readFileSync = (p, enc) => (String(p).endsWith('.html') ? '<html>ok</html>' : origRead(p, enc));
     try {
@@ -236,7 +236,7 @@ function makeFakeActions(overrides) {
 
   await t('openLastReport md: opens the markdown file in an editor', async () => {
     const actions = makeFakeActions();
-    const provider = new TriumphPanelProvider({ actions, repoRoot: () => '/repo', enginePath: () => '/e.js' });
+    const provider = new GaiaPanelProvider({ actions, repoRoot: () => '/repo', enginePath: () => '/e.js' });
     routerRec.opened.length = 0;
     await handleMessage({ type: 'openLastReport', format: 'md' }, { provider, actions });
     assert.strictEqual(routerRec.opened.length, 1);
@@ -244,42 +244,42 @@ function makeFakeActions(overrides) {
 
   await t('openLastReport: invalid format -> error, no dispatch', async () => {
     const actions = makeFakeActions({ findLastReport: () => { throw new Error('should not be called'); } });
-    const provider = new TriumphPanelProvider({ actions, repoRoot: () => '/repo', enginePath: () => '/e.js' });
+    const provider = new GaiaPanelProvider({ actions, repoRoot: () => '/repo', enginePath: () => '/e.js' });
     await handleMessage({ type: 'openLastReport', format: 'pdf' }, { provider, actions });
     assert.ok(provider.state.log.some((l) => l.level === 'error' && /format must be/.test(l.text)));
   });
 
   await t('openLastReport: no report yet -> error, no throw', async () => {
     const actions = makeFakeActions({ findLastReport: () => null });
-    const provider = new TriumphPanelProvider({ actions, repoRoot: () => '/repo', enginePath: () => '/e.js' });
+    const provider = new GaiaPanelProvider({ actions, repoRoot: () => '/repo', enginePath: () => '/e.js' });
     await handleMessage({ type: 'openLastReport', format: 'html' }, { provider, actions });
     assert.ok(provider.state.log.some((l) => l.level === 'error' && /no report yet/.test(l.text)));
   });
 
   await t('openLastReport: no workspace -> "Open a workspace folder first." error', async () => {
     const actions = makeFakeActions();
-    const provider = new TriumphPanelProvider({ actions, repoRoot: () => null, enginePath: () => '/e.js' });
+    const provider = new GaiaPanelProvider({ actions, repoRoot: () => null, enginePath: () => '/e.js' });
     await handleMessage({ type: 'openLastReport', format: 'html' }, { provider, actions });
     assert.ok(provider.state.log.some((l) => l.level === 'error' && l.text === 'Open a workspace folder first.'));
   });
 
   await t('dashboardRun job: updates state.dashboard.url', async () => {
     const actions = makeFakeActions();
-    const provider = new TriumphPanelProvider({ actions, repoRoot: () => '/repo', enginePath: () => '/e.js', dashboardCmd: { isConnected: () => true } });
+    const provider = new GaiaPanelProvider({ actions, repoRoot: () => '/repo', enginePath: () => '/e.js', dashboardCmd: { isConnected: () => true } });
     await handleMessage({ type: 'dashboardRun' }, { provider, actions });
     assert.strictEqual(provider.state.dashboard.url, 'http://dash/1');
   });
 
   await t('dashboardOpen: no url set -> error, no throw', async () => {
     const actions = makeFakeActions();
-    const provider = new TriumphPanelProvider({ actions, repoRoot: () => '/repo', enginePath: () => '/e.js' });
+    const provider = new GaiaPanelProvider({ actions, repoRoot: () => '/repo', enginePath: () => '/e.js' });
     await handleMessage({ type: 'dashboardOpen' }, { provider, actions });
     assert.ok(provider.state.log.some((l) => l.level === 'error' && /no dashboard run yet/.test(l.text)));
   });
 
   await t('dashboardOpen: url set -> openExternal called', async () => {
     const actions = makeFakeActions();
-    const provider = new TriumphPanelProvider({ actions, repoRoot: () => '/repo', enginePath: () => '/e.js' });
+    const provider = new GaiaPanelProvider({ actions, repoRoot: () => '/repo', enginePath: () => '/e.js' });
     provider.state.dashboard.url = 'http://dash/9';
     routerRec.opened.length = 0;
     await handleMessage({ type: 'dashboardOpen' }, { provider, actions });
@@ -288,7 +288,7 @@ function makeFakeActions(overrides) {
 
   await t('dashboardStatus: refreshes connected + posts state, no job', async () => {
     const actions = makeFakeActions();
-    const provider = new TriumphPanelProvider({ actions, repoRoot: () => '/repo', enginePath: () => '/e.js', dashboardCmd: { isConnected: () => true } });
+    const provider = new GaiaPanelProvider({ actions, repoRoot: () => '/repo', enginePath: () => '/e.js', dashboardCmd: { isConnected: () => true } });
     await handleMessage({ type: 'dashboardStatus' }, { provider, actions });
     assert.strictEqual(provider.state.dashboard.connected, true);
     assert.strictEqual(provider.state.job, null);
@@ -296,14 +296,14 @@ function makeFakeActions(overrides) {
 
   await t('openConfig: no workspace -> "Open a workspace folder first." error', async () => {
     const actions = makeFakeActions();
-    const provider = new TriumphPanelProvider({ actions, repoRoot: () => null, enginePath: () => '/e.js' });
+    const provider = new GaiaPanelProvider({ actions, repoRoot: () => null, enginePath: () => '/e.js' });
     await handleMessage({ type: 'openConfig' }, { provider, actions });
     assert.ok(provider.state.log.some((l) => l.level === 'error' && l.text === 'Open a workspace folder first.'));
   });
 
   await t('openConfig: config exists -> opens it in an editor', async () => {
     const actions = makeFakeActions();
-    const provider = new TriumphPanelProvider({ actions, repoRoot: () => '/repo', enginePath: () => '/e.js' });
+    const provider = new GaiaPanelProvider({ actions, repoRoot: () => '/repo', enginePath: () => '/e.js' });
     routerRec.opened.length = 0;
     await handleMessage({ type: 'openConfig' }, { provider, actions });
     assert.strictEqual(routerRec.opened.length, 1);
@@ -313,13 +313,13 @@ function makeFakeActions(overrides) {
     const actions = makeFakeActions({
       detectConfig: async () => { throw new Error('must not dispatch anything'); },
     });
-    const provider = new TriumphPanelProvider({ actions, repoRoot: () => '/repo', enginePath: () => '/e.js' });
+    const provider = new GaiaPanelProvider({ actions, repoRoot: () => '/repo', enginePath: () => '/e.js' });
     await handleMessage({ type: 'notAThing' }, { provider, actions });
     assert.ok(provider.state.log.some((l) => l.level === 'warn' && /unknown message type/.test(l.text)));
   });
 
   await t('no actions module wired: job message is dropped (warn), never throws', async () => {
-    const provider = new TriumphPanelProvider({ repoRoot: () => '/repo', enginePath: () => '/e.js' });
+    const provider = new GaiaPanelProvider({ repoRoot: () => '/repo', enginePath: () => '/e.js' });
     await handleMessage({ type: 'detectConfig' }, { provider, actions: null });
     assert.ok(provider.state.log.some((l) => l.level === 'warn' && /no actions module wired/.test(l.text)));
   });
@@ -331,12 +331,12 @@ function makeFakeActions(overrides) {
       detectConfig: async () => new Promise((res) => { resolveFirst = res; }),
       generateReport: async () => { secondCalled = true; return { htmlPath: 'h', mdPath: 'm', generatedAt: 'x' }; },
     });
-    const provider = new TriumphPanelProvider({ actions, repoRoot: () => '/repo', enginePath: () => '/e.js' });
+    const provider = new GaiaPanelProvider({ actions, repoRoot: () => '/repo', enginePath: () => '/e.js' });
     const p1 = handleMessage({ type: 'detectConfig' }, { provider, actions });
     await handleMessage({ type: 'generateReport' }, { provider, actions }); // should bounce immediately
     assert.ok(provider.state.log.some((l) => l.level === 'error' && /already running/.test(l.text)));
     assert.strictEqual(secondCalled, false, 'generateReport must not run while detectConfig job is in flight');
-    resolveFirst({ path: '/repo/.triumph.yml', notes: [] });
+    resolveFirst({ path: '/repo/.gaia.yml', notes: [] });
     await p1;
   });
 
@@ -362,45 +362,45 @@ function makeFakeActions(overrides) {
     return { FakeMcpClient, calls, isDisposed: () => disposed };
   }
 
-  await t('runCourt REDLINE: calls redline_verdict_all and disposes the client', async () => {
-    const { FakeMcpClient, calls, isDisposed } = makeFakeMcpClient({ responses: { redline_verdict_all: { summary: { green: 1, red: 0, yellow: 0, total: 1 } } } });
+  await t('runCourt WITNESS: calls witness_verdict_all and disposes the client', async () => {
+    const { FakeMcpClient, calls, isDisposed } = makeFakeMcpClient({ responses: { witness_verdict_all: { summary: { green: 1, red: 0, yellow: 0, total: 1 } } } });
     const emitted = [];
     const result = await actionsMod.runCourt(
       { root: '/repo', enginePath: '/e.js', emit: (e) => emitted.push(e), McpClient: FakeMcpClient },
-      { court: 'REDLINE' }
+      { court: 'WITNESS' }
     );
-    assert.deepStrictEqual(calls, ['redline_verdict_all']);
+    assert.deepStrictEqual(calls, ['witness_verdict_all']);
     assert.ok(isDisposed(), 'client must be disposed');
     assert.strictEqual(result.summary.green, 1);
   });
 
-  await t('runCourt REDLINE: disposes the client even when the engine call throws', async () => {
-    const { FakeMcpClient, isDisposed } = makeFakeMcpClient({ callError: { redline_verdict_all: new Error('engine boom') } });
+  await t('runCourt WITNESS: disposes the client even when the engine call throws', async () => {
+    const { FakeMcpClient, isDisposed } = makeFakeMcpClient({ callError: { witness_verdict_all: new Error('engine boom') } });
     await assert.rejects(
-      actionsMod.runCourt({ root: '/repo', enginePath: '/e.js', emit: () => {}, McpClient: FakeMcpClient }, { court: 'REDLINE' }),
+      actionsMod.runCourt({ root: '/repo', enginePath: '/e.js', emit: () => {}, McpClient: FakeMcpClient }, { court: 'WITNESS' }),
       /engine boom/
     );
     assert.ok(isDisposed(), 'client must be disposed even on failure');
   });
 
-  await t('runCourt SPLITBRAIN: status "started" -> no trustgap call', async () => {
-    const { FakeMcpClient, calls } = makeFakeMcpClient({ responses: { splitbrain_mutate: { status: 'started', job_id: 'j1' } } });
+  await t('runCourt TRUSTGAP: status "started" -> no trustgap call', async () => {
+    const { FakeMcpClient, calls } = makeFakeMcpClient({ responses: { trustgap_mutate: { status: 'started', job_id: 'j1' } } });
     const result = await actionsMod.runCourt(
       { root: '/repo', enginePath: '/e.js', emit: () => {}, McpClient: FakeMcpClient },
-      { court: 'SPLITBRAIN' }
+      { court: 'TRUSTGAP' }
     );
-    assert.deepStrictEqual(calls, ['splitbrain_mutate']);
-    assert.ok(!calls.includes('splitbrain_trustgap'), 'must not call splitbrain_trustgap when mutation just started');
+    assert.deepStrictEqual(calls, ['trustgap_mutate']);
+    assert.ok(!calls.includes('trustgap_report'), 'must not call trustgap_report when mutation just started');
     assert.strictEqual(result.status, 'started');
   });
 
-  await t('runCourt SPLITBRAIN: status not "started" -> falls through to trustgap', async () => {
-    const { FakeMcpClient, calls } = makeFakeMcpClient({ responses: { splitbrain_mutate: { status: 'skipped' }, splitbrain_trustgap: { trustGap: 0.1 } } });
+  await t('runCourt TRUSTGAP: status not "started" -> falls through to trustgap', async () => {
+    const { FakeMcpClient, calls } = makeFakeMcpClient({ responses: { trustgap_mutate: { status: 'skipped' }, trustgap_report: { trustGap: 0.1 } } });
     const result = await actionsMod.runCourt(
       { root: '/repo', enginePath: '/e.js', emit: () => {}, McpClient: FakeMcpClient },
-      { court: 'SPLITBRAIN' }
+      { court: 'TRUSTGAP' }
     );
-    assert.deepStrictEqual(calls, ['splitbrain_mutate', 'splitbrain_trustgap']);
+    assert.deepStrictEqual(calls, ['trustgap_mutate', 'trustgap_report']);
     assert.strictEqual(result.trustGap, 0.1);
   });
 
@@ -408,7 +408,7 @@ function makeFakeActions(overrides) {
     let started = false;
     class SpyMcpClient { async start() { started = true; } async call() { return {}; } dispose() {} }
     await assert.rejects(
-      actionsMod.runCourt({ root: null, enginePath: '/e.js', emit: () => {}, McpClient: SpyMcpClient }, { court: 'REDLINE' }),
+      actionsMod.runCourt({ root: null, enginePath: '/e.js', emit: () => {}, McpClient: SpyMcpClient }, { court: 'WITNESS' }),
       /Open a workspace folder first\./
     );
     assert.strictEqual(started, false);
@@ -423,8 +423,8 @@ function makeFakeActions(overrides) {
     });
   }
 
-  await t('findLastReport: no reports/triumph dir yet -> null', () => {
-    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'triumph-panel-test-'));
+  await t('findLastReport: no reports/gaia dir yet -> null', () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gaia-panel-test-'));
     try {
       assert.strictEqual(actionsMod.findLastReport(tmp), null);
     } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
@@ -434,29 +434,29 @@ function makeFakeActions(overrides) {
     assert.strictEqual(actionsMod.findLastReport(null), null);
   });
 
-  await t('findLastReport: html+md+triumph-input.json present -> summary + paths + ISO generatedAt', () => {
-    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'triumph-panel-test-'));
+  await t('findLastReport: html+md+gaia-input.json present -> summary + paths + ISO generatedAt', () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gaia-panel-test-'));
     try {
-      const outDir = path.join(tmp, 'reports', 'triumph');
+      const outDir = path.join(tmp, 'reports', 'gaia');
       fs.mkdirSync(outDir, { recursive: true });
-      fs.writeFileSync(path.join(outDir, 'triumph-report.html'), '<html></html>', 'utf8');
-      fs.writeFileSync(path.join(outDir, 'triumph-report.md'), '# report', 'utf8');
-      fs.writeFileSync(path.join(outDir, 'triumph-input.json'), JSON.stringify({ redline: { summary: { green: 2, red: 1, yellow: 0, total: 3 } } }), 'utf8');
+      fs.writeFileSync(path.join(outDir, 'gaia-report.html'), '<html></html>', 'utf8');
+      fs.writeFileSync(path.join(outDir, 'gaia-report.md'), '# report', 'utf8');
+      fs.writeFileSync(path.join(outDir, 'gaia-input.json'), JSON.stringify({ witness: { summary: { green: 2, red: 1, yellow: 0, total: 3 } } }), 'utf8');
       const report = actionsMod.findLastReport(tmp);
       assert.ok(report);
-      assert.strictEqual(report.htmlPath, path.join(outDir, 'triumph-report.html'));
-      assert.strictEqual(report.mdPath, path.join(outDir, 'triumph-report.md'));
+      assert.strictEqual(report.htmlPath, path.join(outDir, 'gaia-report.html'));
+      assert.strictEqual(report.mdPath, path.join(outDir, 'gaia-report.md'));
       assert.ok(!isNaN(Date.parse(report.generatedAt)), 'generatedAt must be a parseable ISO date');
       assert.deepStrictEqual(report.summary, { green: 2, red: 1, yellow: 0, total: 3 });
     } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
   });
 
-  await t('findLastReport: html present but no .md, no triumph-input.json -> mdPath null, summary null', () => {
-    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'triumph-panel-test-'));
+  await t('findLastReport: html present but no .md, no gaia-input.json -> mdPath null, summary null', () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gaia-panel-test-'));
     try {
-      const outDir = path.join(tmp, 'reports', 'triumph');
+      const outDir = path.join(tmp, 'reports', 'gaia');
       fs.mkdirSync(outDir, { recursive: true });
-      fs.writeFileSync(path.join(outDir, 'triumph-report.html'), '<html></html>', 'utf8');
+      fs.writeFileSync(path.join(outDir, 'gaia-report.html'), '<html></html>', 'utf8');
       const report = actionsMod.findLastReport(tmp);
       assert.ok(report);
       assert.strictEqual(report.mdPath, null);
@@ -492,7 +492,7 @@ function makeFakeActions(overrides) {
 
   await t('panel provider: logs "dashboard disconnected" on true->false via a fake dashboardCmd, and stops on dispose()', () => {
     const { vscode } = mkVscode();
-    const { TriumphPanelProvider } = freshPanel(vscode);
+    const { GaiaPanelProvider } = freshPanel(vscode);
     const listeners = new Set();
     const fakeDashboardCmd = {
       isConnected: () => false,
@@ -501,7 +501,7 @@ function makeFakeActions(overrides) {
     const fire = (v) => { for (const fn of listeners) fn(v); };
 
     const posted = [];
-    const provider = new TriumphPanelProvider({ repoRoot: () => null, enginePath: () => 'x', dashboardCmd: fakeDashboardCmd });
+    const provider = new GaiaPanelProvider({ repoRoot: () => null, enginePath: () => 'x', dashboardCmd: fakeDashboardCmd });
     provider._post = (msg) => posted.push(msg);
 
     assert.strictEqual(provider.state.dashboard.connected, false);

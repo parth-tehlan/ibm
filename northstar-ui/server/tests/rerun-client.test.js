@@ -15,7 +15,7 @@ const { DashboardClient } = require('../../../court-extension/lib/dashboard.js')
 const empty = (state = 'not_run') => ({ state, collectedAt: null, sourceGeneratedAt: null, payload: null, errors: [] });
 
 test('client retries an uncertain publication without changing the revision and re-registers on expiry', async (t) => {
-  const dir = await mkdtemp(path.join(os.tmpdir(), 'triumph-client-retry-'));
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'gaia-client-retry-'));
   t.after(() => rm(dir, { recursive: true, force: true }));
   const history = createHistory({ dir });
   let clock = Date.now();
@@ -36,7 +36,7 @@ test('client retries an uncertain publication without changing the revision and 
   const runId = randomUUID(), createdAt = new Date().toISOString();
   const run = { schemaVersion: 2, project, runId, createdAt, updatedAt: createdAt, revision: 0,
     state: 'complete', checkedOutCommit: null, branch: null, workingTreeDirty: null,
-    producer: { name: 'client-test', version: '1' }, redline: empty(), splitbrain: empty(), warpath: empty() };
+    producer: { name: 'client-test', version: '1' }, witness: empty(), trustgap: empty(), triage: empty() };
   // The first attempt commits but the caller observes a lost response. Replaying
   // the exact bytes must return the same immutable revision, not a conflict.
   const request = client._request.bind(client);

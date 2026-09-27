@@ -1,6 +1,6 @@
 'use strict';
 /**
- * lib/convert.js — convert REAL TRIUMPH engine evidence into the dashboard's
+ * lib/convert.js — convert REAL Gaia engine evidence into the dashboard's
  * version-2 snapshot (contracts/report.js). Pure and dependency-free so it can
  * be unit-tested without zod. The dashboard validates the result on submit; we
  * additionally validate here to fail fast and never ship a malformed run.
@@ -17,7 +17,7 @@
 
 const crypto = require('crypto');
 
-const COURTS = ['redline', 'splitbrain', 'warpath'];
+const COURTS = ['witness', 'trustgap', 'triage'];
 
 /** RFC 4122 UUID v5 (SHA-1, name-based) — stable per canonical workspace URI. */
 function uuidv5(name) {
@@ -30,7 +30,11 @@ function uuidv5(name) {
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20, 32)}`;
 }
 
-const projectId = (workspaceUri) => uuidv5(`triumph:workspace:${workspaceUri}`);
+// NOTE: renaming this namespace changes the deterministic project id for
+// every existing workspace (intentional as part of the full TRIUMPH->Gaia
+// rename — any previously persisted dashboard history keyed by the old id
+// becomes unreachable under the new one; workspaces re-register on next run).
+const projectId = (workspaceUri) => uuidv5(`gaia:workspace:${workspaceUri}`);
 
 /** Extract the court's own source timestamp, or null if absent/invalid. */
 function sourceGeneratedAt(court, engineResult) {
@@ -40,7 +44,7 @@ function sourceGeneratedAt(court, engineResult) {
     engineResult.finishedAt,          // mutate job
     engineResult.updatedAt,
     engineResult.createdAt,
-    engineResult.at,                  // warpath deploy
+    engineResult.at,                  // triage deploy
     engineResult.timestamp,
   ];
   for (const c of candidates) {
@@ -77,7 +81,7 @@ function courtEnvelope(court, outcome, collectedAt) {
  * Assemble a v2 snapshot.
  *   meta: { projectId, projectName, runId, createdAt, revision, state,
  *           checkedOutCommit, branch, workingTreeDirty, producer:{name,version} }
- *   courts: { redline: outcome, splitbrain: outcome, warpath: outcome }
+ *   courts: { witness: outcome, trustgap: outcome, triage: outcome }
  *   now: ISO timestamp for collectedAt/updatedAt.
  */
 function toSnapshot(meta, courts, now) {
@@ -93,9 +97,9 @@ function toSnapshot(meta, courts, now) {
     branch: meta.branch ?? null,
     workingTreeDirty: meta.workingTreeDirty ?? null,
     producer: meta.producer,
-    redline: courtEnvelope('redline', courts.redline, now),
-    splitbrain: courtEnvelope('splitbrain', courts.splitbrain, now),
-    warpath: courtEnvelope('warpath', courts.warpath, now),
+    witness: courtEnvelope('witness', courts.witness, now),
+    trustgap: courtEnvelope('trustgap', courts.trustgap, now),
+    triage: courtEnvelope('triage', courts.triage, now),
   };
   validate(snap);
   return snap;

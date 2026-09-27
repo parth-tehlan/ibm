@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * lib/detect.js — TRIUMPH repo auto-detector.
+ * lib/detect.js — Gaia repo auto-detector.
  *
- * Inspects an open workspace and fills a `.triumph.yml` draft:
+ * Inspects an open workspace and fills a `.gaia.yml` draft:
  *   - test framework (jest / vitest / mocha / pytest / custom)
  *   - mutation tool (stryker / mutmut / custom) + report paths + command
  *   - spec path + clause-ID pattern (inferred from markdown headings)
@@ -146,7 +146,7 @@ function detectWall(root) {
 
 /**
  * Run detection against a workspace root.
- * Returns { config: <triumph config draft>, notes: [human-readable explanations] }.
+ * Returns { config: <gaia config draft>, notes: [human-readable explanations] }.
  */
 function detect(repoRoot) {
   const root = path.resolve(repoRoot);
@@ -209,7 +209,7 @@ function detect(repoRoot) {
       logs: 'fixtures/logs.json',
       mutants: 'fixtures/mutants.json',
     },
-    evidence: { dir: 'evidence', trustgap: 'trustgap/TrustGap.json', incidentDir: 'incident', reportsDir: 'reports/triumph' },
+    evidence: { dir: 'evidence', trustgap: 'trustgap/TrustGap.json', incidentDir: 'incident', reportsDir: 'reports/gaia' },
     wall: { denyGlobs: detectWall(root) },
     waivers: 'evidence/waivers.json',
   };

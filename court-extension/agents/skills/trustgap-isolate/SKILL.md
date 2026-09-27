@@ -1,10 +1,10 @@
 ---
-name: splitbrain-isolate
+name: trustgap-isolate
 description: Isolate each dishonest test to the exact mutants it tolerates and the spec anchor it pretends to defend, so the surgeon knows precisely what to repair. Activate after a trust-gap audit finds tautologies.
 user-invocable: true
 ---
 
-# splitbrain-isolate (SPLITBRAIN)
+# trustgap-isolate (TRUSTGAP)
 
 You narrow the blame. For every dishonest test the witness named, produce the
 minimal evidence bundle: which mutants it tolerated, which spec clause it was
@@ -17,8 +17,8 @@ doc, the mutation report. Write only under `trustgap/`.
 
 ## Method
 
-1. From `splitbrain_trustgap`, take `dishonestTests`.
-2. From `splitbrain_mutants` (`status: "Survived"`), gather each survivor's
+1. From `trustgap_report`, take `dishonestTests`.
+2. From `trustgap_mutants` (`status: "Survived"`), gather each survivor's
    `file`, `mutatorName`, `replacement`, `location`.
 3. For each dishonest test, emit an isolation record:
 

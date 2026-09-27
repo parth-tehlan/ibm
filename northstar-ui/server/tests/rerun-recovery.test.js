@@ -10,7 +10,7 @@ import { createHistory } from '../history.js';
 
 const empty = (state = 'not_run') => ({ state, collectedAt: null, sourceGeneratedAt: null, payload: null, errors: [] });
 async function setup(t) {
-  const data = await mkdtemp(path.join(os.tmpdir(), 'triumph-rerun-recovery-'));
+  const data = await mkdtemp(path.join(os.tmpdir(), 'gaia-rerun-recovery-'));
   t.after(() => rm(data, { recursive: true, force: true }));
   const history = createHistory({ dir: data });
   let clock = Date.now();
@@ -25,7 +25,7 @@ test('failed publication and expired ack interrupt the durable placeholder; fres
   const { url, bridge, history, advance } = await setup(t);
   const project = { id: randomUUID(), name: 'retry' };
   const firstToken = bridge.registerProject({ project }).token;
-  const create = await fetch(`${url}/api/projects/${project.id}/run`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ courts: ['redline'] }) });
+  const create = await fetch(`${url}/api/projects/${project.id}/run`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ courts: ['witness'] }) });
   assert.equal(create.status, 202);
   const { runId, requestId } = await create.json();
   const api = `${url}/api/extension/${project.id}`;
@@ -42,16 +42,16 @@ test('failed publication and expired ack interrupt the durable placeholder; fres
   const interrupted = await history.load(project.id, runId);
   assert.equal(interrupted.state, 'interrupted');
   assert.equal(interrupted.revision, 1);
-  assert.equal(interrupted.redline.state, 'error');
+  assert.equal(interrupted.witness.state, 'error');
   assert.equal((await fetch(`${api}/requests`, { headers: auth })).status, 403);
   const fresh = bridge.registerProject({ project }).token;
-  const retry = await fetch(`${url}/api/projects/${project.id}/run`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ courts: ['redline'] }) });
+  const retry = await fetch(`${url}/api/projects/${project.id}/run`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ courts: ['witness'] }) });
   assert.equal(retry.status, 202);
   const second = await retry.json();
   assert.notEqual(second.runId, runId);
   assert.equal((await (await fetch(`${api}/requests`, { headers: { Authorization: `Bearer ${fresh}` } })).json()).request.runId, second.runId);
   // Replaying a previously acknowledged snapshot must not reopen an interrupted run.
-  const replay = await fetch(`${api}/runs`, { method: 'POST', headers: { Authorization: `Bearer ${fresh}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ ...run, state: 'complete', revision: 2, updatedAt: new Date().toISOString(), redline: empty('error') }) });
+  const replay = await fetch(`${api}/runs`, { method: 'POST', headers: { Authorization: `Bearer ${fresh}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ ...run, state: 'complete', revision: 2, updatedAt: new Date().toISOString(), witness: empty('error') }) });
   assert.equal(replay.status, 403);
   assert.equal((await history.load(project.id, runId)).revision, 1);
 });

@@ -10,7 +10,7 @@ import { exportSnapshot } from '../reports/export.js';
 
 const dist = fileURLToPath(new URL('../dist/', import.meta.url));
 const uuid = z.string().uuid();
-const courts = z.object({ courts: z.array(z.enum(['redline', 'splitbrain', 'warpath'])).min(1).max(3).refine((value) => new Set(value).size === value.length) }).strict();
+const courts = z.object({ courts: z.array(z.enum(['witness', 'trustgap', 'triage'])).min(1).max(3).refine((value) => new Set(value).size === value.length) }).strict();
 const empty = (state = 'not_run') => ({ state, collectedAt: null, sourceGeneratedAt: null, payload: null, errors: [] });
 const bad = (res) => res.status(404).json({ error: 'Not found' });
 function handleError(error, req, res, next) {
@@ -26,7 +26,7 @@ function handleError(error, req, res, next) {
 /** Browser surface only. Extension registration is deliberately NOT an HTTP route:
  * trusted editor-host code calls app.locals.bridge.registerProject() in-process.
  */
-export function createApp({ history = createHistory(), bridge = createBridge({ history }), allowedHosts = (process.env.TRIUMPH_ALLOWED_HOSTS || '').split(',').map((value) => value.trim().toLowerCase()).filter(Boolean), devOrigins = ['http://127.0.0.1:5173', 'http://localhost:5173', ...allowedHosts.map((hostname) => `http://${hostname}:5173`)] } = {}) {
+export function createApp({ history = createHistory(), bridge = createBridge({ history }), allowedHosts = (process.env.GAIA_ALLOWED_HOSTS || '').split(',').map((value) => value.trim().toLowerCase()).filter(Boolean), devOrigins = ['http://127.0.0.1:5173', 'http://localhost:5173', ...allowedHosts.map((hostname) => `http://${hostname}:5173`)] } = {}) {
   const app = express();
   const trustedHostnames = new Set(['127.0.0.1', 'localhost', ...allowedHosts]);
   app.locals.history = history;
@@ -64,7 +64,7 @@ export function createApp({ history = createHistory(), bridge = createBridge({ h
   }));
   app.get('/api/projects/:id/runs', route(async (req, res) => {
     if (!uuid.safeParse(req.params.id).success) return bad(res);
-    res.json((await history.listRuns(req.params.id)).map((run) => ({ runId: run.runId, createdAt: run.createdAt, updatedAt: run.updatedAt, revision: run.revision, state: run.state, branch: run.branch, courts: ['redline', 'splitbrain', 'warpath'].filter((court) => run[court].state !== 'not_run') })));
+    res.json((await history.listRuns(req.params.id)).map((run) => ({ runId: run.runId, createdAt: run.createdAt, updatedAt: run.updatedAt, revision: run.revision, state: run.state, branch: run.branch, courts: ['witness', 'trustgap', 'triage'].filter((court) => run[court].state !== 'not_run') })));
   }));
   app.get('/api/projects/:id/runs/:runId', route(async (req, res) => {
     if (!uuid.safeParse(req.params.id).success || !uuid.safeParse(req.params.runId).success) return bad(res);
@@ -74,13 +74,13 @@ export function createApp({ history = createHistory(), bridge = createBridge({ h
   app.post('/api/projects/:id/run', route(async (req, res) => {
     if (!uuid.safeParse(req.params.id).success) return bad(res);
     const parsed = courts.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: 'Expected distinct redline, splitbrain, warpath courts' });
+    if (!parsed.success) return res.status(400).json({ error: 'Expected distinct witness, trustgap, triage courts' });
     const request = await bridge.requestRun({ projectId: req.params.id, courts: parsed.data.courts, prepare: async (pending, project) => {
       const report = {
         schemaVersion: 2, project, runId: pending.runId, createdAt: pending.createdAt, updatedAt: pending.createdAt,
         revision: 0, state: 'running', checkedOutCommit: null, branch: null, workingTreeDirty: null,
-        producer: { name: 'triumph-extension-request', version: '1' },
-        ...Object.fromEntries(['redline', 'splitbrain', 'warpath'].map((court) => [court, empty(parsed.data.courts.includes(court) ? 'running' : 'not_run')])),
+        producer: { name: 'gaia-extension-request', version: '1' },
+        ...Object.fromEntries(['witness', 'trustgap', 'triage'].map((court) => [court, empty(parsed.data.courts.includes(court) ? 'running' : 'not_run')])),
       };
       await history.save(report);
     } });
@@ -98,7 +98,7 @@ export function createApp({ history = createHistory(), bridge = createBridge({ h
     if (!report) return bad(res);
     if (report.state === 'running') return res.status(409).json({ error: 'Run is still in progress' });
     res.set('Content-Type', { html: 'text/html; charset=utf-8', md: 'text/markdown; charset=utf-8', json: 'application/json; charset=utf-8' }[req.query.format]);
-    res.set('Content-Disposition', `attachment; filename="triumph-${report.runId}.${req.query.format}"`);
+    res.set('Content-Disposition', `attachment; filename="gaia-${report.runId}.${req.query.format}"`);
     res.set('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox");
     res.send(exportSnapshot(report, req.query.format));
   }));

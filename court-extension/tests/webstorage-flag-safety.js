@@ -30,7 +30,7 @@ exit 0
 `;
 
 async function withFakeNode(supportsFlag, fn) {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'triumph-webstorage-'));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gaia-webstorage-'));
   const oldPath = process.env.PATH;
   const oldSupports = process.env.FAKE_NODE_SUPPORTS_FLAG;
   const oldDump = process.env.FAKE_NODE_ENV_DUMP;

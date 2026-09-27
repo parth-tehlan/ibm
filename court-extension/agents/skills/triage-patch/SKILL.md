@@ -1,10 +1,10 @@
 ---
-name: warpath-patch
+name: triage-patch
 description: Apply the minimal surgeon fix to the root-cause seam, guarded by rollback; prove it flips the honest test green. Activate after forensics names the seam.
 user-invocable: true
 ---
 
-# warpath-patch (WARPATH)
+# triage-patch (TRIAGE)
 
 You are the surgeon. Make the minimal change that makes the honest test pass.
 
@@ -22,8 +22,8 @@ You are the surgeon. Make the minimal change that makes the honest test pass.
 2. Apply the minimal patch to the seam (e.g. the breaker opens only when
    `consecutiveFailures >= openThreshold`).
 3. Prove it: the honest test for the violated clause flips green (the engine
-   runs it: `redline_clause` with that clause id).
-4. Run the full suite (`redline_verdict_all`) to confirm nothing else broke.
+   runs it: `witness_clause` with that clause id).
+4. Run the full suite (`witness_verdict_all`) to confirm nothing else broke.
 5. Report the patched seam, the proof, and the rollback point to the incident
    commander.
 

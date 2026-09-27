@@ -9,9 +9,9 @@ const crypto = require('crypto');
 
 const AGENTS = ['spec-witness', 'test-author', 'mutant-analyst', 'war-room'];
 const ENGINE_TOOL_NAMES = [
-  'redline_clauses', 'redline_verdict_all', 'redline_clause',
-  'splitbrain_trustgap', 'splitbrain_mutants', 'splitbrain_mutate', 'splitbrain_status',
-  'warpath_context', 'warpath_triage', 'warpath_postmortem', 'courts_about',
+  'witness_clauses', 'witness_verdict_all', 'witness_clause',
+  'trustgap_report', 'trustgap_mutants', 'trustgap_mutate', 'trustgap_status',
+  'triage_context', 'triage_run', 'triage_postmortem', 'courts_about',
 ];
 const EXT_DIR = path.resolve(__dirname, '..');
 const ENGINE_ENTRY = path.join(EXT_DIR, 'court.js');
@@ -66,13 +66,13 @@ function mergeMcp(fp, repoRoot, kind) {
   const key = kind === 'codex' ? 'mcp_servers' : kind === 'vscode' ? 'servers' : 'mcpServers';
   if (j[key] !== undefined && !isObject(j[key])) throw new Error(`expected ${key} object in ${fp}`);
   const servers = j[key] || {};
-  if (Object.prototype.hasOwnProperty.call(servers, 'triumph-courts') &&
-      !isObject(servers['triumph-courts'])) {
-    throw new Error(`expected triumph-courts object in ${fp}`);
+  if (Object.prototype.hasOwnProperty.call(servers, 'gaia-courts') &&
+      !isObject(servers['gaia-courts'])) {
+    throw new Error(`expected gaia-courts object in ${fp}`);
   }
   // Only refresh the engine location. Preserve disabled, alwaysAllow and all
   // other user-supplied server settings, including those on our own entry.
-  servers['triumph-courts'] = serverConfig(repoRoot, kind, servers['triumph-courts']);
+  servers['gaia-courts'] = serverConfig(repoRoot, kind, servers['gaia-courts']);
   j[key] = servers;
   return JSON.stringify(j, null, 2) + '\n';
 }
@@ -82,7 +82,7 @@ function loadYaml() {
   // unrelated global npm installation, while the court engine remains zero-dep.
   //
   // NOTE — two YAML implementations coexist deliberately. lib/config.js ships
-  // a zero-dep YAML *subset* parser for `.triumph.yml` (author-controlled,
+  // a zero-dep YAML *subset* parser for `.gaia.yml` (author-controlled,
   // flat schema). This vendored full parser exists solely for merging the
   // user's pre-existing Bob `custom_modes.yaml` (arbitrary third-party YAML:
   // anchors, comments, key order), where a subset parser would corrupt the
@@ -157,7 +157,7 @@ function createPlan(hostId, root) {
     changes.push({ fp, content, original, stat });
   }
   const agentsDir = path.join(root, hostId === 'claude' ? '.claude' :
-    hostId === 'bob' ? '.bob' : hostId === 'codex' ? '.codex' : '.triumph', 'agents');
+    hostId === 'bob' ? '.bob' : hostId === 'codex' ? '.codex' : '.gaia', 'agents');
   if (hostId !== 'vscode') {
     for (const name of AGENTS) {
       add(path.join(agentsDir, name + '.md'),
@@ -175,14 +175,14 @@ function createPlan(hostId, root) {
   }
   const config = hostId === 'claude' ? path.join(root, '.mcp.json') :
     hostId === 'vscode' ? path.join(root, '.vscode', 'mcp.json') :
-    path.join(root, hostId === 'bob' ? '.bob' : hostId === 'codex' ? '.codex' : '.triumph',
+    path.join(root, hostId === 'bob' ? '.bob' : hostId === 'codex' ? '.codex' : '.gaia',
       hostId === 'codex' ? 'config.json' : 'mcp.json');
   add(config, mergeMcp(config, root, hostId === 'codex' ? 'codex' : hostId === 'vscode' ? 'vscode' : 'mcp'));
   if (hostId === 'vscode') {
     for (const name of AGENTS) {
       const body = fs.readFileSync(path.join(EXT_DIR, 'agents', name + '.md'), 'utf8')
         .replace(/^name:/m, 'description:');
-      add(path.join(root, '.github', 'chatmodes', `triumph-${name}.chatmode.md`), body, true);
+      add(path.join(root, '.github', 'chatmodes', `gaia-${name}.chatmode.md`), body, true);
     }
   }
   return { files, changes };
@@ -193,7 +193,7 @@ function installChanges(changes) {
   const applied = [];
   const scratch = [];
   const retainedBackups = new Set();
-  const unique = (fp, kind = 'temp') => path.join(path.dirname(fp), `.${path.basename(fp)}.triumph-${kind}-${process.pid}-${crypto.randomBytes(12).toString('hex')}`);
+  const unique = (fp, kind = 'temp') => path.join(path.dirname(fp), `.${path.basename(fp)}.gaia-${kind}-${process.pid}-${crypto.randomBytes(12).toString('hex')}`);
   function mkdir(dir) {
     if (safeStat(dir)) { validateDirectory(dir); return; }
     mkdir(path.dirname(dir));

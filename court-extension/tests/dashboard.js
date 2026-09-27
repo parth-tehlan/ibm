@@ -21,9 +21,9 @@ async function t(name, fn) {
 const META = (pid, runId, projectName = 'northstar') => ({
   projectId: pid, projectName, runId, createdAt: new Date().toISOString(),
   revision: 0, state: 'complete', checkedOutCommit: null, branch: 'main',
-  workingTreeDirty: false, producer: { name: 'triumph-courts', version: '0.2.0' },
+  workingTreeDirty: false, producer: { name: 'gaia-courts', version: '0.2.0' },
 });
-const full = (r, s, w) => ({ redline: r, splitbrain: s, warpath: w });
+const full = (r, s, w) => ({ witness: r, trustgap: s, triage: w });
 
 (async () => {
   await t('projectId is a stable RFC-4122 v5 UUID per workspace URI', () => {
@@ -39,12 +39,12 @@ const full = (r, s, w) => ({ redline: r, splitbrain: s, warpath: w });
     const pid = projectId('file:///x'); const runId = crypto.randomUUID();
     const gen = new Date('2026-09-26T09:00:00Z').toISOString();
     const snap = toSnapshot(META(pid, runId), full(
-      { kind: 'complete', payload: { court: 'REDLINE', summary: { green: 0, red: 8 }, generated: gen } },
+      { kind: 'complete', payload: { court: 'WITNESS', summary: { green: 0, red: 8 }, generated: gen } },
       { kind: 'not_run' },
       { kind: 'not_run' }), new Date().toISOString());
-    assert.strictEqual(snap.redline.state, 'complete');
-    assert.strictEqual(snap.redline.payload.summary.red, 8, 'evidence must pass through verbatim');
-    assert.strictEqual(snap.redline.sourceGeneratedAt, gen, 'source timestamp mapped from generated');
+    assert.strictEqual(snap.witness.state, 'complete');
+    assert.strictEqual(snap.witness.payload.summary.red, 8, 'evidence must pass through verbatim');
+    assert.strictEqual(snap.witness.sourceGeneratedAt, gen, 'source timestamp mapped from generated');
     validate(snap);
   });
 
@@ -54,9 +54,9 @@ const full = (r, s, w) => ({ redline: r, splitbrain: s, warpath: w });
       { kind: 'unavailable', errors: ['spec.path missing'] },
       { kind: 'unavailable', errors: ['no mutation.command'] },
       { kind: 'not_run' }), new Date().toISOString());
-    assert.strictEqual(snap.redline.state, 'unavailable');
-    assert.strictEqual(snap.redline.payload, null);
-    assert.ok(snap.redline.errors.length > 0);
+    assert.strictEqual(snap.witness.state, 'unavailable');
+    assert.strictEqual(snap.witness.payload, null);
+    assert.ok(snap.witness.errors.length > 0);
     assert.strictEqual(snap.state, 'complete', 'run completes even with unavailable courts');
     validate(snap);
   });
@@ -64,10 +64,10 @@ const full = (r, s, w) => ({ redline: r, splitbrain: s, warpath: w });
   await t('missing source timestamp → null, evidence retained', () => {
     const pid = projectId('file:///x'); const runId = crypto.randomUUID();
     const snap = toSnapshot(META(pid, runId), full(
-      { kind: 'complete', payload: { court: 'WARPATH', suspect: { id: 'd1' } } }, // no timestamp field
+      { kind: 'complete', payload: { court: 'TRIAGE', suspect: { id: 'd1' } } }, // no timestamp field
       { kind: 'not_run' }, { kind: 'not_run' }), new Date().toISOString());
-    assert.strictEqual(snap.redline.sourceGeneratedAt, null);
-    assert.ok(snap.redline.payload.suspect);
+    assert.strictEqual(snap.witness.sourceGeneratedAt, null);
+    assert.ok(snap.witness.payload.suspect);
     validate(snap);
   });
 
@@ -79,7 +79,7 @@ const full = (r, s, w) => ({ redline: r, splitbrain: s, warpath: w });
 
   await t('handoff e2e: isolated child, register, publish, run-again, stop', async () => {
     const historyDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dash-hist-'));
-    const pid = projectId('file:///tmp/triumph-e2e');
+    const pid = projectId('file:///tmp/gaia-e2e');
     const client = new DashboardClient({ project: { id: pid, name: 'e2e' }, historyDir });
     await client.start();
     try {
@@ -89,14 +89,14 @@ const full = (r, s, w) => ({ redline: r, splitbrain: s, warpath: w });
       const runId = crypto.randomUUID();
       const now = new Date().toISOString();
       const snap = toSnapshot(META(pid, runId, 'e2e'), full(
-        { kind: 'complete', payload: { court: 'REDLINE', summary: { green: 0, red: 8 }, generated: now } },
+        { kind: 'complete', payload: { court: 'WITNESS', summary: { green: 0, red: 8 }, generated: now } },
         { kind: 'not_run' }, { kind: 'not_run' }), now);
       const r = await client.publish(snap);
       assert.strictEqual(r.revision, 0);
       // browser "Run again" → placeholder rev 0 → extension submits rev 1
       const browserReq = await new Promise((res, rej) => {
         const u = new URL(client.url + '/api/projects/' + pid + '/run');
-        const d = Buffer.from(JSON.stringify({ courts: ['redline'] }));
+        const d = Buffer.from(JSON.stringify({ courts: ['witness'] }));
         const rq = require('http').request({ host: u.hostname, port: u.port, path: u.pathname, method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': d.length } }, (x) => { let b = ''; x.on('data', c => b += c); x.on('end', () => res({ status: x.statusCode })); });
         rq.on('error', rej); rq.write(d); rq.end();
       });
@@ -104,11 +104,11 @@ const full = (r, s, w) => ({ redline: r, splitbrain: s, warpath: w });
       let pending = null;
       for (let i = 0; i < 12 && !pending; i++) { await new Promise(r => setTimeout(r, 400)); pending = await client.poll(); }
       assert.ok(pending, 'no pending run request surfaced');
-      assert.deepStrictEqual(pending.courts, ['redline']);
+      assert.deepStrictEqual(pending.courts, ['witness']);
       await client.acknowledge(pending.requestId);
       const rerun = toSnapshot(
         { ...META(pid, pending.runId, 'e2e'), createdAt: pending.createdAt, revision: 1 },
-        full({ kind: 'complete', payload: { court: 'REDLINE', summary: { green: 1, red: 7 } } }, { kind: 'not_run' }, { kind: 'not_run' }),
+        full({ kind: 'complete', payload: { court: 'WITNESS', summary: { green: 1, red: 7 } } }, { kind: 'not_run' }, { kind: 'not_run' }),
         new Date().toISOString());
       const pub = await client.publish(rerun);
       assert.strictEqual(pub.revision, 1);
@@ -129,7 +129,7 @@ const full = (r, s, w) => ({ redline: r, splitbrain: s, warpath: w });
   });
 
   await t('session: one dashboard serves an unsolicited run then a browser run-again', async () => {
-    const vscode = { workspace: { workspaceFolders: [{ uri: { toString: () => 'file:///tmp/triumph-sess' } }] } };
+    const vscode = { workspace: { workspaceFolders: [{ uri: { toString: () => 'file:///tmp/gaia-sess' } }] } };
     const { ensureSession, stopSession } = require('../src/dashboard');
     const historyDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dash-sess-'));
     // Stub enginePath with a repo that has no courts — proves session+polling plumbing
@@ -144,14 +144,14 @@ const full = (r, s, w) => ({ redline: r, splitbrain: s, warpath: w });
       const http = require('http');
       await new Promise((res, rej) => {
         const u = new URL(session.dash.url + '/api/projects/' + session.project.id + '/run');
-        const d = Buffer.from(JSON.stringify({ courts: ['warpath'] }));
+        const d = Buffer.from(JSON.stringify({ courts: ['triage'] }));
         const rq = http.request({ host: u.hostname, port: u.port, path: u.pathname, method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': d.length } }, (x) => { x.resume(); x.on('end', res); });
         rq.on('error', rej); rq.write(d); rq.end();
       });
       let pending = null;
       for (let i = 0; i < 12 && !pending; i++) { await new Promise(r => setTimeout(r, 400)); pending = await session.dash.poll(); }
       assert.ok(pending && pending.runId, 'browser run-again should surface on the persistent session');
-      assert.deepStrictEqual(pending.courts, ['warpath']);
+      assert.deepStrictEqual(pending.courts, ['triage']);
       await session.dash.acknowledge(pending.requestId);
     } finally {
       await stopSession();
@@ -160,7 +160,7 @@ const full = (r, s, w) => ({ redline: r, splitbrain: s, warpath: w });
 
   await t('re-register the same project after a clean disconnect', async () => {
     const historyDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dash-hist-'));
-    const pid = projectId('file:///tmp/triumph-reconn');
+    const pid = projectId('file:///tmp/gaia-reconn');
     const c1 = new DashboardClient({ project: { id: pid, name: 'e2e' }, historyDir });
     await c1.start();
     const t1 = c1.token;

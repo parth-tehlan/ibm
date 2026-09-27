@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * tests/run.js — dependency-free smoke tests for the TRIUMPH engine libs.
+ * tests/run.js — dependency-free smoke tests for the GAIA engine libs.
  * Run: node tests/run.js
  */
 'use strict';
@@ -54,7 +54,7 @@ t('glob: src/** denies src paths only', () => {
 });
 
 t('round-trip: detect() output parses via toYaml → parseYamlSubset', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'triumph-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gaia-'));
   fs.mkdirSync(path.join(dir, 'docs'), { recursive: true });
   fs.mkdirSync(path.join(dir, 'tests'));
   fs.mkdirSync(path.join(dir, 'src'));
@@ -96,23 +96,23 @@ t('trustgap: zero counted mutants → score null, no crash', () => {
 t('render: md + html contain all three courts and escape HTML', () => {
   const input = {
     repo: 'r<repo>', generated: 'now', repoRootAbs: '/x',
-    redline: { summary: { green: 1, red: 1, yellow: 0, total: 2 }, results: [
+    witness: { summary: { green: 1, red: 1, yellow: 0, total: 2 }, results: [
       { clause: 'W1', status: 'green', passed: 1, failed: 0, total: 1, test: 'tests/w1.ts', spec_anchor: 's#W1', failures: [] },
       { clause: 'W2', status: 'red', passed: 0, failed: 1, total: 1, test: 'tests/w2.ts', spec_anchor: 's#W2', failures: [{ title: '<b>bad</b>', message: 'boom' }] },
     ] },
-    splitbrain: { status: 'ok', claimedCoverage: 90, honestMutationScore: 50, trustGap: 40, dishonestTests: [{ testId: 't', survivedMutants: ['m1'] }], mutants: [{ id: 'm1', status: 'Survived', file: 'src/a.ts', location: { line: 3 }, replacement: 'x' }] },
-    warpath: { incidentWindow: 'a..b', suspect: { id: 'd-1', commit: 'abc', deployedAt: 't', reason: 'r' }, breakerSnapshot: { state: 'open' }, evidence: [{ t: 't', level: 'error', msg: 'm' }], clearedDeploys: [{ id: 'd-0', at: 'x' }] },
+    trustgap: { status: 'ok', claimedCoverage: 90, honestMutationScore: 50, trustGap: 40, dishonestTests: [{ testId: 't', survivedMutants: ['m1'] }], mutants: [{ id: 'm1', status: 'Survived', file: 'src/a.ts', location: { line: 3 }, replacement: 'x' }] },
+    triage: { incidentWindow: 'a..b', suspect: { id: 'd-1', commit: 'abc', deployedAt: 't', reason: 'r' }, breakerSnapshot: { state: 'open' }, evidence: [{ t: 't', level: 'error', msg: 'm' }], clearedDeploys: [{ id: 'd-0', at: 'x' }] },
   };
   const md = renderMarkdown(input);
   const html = renderHtml(input);
-  for (const s of ['REDLINE', 'SPLITBRAIN', 'WARPATH']) {
+  for (const s of ['WITNESS', 'TRUSTGAP', 'TRIAGE']) {
     assert.ok(md.includes(s), 'md missing ' + s);
     assert.ok(html.includes(s), 'html missing ' + s);
   }
   assert.ok(html.includes('&lt;b&gt;bad&lt;/b&gt;'), 'html not escaped');
   assert.ok(!html.includes('<b>bad</b>'), 'raw html leaked');
   assert.ok(md.includes('🟢') && md.includes('🔴'));
-  assert.ok(html.includes('triumph-input') === false); // no artifact self-reference needed
+  assert.ok(html.includes('gaia-input') === false); // no artifact self-reference needed
 });
 
 // --- hosts ----------------------------------------------------------------
@@ -123,25 +123,25 @@ t('hosts: install writes agents + merges MCP without clobbering', () => {
   // traversal check on real repo paths (never relaxed here). Canonicalize
   // the test's own tmp root first so it matches an ordinary, non-symlinked
   // repo path instead of tripping that check on the OS's own plumbing.
-  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'triumph-host-')));
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'gaia-host-')));
   fs.writeFileSync(path.join(dir, '.mcp.json'), JSON.stringify({ mcpServers: { existing: { command: 'x' } } }));
   const r = installHost('claude', dir);
   const mcp = JSON.parse(fs.readFileSync(path.join(dir, '.mcp.json'), 'utf8'));
   assert.ok(mcp.mcpServers.existing, 'clobbered existing server');
-  assert.ok(mcp.mcpServers['triumph-courts'], 'engine not wired');
-  assert.ok(mcp.mcpServers['triumph-courts'].args.includes('--repo'));
+  assert.ok(mcp.mcpServers['gaia-courts'], 'engine not wired');
+  assert.ok(mcp.mcpServers['gaia-courts'].args.includes('--repo'));
   assert.strictEqual(r.files.length, 5); // 4 agents + .mcp.json
   for (const f of r.files) assert.ok(fs.existsSync(f), 'missing ' + f);
   // bob
   installHost('bob', dir);
   const bobMcp = JSON.parse(fs.readFileSync(path.join(dir, '.bob', 'mcp.json'), 'utf8'));
-  assert.ok(bobMcp.mcpServers['triumph-courts'].alwaysAllow.includes('redline_clause'));
+  assert.ok(bobMcp.mcpServers['gaia-courts'].alwaysAllow.includes('witness_clause'));
 });
 
 t('hosts: every host id installs', () => {
   for (const id of Object.keys(HOSTS)) {
     // See realpathSync note above: canonicalize the tmp root, not the check.
-    const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'triumph-hosts-')));
+    const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'gaia-hosts-')));
     const r = installHost(id, dir);
     assert.ok(r.files.length >= 1, id + ' wrote nothing');
   }
@@ -149,12 +149,12 @@ t('hosts: every host id installs', () => {
 
 t('hosts: bob installs the full structure (agents + skills + rules + modes + mcp)', () => {
   // See realpathSync note above: canonicalize the tmp root, not the check.
-  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'triumph-bobfull-')));
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'gaia-bobfull-')));
   installHost('bob', dir);
   const need = [
     '.bob/agents/spec-witness.md', '.bob/agents/war-room.md',
-    '.bob/skills/redline-extract/SKILL.md', '.bob/skills/splitbrain-witness/SKILL.md',
-    '.bob/skills/warpath-postmortem/SKILL.md',
+    '.bob/skills/witness-extract/SKILL.md', '.bob/skills/trustgap-witness/SKILL.md',
+    '.bob/skills/triage-postmortem/SKILL.md',
     '.bob/rules-witness/00-never-src.md', '.bob/rules-surgeon/00-minimal-fixes.md',
     '.bob/custom_modes.yaml', '.bob/mcp.json',
   ];
@@ -168,7 +168,7 @@ t('hosts: bob installs the full structure (agents + skills + rules + modes + mcp
 });
 
 t('detect: empty repo (no package.json) does not crash', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'triumph-empty-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gaia-empty-'));
   const { config, notes } = detect(dir);
   assert.strictEqual(config.tests.framework, 'custom');
   assert.ok(notes.some((n) => /spec: none found/.test(n)));

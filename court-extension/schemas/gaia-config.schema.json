@@ -1,8 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://triumph.local/schemas/triumph-config.schema.json",
-  "title": "TRIUMPH repo adapter (.triumph.yml)",
-  "description": "One-per-repo adapter config consumed by the TRIUMPH 3-court engine. Repo-agnostic by construction: every path, pattern, and runner is config, not assumption.",
+  "$id": "https://gaia.local/schemas/gaia-config.schema.json",
+  "title": "Gaia repo adapter (.gaia.yml)",
+  "description": "One-per-repo adapter config consumed by the Gaia 3-court engine. Repo-agnostic by construction: every path, pattern, and runner is config, not assumption.",
   "type": "object",
   "required": ["version", "spec", "tests", "mutation", "wall"],
   "additionalProperties": true,
@@ -16,7 +16,7 @@
       "type": "object",
       "required": ["path", "clausePattern", "clauseIdPattern"],
       "properties": {
-        "path": { "type": "string", "description": "Path to the spec contract (markdown), relative to repo root. The law for REDLINE." },
+        "path": { "type": "string", "description": "Path to the spec contract (markdown), relative to repo root. The law for WITNESS." },
         "clausePattern": { "type": "string", "description": "Regex (with one capture group) extracting clause IDs from spec headings, e.g. '^## (W\\d+)'." },
         "clauseIdPattern": { "type": "string", "description": "Regex a valid clause id must fully match, e.g. '^W\\d+$'." }
       }
@@ -39,7 +39,7 @@
         "tool": { "enum": ["stryker", "mutmut", "custom"] },
         "report": { "type": ["string", "null"], "description": "Path to the mutation JSON report the engine derives the trust gap from." },
         "claimedCoverageFrom": { "type": ["string", "null"], "description": "Path to a jest coverage-summary.json (total.lines.pct used as claimed coverage)." },
-        "command": { "type": ["string", "null"], "description": "Shell command that runs the mutator and writes mutation.report. Run async via splitbrain_mutate." },
+        "command": { "type": ["string", "null"], "description": "Shell command that runs the mutator and writes mutation.report. Run async via trustgap_mutate." },
         "timeoutSeconds": { "type": "integer", "default": 900 },
         "strykerJestConfig": { "type": ["string", "null"], "description": "Stryker-only jest config (narrows testMatch to the mutation suite); used to resolve test names for per-test attribution." }
       }
@@ -59,7 +59,7 @@
         "dir": { "type": "string" },
         "trustgap": { "type": "string" },
         "incidentDir": { "type": "string" },
-        "reportsDir": { "type": "string", "description": "Where the report generator writes triumph-report.html/.md." }
+        "reportsDir": { "type": "string", "description": "Where the report generator writes gaia-report.html/.md." }
       }
     },
     "wall": {
@@ -69,7 +69,7 @@
         "denyGlobs": {
           "type": "array",
           "items": { "type": "string" },
-          "description": "Paths REDLINE witness tooling must never read, e.g. ['src/**']. The wall is enforced by the engine."
+          "description": "Paths WITNESS tooling must never read, e.g. ['src/**']. The wall is enforced by the engine."
         }
       }
     },

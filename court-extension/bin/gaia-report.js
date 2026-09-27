@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
- * triumph-report — collect engine JSON (via MCP stdio) and render the two
- * deterministic artifacts: triumph-report.html + triumph-report.md.
+ * gaia-report — collect engine JSON (via MCP stdio) and render the two
+ * deterministic artifacts: gaia-report.html + gaia-report.md.
  *
- *   node bin/triumph-report.js --repo <dir> [--out <dir>]
- *     [--skip redline|splitbrain|warpath ...]   (comma or repeat)
+ *   node bin/gaia-report.js --repo <dir> [--out <dir>]
+ *     [--skip witness|trustgap|triage ...]   (comma or repeat)
  *     [--claimed-coverage <pct>]
  *
  * The collector is a thin MCP client over the engine (court.js). Rendering is
@@ -38,7 +38,7 @@ function parseArgs(argv) {
       process.exit(0);
     }
     else if (a === '--help' || a === '-h') {
-      console.log('usage: triumph-report --repo <dir> [--out <dir>] [--skip redline,splitbrain,warpath] [--claimed-coverage <pct>]');
+      console.log('usage: gaia-report --repo <dir> [--out <dir>] [--skip witness,trustgap,triage] [--claimed-coverage <pct>]');
       process.exit(0);
     }
   }
@@ -81,19 +81,19 @@ async function main() {
     generated: new Date().toISOString(),
   };
   try {
-    if (!args.skip.has('redline')) {
-      console.error('[report] REDLINE …');
-      input.redline = await call('redline_verdict_all');
+    if (!args.skip.has('witness')) {
+      console.error('[report] WITNESS …');
+      input.witness = await call('witness_verdict_all');
     }
-    if (!args.skip.has('splitbrain')) {
-      console.error('[report] SPLITBRAIN …');
-      input.splitbrain = await call('splitbrain_trustgap', args.claimed != null ? { claimed_coverage: args.claimed } : {});
-      const surv = await call('splitbrain_mutants', { status: 'Survived' });
-      if (surv && surv.mutants && surv.mutants.length) input.splitbrain.survivors = surv.mutants;
+    if (!args.skip.has('trustgap')) {
+      console.error('[report] TRUSTGAP …');
+      input.trustgap = await call('trustgap_report', args.claimed != null ? { claimed_coverage: args.claimed } : {});
+      const surv = await call('trustgap_mutants', { status: 'Survived' });
+      if (surv && surv.mutants && surv.mutants.length) input.trustgap.survivors = surv.mutants;
     }
-    if (!args.skip.has('warpath')) {
-      console.error('[report] WARPATH …');
-      input.warpath = await call('warpath_triage');
+    if (!args.skip.has('triage')) {
+      console.error('[report] TRIAGE …');
+      input.triage = await call('triage_run');
     }
   } finally {
     close();
@@ -101,11 +101,11 @@ async function main() {
 
   // Persist the raw engine input alongside the reports for re-render + audit.
   fs.mkdirSync(outDir, { recursive: true });
-  fs.writeFileSync(path.join(outDir, 'triumph-input.json'), JSON.stringify(input, null, 2) + '\n', 'utf8');
+  fs.writeFileSync(path.join(outDir, 'gaia-input.json'), JSON.stringify(input, null, 2) + '\n', 'utf8');
   const { mdPath, htmlPath } = writeReports(input, outDir);
   console.log('wrote:');
   console.log('  ' + mdPath);
   console.log('  ' + htmlPath);
 }
 
-main().catch((e) => { console.error('triumph-report: ' + (e && e.message ? e.message : e)); process.exit(1); });
+main().catch((e) => { console.error('gaia-report: ' + (e && e.message ? e.message : e)); process.exit(1); });

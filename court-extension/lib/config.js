@@ -1,19 +1,19 @@
 #!/usr/bin/env node
 /**
- * lib/config.js — TRIUMPH repo-adapter config loader.
+ * lib/config.js — Gaia repo-adapter config loader.
  *
- * Reads `.triumph.yml` (or .yaml / .json) from the target repo root and
+ * Reads `.gaia.yml` (or .yaml / .json) from the target repo root and
  * returns a fully-resolved, default-filled, validated config object. The
  * engine (court.js) is driven *entirely* by this object — no path or stack
  * is ever assumed.
  *
  * Dependency policy: zero npm deps. The YAML subset parser below handles the
- * full `.triumph.yml` schema (nested maps, lists of scalars, lists of maps,
+ * full `.gaia.yml` schema (nested maps, lists of scalars, lists of maps,
  * inline [a, b] and {k: v}, quoted strings, comments, booleans, numbers,
  * null). JSON configs parse via JSON.parse.
  *
- * Precedence: TRIUMPH_CONFIG env path > .triumph.yml > .triumph.yaml >
- * .triumph.json. Environment variables TRIUMPH_* still override individual
+ * Precedence: GAIA_CONFIG env path > .gaia.yml > .gaia.yaml >
+ * .gaia.json. Environment variables GAIA_* still override individual
  * paths (escape hatch, honored after load).
  */
 
@@ -111,7 +111,7 @@ function parseYamlSubset(text) {
     if (/^---\s*$/.test(noComment.trim())) continue;
     const indent = /^ */.exec(noComment)[0].length;
     if (/\t/.test(noComment.slice(0, indent))) {
-      throw new Error(`.triumph.yml line ${i + 1}: tabs are not valid indentation`);
+      throw new Error(`.gaia.yml line ${i + 1}: tabs are not valid indentation`);
     }
     toks.push({ indent, content: noComment.trim(), lineNo: i + 1 });
   }
@@ -132,11 +132,11 @@ function parseYamlSubset(text) {
       const t = toks[pos];
       if (t.indent < indent) break;
       if (t.indent > indent) {
-        throw new Error(`.triumph.yml line ${t.lineNo}: unexpected indent (expected ${indent})`);
+        throw new Error(`.gaia.yml line ${t.lineNo}: unexpected indent (expected ${indent})`);
       }
       if (t.content.startsWith('- ')) break; // caller's list item
       const m = /^([^:]+):(?:\s+(.*))?$/.exec(t.content);
-      if (!m) throw new Error(`.triumph.yml line ${t.lineNo}: expected "key: value"`);
+      if (!m) throw new Error(`.gaia.yml line ${t.lineNo}: expected "key: value"`);
       const key = unquote(m[1].trim());
       const rest = m[2];
       pos++;
@@ -164,7 +164,7 @@ function parseYamlSubset(text) {
       if (t.indent < indent) break;
       if (!(t.content.startsWith('- ') || t.content === '-')) break;
       if (t.indent > indent) {
-        throw new Error(`.triumph.yml line ${t.lineNo}: unexpected indent in list`);
+        throw new Error(`.gaia.yml line ${t.lineNo}: unexpected indent in list`);
       }
       const itemText = t.content === '-' ? '' : t.content.slice(2).trim();
       pos++;
@@ -205,7 +205,7 @@ function parseYamlSubset(text) {
   if (toks.length === 0) return {};
   const result = parseBlock(toks[0].indent);
   if (pos < toks.length) {
-    throw new Error(`.triumph.yml line ${toks[pos].lineNo}: could not parse (trailing content)`);
+    throw new Error(`.gaia.yml line ${toks[pos].lineNo}: could not parse (trailing content)`);
   }
   return result;
 }
@@ -242,10 +242,10 @@ const DEFAULTS = {
     dir: 'evidence',
     trustgap: 'trustgap/TrustGap.json',
     incidentDir: 'incident',
-    reportsDir: 'reports/triumph',
+    reportsDir: 'reports/gaia',
   },
   wall: { denyGlobs: ['src/**'] },
-  rules: { runbook: null }, // optional: cited in WARPATH triage output
+  rules: { runbook: null }, // optional: cited in TRIAGE triage output
   waivers: 'evidence/waivers.json',
 };
 
@@ -307,7 +307,7 @@ function validate(cfg, repoRoot) {
     errors.push(`spec.path '${cfg.spec.path}' does not exist under ${repoRoot}`);
   }
   // The wall must not swallow the spec or the tests dir — that would make
-  // REDLINE impossible and silently defeat the method.
+  // WITNESS impossible and silently defeat the method.
   for (const re of cfg.wall.denyGlobs.map(globToRegExp)) {
     if (re.test(cfg.tests.dir.replace(/\\/g, '/') + '/') || re.test(cfg.tests.dir.replace(/\\/g, '/'))) {
       errors.push(`wall.denyGlobs must not match the tests dir '${cfg.tests.dir}' — the wall guards implementation, not the witness suites`);
@@ -317,7 +317,7 @@ function validate(cfg, repoRoot) {
     }
   }
   if (errors.length) {
-    const err = new Error('invalid .triumph.yml:\n  - ' + errors.join('\n  - '));
+    const err = new Error('invalid .gaia.yml:\n  - ' + errors.join('\n  - '));
     err.validationErrors = errors;
     throw err;
   }
@@ -360,12 +360,12 @@ function resolvePaths(cfg, repoRoot) {
 
 /** Find and load the config for a repo. Returns null when no file exists. */
 function findConfigFile(repoRoot) {
-  if (process.env.TRIUMPH_CONFIG) {
-    const p = path.resolve(process.env.TRIUMPH_CONFIG);
-    if (!fs.existsSync(p)) throw new Error(`TRIUMPH_CONFIG points at missing file ${p}`);
+  if (process.env.GAIA_CONFIG) {
+    const p = path.resolve(process.env.GAIA_CONFIG);
+    if (!fs.existsSync(p)) throw new Error(`GAIA_CONFIG points at missing file ${p}`);
     return p;
   }
-  for (const name of ['.triumph.yml', '.triumph.yaml', '.triumph.json']) {
+  for (const name of ['.gaia.yml', '.gaia.yaml', '.gaia.json']) {
     const p = path.join(repoRoot, name);
     if (fs.existsSync(p)) return p;
   }
@@ -373,7 +373,7 @@ function findConfigFile(repoRoot) {
 }
 
 function loadConfig(repoRoot) {
-  const root = path.resolve(repoRoot || process.env.TRIUMPH_REPO_ROOT || process.cwd());
+  const root = path.resolve(repoRoot || process.env.GAIA_REPO_ROOT || process.cwd());
   const file = findConfigFile(root);
   let raw = {};
   let source = 'defaults';
@@ -387,8 +387,8 @@ function loadConfig(repoRoot) {
   validate(resolved, root);
 
   // Escape-hatch env overrides (optional, applied last).
-  if (process.env.TRIUMPH_SPEC) resolved.spec.absPath = path.resolve(process.env.TRIUMPH_SPEC);
-  if (process.env.TRIUMPH_TRUSTGAP) resolved.evidence.trustgap = path.resolve(process.env.TRIUMPH_TRUSTGAP);
+  if (process.env.GAIA_SPEC) resolved.spec.absPath = path.resolve(process.env.GAIA_SPEC);
+  if (process.env.GAIA_TRUSTGAP) resolved.evidence.trustgap = path.resolve(process.env.GAIA_TRUSTGAP);
 
   resolved.configSource = source;
   return resolved;

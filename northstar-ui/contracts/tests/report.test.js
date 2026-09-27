@@ -10,9 +10,9 @@ function legacy() {
   return {
     schemaVersion: 1, repository: 'another-project', runId, createdAt: '2026-09-26T12:00:00.000Z',
     checkedOutCommit: 'abc123', workingTreeDirty: true, state: 'complete',
-    redline: { ...empty(), state: 'complete', payload: { results: [{ requirementId: 'REQ-B', spec_text: 'source evidence', failures: [{ message: 'failed' }] }], custom: { deeply: ['preserved'] } } },
-    splitbrain: { ...empty(), state: 'error', errors: ['No source'], sourceGeneratedAt: '2026-09-25T00:00:00.000Z' },
-    warpath: { ...empty(), state: 'complete', payload: { context: { deploys: [{ id: 'd1' }] }, triage: { status: 'suspect' } } },
+    witness: { ...empty(), state: 'complete', payload: { results: [{ requirementId: 'REQ-B', spec_text: 'source evidence', failures: [{ message: 'failed' }] }], custom: { deeply: ['preserved'] } } },
+    trustgap: { ...empty(), state: 'error', errors: ['No source'], sourceGeneratedAt: '2026-09-25T00:00:00.000Z' },
+    triage: { ...empty(), state: 'complete', payload: { context: { deploys: [{ id: 'd1' }] }, triage: { status: 'suspect' } } },
   };
 }
 function v2() {
@@ -20,22 +20,22 @@ function v2() {
   return { schemaVersion: 2, project: { id: projectId, name: 'General project' }, runId,
     createdAt: old.createdAt, updatedAt: old.createdAt, revision: 2, state: 'interrupted',
     checkedOutCommit: old.checkedOutCommit, branch: 'feature/a', workingTreeDirty: false,
-    producer: { name: 'worker', version: '2.0' }, redline: old.redline, splitbrain: old.splitbrain, warpath: old.warpath };
+    producer: { name: 'worker', version: '2.0' }, witness: old.witness, trustgap: old.trustgap, triage: old.triage };
 }
 
 test('v2 strict envelope, valid interrupted state, court states and opaque payloads', () => {
   const report = v2();
   assert.deepEqual(snapshotSchema.parse(report), report);
   assert.deepEqual(normalizeReport(report), report);
-  assert.deepEqual(courtResultSchema.parse(report.redline), report.redline);
+  assert.deepEqual(courtResultSchema.parse(report.witness), report.witness);
   for (const bad of [
     { revision: -1 }, { revision: 1.5 }, { state: 'passed' }, { project: { id: 'wrong', name: 'project' } },
     { producer: { name: 'x', version: '1', arbitrary: true } }, { updatedAt: 'not a date' },
     { branch: 42 }, { extraneous: true },
-    { redline: { ...empty(), payload: [] } },
-    { redline: { ...empty(), state: 'green' } },
-    { redline: { ...empty(), unexpected: 'field' } },
-    { redline: { ...empty(), errors: [42] } },
+    { witness: { ...empty(), payload: [] } },
+    { witness: { ...empty(), state: 'green' } },
+    { witness: { ...empty(), unexpected: 'field' } },
+    { witness: { ...empty(), errors: [42] } },
   ]) assert.equal(snapshotSchema.safeParse({ ...report, ...bad }).success, false, JSON.stringify(bad));
 });
 
@@ -51,10 +51,10 @@ test('legacy v1 migration is deterministic, retains source evidence and never mu
   assert.equal(report.branch, null);
   assert.equal(report.updatedAt, source.createdAt);
   assert.deepEqual(report.producer, { name: 'legacy-snapshot', version: '1' });
-  for (const court of ['redline', 'splitbrain', 'warpath']) assert.deepEqual(report[court], source[court]);
+  for (const court of ['witness', 'trustgap', 'triage']) assert.deepEqual(report[court], source[court]);
   assert.deepEqual(source, before);
   assert.notEqual(normalizeReport({ ...source, repository: 'different' }).project.id, report.project.id);
-  assert.throws(() => normalizeReport({ ...source, redline: { ...empty(), state: 'invalid' } }));
+  assert.throws(() => normalizeReport({ ...source, witness: { ...empty(), state: 'invalid' } }));
   assert.throws(() => normalizeReport({ ...source, repository: '' }));
   assert.throws(() => normalizeReport({ ...source, injected: 'not legacy' }));
 });
@@ -67,7 +67,7 @@ test('legacy v1 migration is deterministic, retains source evidence and never mu
 test('legacy project id matches the pinned cross-implementation vector', () => {
   const source = legacy();
   assert.equal(normalizeReport({ ...source, repository: 'northstar' }).project.id,
-    'f7ba6a90-71c4-5d81-ab88-fbfb272df915');
+    '7e9713f9-11b5-509a-a9ab-9e4042e65556');
 });
 
 test('JSON exports complete v2 evidence from either version; text and HTML are generic and offline', () => {
@@ -76,7 +76,7 @@ test('JSON exports complete v2 evidence from either version; text and HTML are g
   assert.deepEqual(JSON.parse(exportJson(report)), report);
   assert.deepEqual(JSON.parse(exportSnapshot(legacy(), 'json')), normalizeReport(legacy()));
   assert.deepEqual(report, before);
-  assert.deepEqual(evidence(report).sections.map((s) => s.court), ['redline', 'splitbrain', 'warpath']);
+  assert.deepEqual(evidence(report).sections.map((s) => s.court), ['witness', 'trustgap', 'triage']);
   for (const format of ['md', 'html']) {
     const output = exportSnapshot(report, format);
     const readable = format === 'md' ? output.replace(/\\/g, '') : output;
@@ -91,8 +91,8 @@ test('untrusted project names, errors, keys and nested evidence cannot inject HT
   const report = v2();
   const attack = '</style><script>alert(1)</script><svg onload="bad">\n## Fake verdict\n- **Safe:** yes';
   report.project.name = attack;
-  report.redline.errors = [attack];
-  report.redline.payload = { [attack]: { nested: [attack] } };
+  report.witness.errors = [attack];
+  report.witness.payload = { [attack]: { nested: [attack] } };
   const page = exportHtml(report);
   assert.doesNotMatch(page, /<script|<svg|<\/style><script/i);
   assert.match(page, /&lt;script&gt;/);

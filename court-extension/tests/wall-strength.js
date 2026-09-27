@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* Wall-strength: the REDLINE wall must hold even if the model misbehaves. */
+/* Wall-strength: the WITNESS wall must hold even if the model misbehaves. */
 'use strict';
 const assert = require('assert');
 const fs = require('fs');
@@ -39,7 +39,7 @@ function calls(repo, list) {
   // Clause-id injection attempts that must all be rejected.
   for (const bad of ['W4/../../src/circuit', 'W4\0', 'W4; rm -rf /', 'W4$(cat src/circuit.ts)', 'W4`id`', 'W4%0a']) {
     await t('rejects clause_id ' + JSON.stringify(bad), async () => {
-      const [r] = await calls(NORTHSTAR, [{ name: 'redline_clause', arguments: { clause_id: bad } }]);
+      const [r] = await calls(NORTHSTAR, [{ name: 'witness_clause', arguments: { clause_id: bad } }]);
       const msg = r.error ? r.error.message : (JSON.parse(r.result.content[0].text).error || JSON.stringify(r.result));
       assert.ok(/invalid clause_id/.test(msg), 'not rejected: ' + msg.slice(0, 120));
     });
@@ -60,11 +60,11 @@ function calls(repo, list) {
   // A repo whose denyGlobs would swallow tests/ must fail validation loudly.
   await t('config validation refuses a wall that swallows the tests dir', () => {
     const os = require('os');
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'triumph-wall-'));
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gaia-wall-'));
     fs.mkdirSync(path.join(dir, 'docs'));
     fs.mkdirSync(path.join(dir, 'tests'));
     fs.writeFileSync(path.join(dir, 'docs', 's.md'), '# s\n## W1 — x\n1. a MUST b\n');
-    fs.writeFileSync(path.join(dir, '.triumph.yml'), 'version: 1\nspec: { path: docs/s.md }\nwall: { denyGlobs: ["**"] }\n');
+    fs.writeFileSync(path.join(dir, '.gaia.yml'), 'version: 1\nspec: { path: docs/s.md }\nwall: { denyGlobs: ["**"] }\n');
     const { loadConfig } = require('../lib/config');
     let threw = null;
     try { loadConfig(dir); } catch (e) { threw = e; }

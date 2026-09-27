@@ -172,7 +172,7 @@ function fakeWebviewView(posted) {
   const activateContext = { subscriptions: [] };
   await t('activate registers all commands including statusBarAction', () => {
     ext.activate(activateContext);
-    for (const c of ['triumph.installCourts', 'triumph.detectConfig', 'triumph.runCourt', 'triumph.generateReport', 'triumph.openReport', 'triumph.dashboardRun', 'triumph.statusBarAction']) {
+    for (const c of ['gaia.installCourts', 'gaia.detectConfig', 'gaia.runCourt', 'gaia.generateReport', 'gaia.openReport', 'gaia.dashboardRun', 'gaia.statusBarAction']) {
       assert.ok(registered.commands.includes(c), 'missing command ' + c);
     }
   });
@@ -224,8 +224,8 @@ function fakeWebviewView(posted) {
     // run the command's core: writeReports on collected input.
     const { writeReports } = require('../lib/render');
     const os = require('os');
-    const out = fs.mkdtempSync(path.join(os.tmpdir(), 'triumph-ext-'));
-    const input = { repo: 'n', repoRootAbs: '/r', generated: 'g', redline: { summary: { green: 0, red: 1, yellow: 0, total: 1 }, results: [{ clause: 'W1', status: 'red', passed: 0, failed: 1, total: 1, test: 't', spec_anchor: 's', failures: [] }] } };
+    const out = fs.mkdtempSync(path.join(os.tmpdir(), 'gaia-ext-'));
+    const input = { repo: 'n', repoRootAbs: '/r', generated: 'g', witness: { summary: { green: 0, red: 1, yellow: 0, total: 1 }, results: [{ clause: 'W1', status: 'red', passed: 0, failed: 1, total: 1, test: 't', spec_anchor: 's', failures: [] }] } };
     const { mdPath, htmlPath } = writeReports(input, out);
     assert.ok(fs.existsSync(mdPath) && fs.existsSync(htmlPath));
   });
@@ -234,7 +234,7 @@ function fakeWebviewView(posted) {
     const os = require('os');
     const base = path.join(os.homedir(), '.local', 'share', 'code-server', 'extensions');
     if (!fs.existsSync(base)) { console.log('     (skipped: no code-server extensions dir)'); return; }
-    const installs = fs.readdirSync(base).filter((d) => d.startsWith('triumph.triumph-courts-'));
+    const installs = fs.readdirSync(base).filter((d) => d.startsWith('gaia.gaia-courts-'));
     if (!installs.length) { console.log('     (skipped: extension not installed)'); return; }
     // Newest install dir.
     const newest = installs.map((d) => path.join(base, d)).sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs)[0];
@@ -247,34 +247,34 @@ function fakeWebviewView(posted) {
     const instHosts = fs.readFileSync(path.join(newest, 'lib', 'hosts.js'), 'utf8');
     assert.strictEqual(instHosts, srcHosts, 'installed lib/hosts.js is stale — reinstall + reload the host');
     // 3. Skills + custom_modes present in the installed bundle.
-    assert.ok(fs.existsSync(path.join(newest, 'agents', 'skills', 'redline-extract', 'SKILL.md')), 'skills missing from installed bundle');
+    assert.ok(fs.existsSync(path.join(newest, 'agents', 'skills', 'witness-extract', 'SKILL.md')), 'skills missing from installed bundle');
     const cm = fs.readFileSync(path.join(newest, 'agents', 'bob', 'custom_modes.yaml'), 'utf8');
     assert.ok(/^customModes:/m.test(cm), 'installed custom_modes.yaml must be object-shaped');
   });
 
   // --- persistent panel: registration (subtask 6, contract A/G) -----------
 
-  await t('registerWebviewViewProvider is called with "triumph.panel" and a resolveWebviewView provider', () => {
+  await t('registerWebviewViewProvider is called with "gaia.panel" and a resolveWebviewView provider', () => {
     const { vscode: v2, rec } = mkVscode();
     const ext2 = freshExtension(v2);
     ext2.activate({ subscriptions: [] });
     assert.strictEqual(rec.webviewProviders.length, 1, 'expected exactly one webview view provider registration');
-    assert.strictEqual(rec.webviewProviders[0].id, 'triumph.panel');
+    assert.strictEqual(rec.webviewProviders[0].id, 'gaia.panel');
     assert.strictEqual(typeof rec.webviewProviders[0].provider.resolveWebviewView, 'function');
   });
 
-  await t('package.json contributes the triumph activitybar container + triumph.panel webview view; icon exists', () => {
+  await t('package.json contributes the gaia activitybar container + gaia.panel webview view; icon exists', () => {
     const pkg = require('../package.json');
     const containers = pkg.contributes.viewsContainers && pkg.contributes.viewsContainers.activitybar;
     assert.ok(Array.isArray(containers), 'contributes.viewsContainers.activitybar must be an array');
-    const triumphContainer = containers.find((c) => c.id === 'triumph');
-    assert.ok(triumphContainer, 'missing activitybar container with id "triumph"');
-    assert.ok(triumphContainer.icon, 'activitybar container must declare an icon');
-    assert.ok(fs.existsSync(path.join(EXT, triumphContainer.icon)), 'icon file must exist on disk: ' + triumphContainer.icon);
-    const views = pkg.contributes.views && pkg.contributes.views.triumph;
-    assert.ok(Array.isArray(views), 'contributes.views.triumph must be an array');
-    assert.ok(views.some((v) => v.id === 'triumph.panel' && v.type === 'webview'),
-      'contributes.views.triumph must contain a webview view with id "triumph.panel"');
+    const gaiaContainer = containers.find((c) => c.id === 'gaia');
+    assert.ok(gaiaContainer, 'missing activitybar container with id "gaia"');
+    assert.ok(gaiaContainer.icon, 'activitybar container must declare an icon');
+    assert.ok(fs.existsSync(path.join(EXT, gaiaContainer.icon)), 'icon file must exist on disk: ' + gaiaContainer.icon);
+    const views = pkg.contributes.views && pkg.contributes.views.gaia;
+    assert.ok(Array.isArray(views), 'contributes.views.gaia must be an array');
+    assert.ok(views.some((v) => v.id === 'gaia.panel' && v.type === 'webview'),
+      'contributes.views.gaia must contain a webview view with id "gaia.panel"');
   });
 
   // --- persistent panel: old commands still invoke the right logic (contract G) ---
@@ -282,9 +282,9 @@ function fakeWebviewView(posted) {
   await t('old commands reach the underlying actions; installCourts/runCourt only preselect + focus (no dispatch, no quickpick)', async () => {
     const calls = [];
     const fakeActions = {
-      COURTS: ['REDLINE', 'SPLITBRAIN', 'WARPATH'],
+      COURTS: ['WITNESS', 'TRUSTGAP', 'TRIAGE'],
       configStatus: () => ({ exists: false, path: null, notes: [] }),
-      detectConfig: async () => { calls.push('detectConfig'); return { path: '/repo/.triumph.yml', notes: [] }; },
+      detectConfig: async () => { calls.push('detectConfig'); return { path: '/repo/.gaia.yml', notes: [] }; },
       installCourts: async () => { throw new Error('installCourts must not be called by the bare command'); },
       runCourt: async () => { throw new Error('runCourt must not be called by the bare command'); },
       generateReport: async () => { calls.push('generateReport'); return { htmlPath: 'h', mdPath: 'm', generatedAt: 'now' }; },
@@ -292,7 +292,7 @@ function fakeWebviewView(posted) {
       dashboardRun: async () => { calls.push('dashboardRun'); return { url: 'http://dash/1' }; },
     };
     const { vscode: v2, rec } = mkVscode({
-      configGet: (section, key) => (section === 'triumph' && key === 'defaultHost' ? 'claude' : undefined),
+      configGet: (section, key) => (section === 'gaia' && key === 'defaultHost' ? 'claude' : undefined),
     });
     const ext2 = freshExtension(v2, (request, parent) => {
       if (request === './actions' && parent && parent.filename && /extension\.js$/.test(parent.filename)) return fakeActions;
@@ -306,44 +306,44 @@ function fakeWebviewView(posted) {
     provider.markReady(); // simulate the webview having sent `ready`
 
     calls.length = 0; posted.length = 0;
-    await rec.commandFns['triumph.detectConfig']();
+    await rec.commandFns['gaia.detectConfig']();
     await waitForJobClear(provider);
-    assert.ok(calls.includes('detectConfig'), 'triumph.detectConfig must reach actions.detectConfig');
-    assert.ok(rec.executed.some((e) => e.id === 'triumph.panel.focus'), 'triumph.detectConfig must execute triumph.panel.focus');
+    assert.ok(calls.includes('detectConfig'), 'gaia.detectConfig must reach actions.detectConfig');
+    assert.ok(rec.executed.some((e) => e.id === 'gaia.panel.focus'), 'gaia.detectConfig must execute gaia.panel.focus');
 
     calls.length = 0; posted.length = 0;
-    await rec.commandFns['triumph.installCourts']();
-    assert.ok(rec.executed.some((e) => e.id === 'triumph.panel.focus'), 'triumph.installCourts must execute triumph.panel.focus');
-    assert.deepStrictEqual(calls, [], 'triumph.installCourts must not call actions.installCourts');
-    assert.strictEqual(rec.quickPicks.length, 0, 'triumph.installCourts must not use showQuickPick');
+    await rec.commandFns['gaia.installCourts']();
+    assert.ok(rec.executed.some((e) => e.id === 'gaia.panel.focus'), 'gaia.installCourts must execute gaia.panel.focus');
+    assert.deepStrictEqual(calls, [], 'gaia.installCourts must not call actions.installCourts');
+    assert.strictEqual(rec.quickPicks.length, 0, 'gaia.installCourts must not use showQuickPick');
     const focusInstall = posted.find((m) => m.type === 'focus');
     assert.ok(focusInstall, 'expected a focus message for installCourts');
     assert.strictEqual(focusInstall.section, 'install');
-    assert.deepStrictEqual(focusInstall.preselect, { host: 'claude' }, 'host must be preselected from triumph.defaultHost');
+    assert.deepStrictEqual(focusInstall.preselect, { host: 'claude' }, 'host must be preselected from gaia.defaultHost');
 
     calls.length = 0; posted.length = 0;
-    await rec.commandFns['triumph.runCourt']();
-    assert.ok(rec.executed.some((e) => e.id === 'triumph.panel.focus'), 'triumph.runCourt must execute triumph.panel.focus');
-    assert.deepStrictEqual(calls, [], 'triumph.runCourt must not call actions.runCourt');
-    assert.strictEqual(rec.quickPicks.length, 0, 'triumph.runCourt must not use showQuickPick');
+    await rec.commandFns['gaia.runCourt']();
+    assert.ok(rec.executed.some((e) => e.id === 'gaia.panel.focus'), 'gaia.runCourt must execute gaia.panel.focus');
+    assert.deepStrictEqual(calls, [], 'gaia.runCourt must not call actions.runCourt');
+    assert.strictEqual(rec.quickPicks.length, 0, 'gaia.runCourt must not use showQuickPick');
     const focusRun = posted.find((m) => m.type === 'focus');
     assert.ok(focusRun, 'expected a focus message for runCourt');
     assert.strictEqual(focusRun.section, 'run');
 
     calls.length = 0; posted.length = 0;
-    await rec.commandFns['triumph.generateReport']();
+    await rec.commandFns['gaia.generateReport']();
     await waitForJobClear(provider);
-    assert.ok(calls.includes('generateReport'), 'triumph.generateReport must reach actions.generateReport');
+    assert.ok(calls.includes('generateReport'), 'gaia.generateReport must reach actions.generateReport');
 
     calls.length = 0; posted.length = 0;
-    await rec.commandFns['triumph.openReport']();
+    await rec.commandFns['gaia.openReport']();
     await waitForJobClear(provider);
-    assert.ok(calls.includes('findLastReport'), 'triumph.openReport must reach actions.findLastReport');
+    assert.ok(calls.includes('findLastReport'), 'gaia.openReport must reach actions.findLastReport');
 
     calls.length = 0; posted.length = 0;
-    await rec.commandFns['triumph.dashboardRun']();
+    await rec.commandFns['gaia.dashboardRun']();
     await waitForJobClear(provider);
-    assert.ok(calls.includes('dashboardRun'), 'triumph.dashboardRun must reach actions.dashboardRun');
+    assert.ok(calls.includes('dashboardRun'), 'gaia.dashboardRun must reach actions.dashboardRun');
   });
 
   console.log(`\n${passed} passed, ${failed} failed`);

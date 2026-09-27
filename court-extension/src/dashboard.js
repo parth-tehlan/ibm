@@ -17,7 +17,7 @@
  * multi-project startSession/stopAll so the extension host's status bar and
  * clean-shutdown paths keep working unchanged.
  *
- * Raw offline artifacts (triumph-input.json/html/md) are untouched — the
+ * Raw offline artifacts (gaia-input.json/html/md) are untouched — the
  * dashboard run is an additional, separate artifact.
  */
 
@@ -30,8 +30,8 @@ const { projectId, toSnapshot } = require('../lib/convert');
 const { loadConfig, findConfigFile } = require('../lib/config');
 const { McpClient } = require('./mcp-client');
 
-const PRODUCER = { name: 'triumph-courts', version: require('../package.json').version };
-const ALL = ['redline', 'splitbrain', 'warpath'];
+const PRODUCER = { name: 'gaia-courts', version: require('../package.json').version };
+const ALL = ['witness', 'trustgap', 'triage'];
 
 // --- shared child + per-project sessions -------------------------------------
 let sharedServer = null; // one DashboardServer child serves every project
@@ -96,20 +96,20 @@ function preflight(root) {
   const reasons = {};
   let cfg;
   try {
-    if (!findConfigFile(root)) throw new Error('No TRIUMPH configuration found');
+    if (!findConfigFile(root)) throw new Error('No Gaia configuration found');
     cfg = loadConfig(root);
   } catch (e) {
-    for (const court of ALL) reasons[court] = `Invalid TRIUMPH configuration: ${e.message}`;
+    for (const court of ALL) reasons[court] = `Invalid Gaia configuration: ${e.message}`;
     return { runnable: [], reasons };
   }
-  if (!fs.existsSync(cfg.spec.absPath)) reasons.redline = 'spec.path missing';
-  if (!fs.existsSync(cfg.tests.absDir)) reasons.redline = 'tests.dir missing';
+  if (!fs.existsSync(cfg.spec.absPath)) reasons.witness = 'spec.path missing';
+  if (!fs.existsSync(cfg.tests.absDir)) reasons.witness = 'tests.dir missing';
   if (!(cfg.mutation.absReport && fs.existsSync(cfg.mutation.absReport)) &&
       !fs.existsSync(cfg.evidence.trustgap) && !cfg.mutation.command) {
-    reasons.splitbrain = 'no mutation report, TrustGap ledger or mutation command';
+    reasons.trustgap = 'no mutation report, TrustGap ledger or mutation command';
   }
-  if (!cfg.fixtures.metrics || !fs.existsSync(cfg.fixtures.metrics)) reasons.warpath = 'metrics fixture missing';
-  else if (!cfg.fixtures.deploys || !fs.existsSync(cfg.fixtures.deploys)) reasons.warpath = 'deploy fixture missing';
+  if (!cfg.fixtures.metrics || !fs.existsSync(cfg.fixtures.metrics)) reasons.triage = 'metrics fixture missing';
+  else if (!cfg.fixtures.deploys || !fs.existsSync(cfg.fixtures.deploys)) reasons.triage = 'deploy fixture missing';
   const runnable = ALL.filter((c) => !reasons[c]);
   return { runnable, reasons, cfg };
 }
@@ -117,16 +117,16 @@ function preflight(root) {
 /** Classify a court's engine payload as complete/unavailable/error evidence. */
 function outcome(court, payload) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return { kind: 'error', errors: ['Engine returned no object evidence'] };
-  if (court === 'redline' && (payload.status === 'error' || !Array.isArray(payload.results))) {
-    return { kind: 'error', errors: [String(payload.detail || 'REDLINE produced no verdicts')], payload };
+  if (court === 'witness' && (payload.status === 'error' || !Array.isArray(payload.results))) {
+    return { kind: 'error', errors: [String(payload.detail || 'WITNESS produced no verdicts')], payload };
   }
-  if (court === 'splitbrain' && payload.status !== 'ok') return {
+  if (court === 'trustgap' && payload.status !== 'ok') return {
     kind: payload.status === 'not-run' || payload.status === 'unconfigured' ? 'unavailable' : 'error',
-    errors: [String(payload.note || payload.error || `SPLITBRAIN status: ${payload.status || 'missing'}`)], payload,
+    errors: [String(payload.note || payload.error || `TRUSTGAP status: ${payload.status || 'missing'}`)], payload,
   };
-  if (court === 'warpath' && (payload.status || !payload.incidentWindow)) return {
+  if (court === 'triage' && (payload.status || !payload.incidentWindow)) return {
     kind: payload.status === 'no-signal-window' ? 'unavailable' : 'error',
-    errors: [String(payload.detail || `WARPATH status: ${payload.status || 'missing incident window'}`)], payload,
+    errors: [String(payload.detail || `TRIAGE status: ${payload.status || 'missing incident window'}`)], payload,
   };
   return { kind: 'complete', payload };
 }
@@ -142,12 +142,12 @@ async function collectCourts(client, root, requested, reasons, cfg, signal, onMu
     if (signal?.aborted) { outcomes[court] = { kind: 'error', errors: ['Extension stopped'] }; continue; }
     try {
       let payload;
-      if (court === 'redline') payload = await client.call('redline_verdict_all');
-      else if (court === 'warpath') payload = await client.call('warpath_triage');
+      if (court === 'witness') payload = await client.call('witness_verdict_all');
+      else if (court === 'triage') payload = await client.call('triage_run');
       else {
         if (cfg.mutation.command) {
           const startedAt = Date.now();
-          const started = await client.call('splitbrain_mutate');
+          const started = await client.call('trustgap_mutate');
           if (started.status !== 'started' || !started.job_id) { outcomes[court] = outcome(court, started); continue; }
           const jobId = started.job_id;
           const deadline = Date.now() + (cfg.mutation.timeoutSeconds || 900) * 1000 + 10_000;
@@ -157,7 +157,7 @@ async function collectCourts(client, root, requested, reasons, cfg, signal, onMu
             if (signal?.aborted) throw new Error('Extension stopped');
             if (Date.now() > deadline) throw new Error('Mutation job timed out');
             await new Promise((resolve) => setTimeout(resolve, 1000));
-            status = await client.call('splitbrain_status', { job_id: jobId });
+            status = await client.call('trustgap_status', { job_id: jobId });
             // Forward any new progress events to the dashboard's mutation bus.
             if (onMutationProgress && Array.isArray(status.progress)) {
               const newEvents = status.progress.slice(lastProgressIdx);
@@ -173,7 +173,7 @@ async function collectCourts(client, root, requested, reasons, cfg, signal, onMu
           // Signal completion to the bus.
           if (onMutationProgress) onMutationProgress(jobId, null, 'done');
         }
-        payload = await client.call('splitbrain_trustgap');
+        payload = await client.call('trustgap_report');
       }
       outcomes[court] = outcome(court, payload);
     } catch (e) {
@@ -194,7 +194,7 @@ async function execute(session, requested, existingRun, openExternal) {
   // is known before collectCourts starts the mutation job.
   const runId = existingRun?.runId || crypto.randomUUID();
 
-  // Relay mutation progress from splitbrain_status poll responses to the
+  // Relay mutation progress from trustgap_status poll responses to the
   // dashboard server's MutationBus via the IPC channel on the shared child.
   // Uses `runKey` (projectId:runId) — the same key the browser uses to
   // subscribe via /api/projects/:id/runs/:runId/mutation-stream.
@@ -204,9 +204,9 @@ async function execute(session, requested, existingRun, openExternal) {
     if (!child || !child.connected) return;
     try {
       if (signal === 'done') {
-        child.send({ type: 'triumph.mutationDone', runKey, status: 'done', error: null });
+        child.send({ type: 'gaia.mutationDone', runKey, status: 'done', error: null });
       } else if (event) {
-        child.send({ type: 'triumph.mutationProgress', runKey, event });
+        child.send({ type: 'gaia.mutationProgress', runKey, event });
       }
     } catch { /* IPC gone — not fatal */ }
   }
@@ -351,7 +351,7 @@ async function runAndPublish(vscode, opts) {
   const selected = opts.requested || ALL;
   if (!Array.isArray(selected) || !selected.length || selected.some((c) => !ALL.includes(c)) || new Set(selected).size !== selected.length) throw new Error('Invalid court selection');
   const session = await startSession(vscode, opts);
-  if (session.busy) throw new Error('TRIUMPH run already in progress');
+  if (session.busy) throw new Error('Gaia run already in progress');
   session.busy = true;
   try { return await execute(session, selected, opts.existingRun, opts.openExternal); }
   finally { session.busy = false; }

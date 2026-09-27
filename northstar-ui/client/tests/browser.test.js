@@ -21,7 +21,7 @@ async function until(check) {
 // Render the actual TSX browser client against an isolated HTTP server. Never
 // read the developer's default history or depend on an installed browser binary.
 test('browser contract: two projects, detached imports, generic untrusted evidence and navigation', async (t) => {
-  const dir = await mkdtemp(path.join(os.tmpdir(), 'triumph-browser-'));
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'gaia-browser-'));
   const vite = await createServer({ server: { middlewareMode: true }, appType: 'custom', logLevel: 'silent' });
   const { default: App } = await vite.ssrLoadModule('/client/App.tsx');
   const history = createHistory({ dir, legacyDir: path.join(dir, 'no-legacy') });
@@ -54,27 +54,27 @@ test('browser contract: two projects, detached imports, generic untrusted eviden
   assert.equal(dom.window.document.querySelectorAll('.project-item').length, 2);
   assert.equal(dom.window.document.querySelector('img'), null, 'project name is text, not markup');
   await click(button('Alpha <img'));
-  await click(button('Run REDLINE'));
+  await click(button('Run WITNESS'));
   await until(() => dom.window.location.pathname.startsWith(`/projects/${a.id}/runs/`));
   assert.match(dom.window.location.pathname, new RegExp(`^/projects/${a.id}/runs/`));
   const runA = dom.window.location.pathname.split('/').at(-1);
   const requestA = (await (await globalThis.fetch(`/api/extension/${a.id}/requests`, { headers: { Authorization: `Bearer ${tokenA}` } })).json()).request;
-  assert.deepEqual(requestA.courts, ['redline']);
+  assert.deepEqual(requestA.courts, ['witness']);
   assert.equal(requestA.runId, runA);
   await click(button('Beta repository'));
-  await click(button('Run WARPATH'));
+  await click(button('Run TRIAGE'));
   await until(() => dom.window.location.pathname.startsWith(`/projects/${b.id}/runs/`));
   const runB = dom.window.location.pathname.split('/').at(-1);
   assert.notEqual(runA, runB);
   assert.equal((await (await globalThis.fetch(`/api/projects/${a.id}/runs`)).json()).length, 1);
   assert.equal((await (await globalThis.fetch(`/api/projects/${b.id}/runs`)).json()).length, 1);
   const initialB = await (await globalThis.fetch(`/api/projects/${b.id}/runs/${runB}`)).json();
-  const generic = { ...initialB, revision: 1, state: 'complete', updatedAt: new Date().toISOString(), warpath: { ...envelope(), state: 'complete', payload: { novel: '<img src=x onerror=alert(1)>' } } };
+  const generic = { ...initialB, revision: 1, state: 'complete', updatedAt: new Date().toISOString(), triage: { ...envelope(), state: 'complete', payload: { novel: '<img src=x onerror=alert(1)>' } } };
   assert.equal((await globalThis.fetch(`/api/extension/${b.id}/runs`, { method: 'POST', headers: { Authorization: `Bearer ${tokenB}`, 'Content-Type': 'application/json' }, body: JSON.stringify(generic) })).status, 201);
   await click(button('Beta repository'));
   await click([...dom.window.document.querySelectorAll('.run-item')].find((el) => el.textContent.includes(runB.slice(0, 8))));
   await until(() => dom.window.document.querySelector('.run-identity').textContent.includes(runB));
-  await click(button('WARPATH'));
+  await click(button('TRIAGE'));
   assert.match(dom.window.document.body.textContent, /Unrecognized court payload/);
   assert.equal(dom.window.document.querySelector('img'), null, 'generic evidence is escaped');
   // A disconnected project cannot run, even though its history remains visible.
@@ -96,11 +96,11 @@ test('browser contract: two projects, detached imports, generic untrusted eviden
 });
 
 test('branded real-like opaque court evidence renders without invented scores or verdicts', async (t) => {
-  const dir = await mkdtemp(path.join(os.tmpdir(), 'triumph-generic-'));
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'gaia-generic-'));
   const vite = await createServer({ server: { middlewareMode: true }, appType: 'custom', logLevel: 'silent' });
   const { default: App } = await vite.ssrLoadModule('/client/App.tsx');
   const project = { id: randomUUID(), name: 'Generic' };
-  const report = { schemaVersion: 2, project, runId: randomUUID(), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), revision: 0, state: 'complete', checkedOutCommit: null, branch: null, workingTreeDirty: null, producer: { name: 'test', version: '1' }, redline: { ...envelope(), state: 'complete', payload: { testimony: '<script>alert(1)</script>' } }, splitbrain: { ...envelope(), state: 'complete', payload: { court: 'SPLITBRAIN', status: 'ok', schemaVersion: 1, claimedCoverage: null, honestMutationScore: 89.47, trustGap: null, dishonestTests: [{ testId: 'tests/weak.test.js', survivedMutants: ['m-2'] }], itLedger: [], survivors: [{ id: 'm-2' }] } }, warpath: { ...envelope(), state: 'complete', payload: { court: 'WARPATH', status: 'triaged', suspect: { id: 'deploy-1' }, evidence: [{ message: 'latency increased' }] } } };
+  const report = { schemaVersion: 2, project, runId: randomUUID(), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), revision: 0, state: 'complete', checkedOutCommit: null, branch: null, workingTreeDirty: null, producer: { name: 'test', version: '1' }, witness: { ...envelope(), state: 'complete', payload: { testimony: '<script>alert(1)</script>' } }, trustgap: { ...envelope(), state: 'complete', payload: { court: 'TRUSTGAP', status: 'ok', schemaVersion: 1, claimedCoverage: null, honestMutationScore: 89.47, trustGap: null, dishonestTests: [{ testId: 'tests/weak.test.js', survivedMutants: ['m-2'] }], itLedger: [], survivors: [{ id: 'm-2' }] } }, triage: { ...envelope(), state: 'complete', payload: { court: 'TRIAGE', status: 'triaged', suspect: { id: 'deploy-1' }, evidence: [{ message: 'latency increased' }] } } };
   const history = createHistory({ dir, legacyDir: path.join(dir, 'no-legacy') });
   await history.save(report);
   const app = createApp({ history }); const server = app.listen(0, '127.0.0.1'); await new Promise((r) => server.once('listening', r));
@@ -120,7 +120,7 @@ test('branded real-like opaque court evidence renders without invented scores or
   await act(async () => nav('Overview').click());
   assert.equal(dom.window.document.querySelectorAll('.court-card .card-foot').length, 3);
   assert.equal([...dom.window.document.querySelectorAll('.court-card .card-foot')].filter((el) => el.textContent.includes('unrecognized format')).length, 2);
-  await act(async () => nav('SPLITBRAIN').click());
+  await act(async () => nav('TRUSTGAP').click());
   const split = dom.window.document.querySelector('.page-section');
   assert.match(split.textContent, /Engine mutation ledger/);
   assert.match(split.textContent, /89\.47%/);
@@ -128,7 +128,7 @@ test('branded real-like opaque court evidence renders without invented scores or
   assert.match(split.textContent, /tests\/weak\.test\.js/);
   assert.doesNotMatch(split.textContent, /8947\.0%|GREEN CLAUSES/i);
   assert.match(split.querySelector('details pre').textContent, /"honestMutationScore": 89\.47/);
-  await act(async () => nav('WARPATH').click());
+  await act(async () => nav('TRIAGE').click());
   const war = dom.window.document.querySelector('.page-section');
   assert.match(war.textContent, /Unrecognized evidence/, 'incomplete triage without incident window stays opaque');
   assert.match(war.querySelector('pre').textContent, /latency increased/);

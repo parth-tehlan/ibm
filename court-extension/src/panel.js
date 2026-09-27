@@ -1,7 +1,7 @@
 'use strict';
 /**
- * src/panel.js — TriumphPanelProvider: persistent Webview View for the
- * TRIUMPH activity-bar container (`triumph.panel`).
+ * src/panel.js — GaiaPanelProvider: persistent Webview View for the
+ * Gaia activity-bar container (`gaia.panel`).
  *
  * The provider owns state, logging, the single-flight job slot and message
  * plumbing. `handleMessage` dispatches job-type messages into src/actions.js
@@ -20,7 +20,7 @@ const crypto = require('crypto');
 const { HOSTS } = require('../lib/hosts');
 
 const LOG_LIMIT = 200;
-const FALLBACK_COURTS = ['REDLINE', 'SPLITBRAIN', 'WARPATH'];
+const FALLBACK_COURTS = ['WITNESS', 'TRUSTGAP', 'TRIAGE'];
 
 const WHITELIST = new Set([
   'ready', 'detectConfig', 'openConfig', 'installCourts', 'runCourt',
@@ -43,7 +43,7 @@ function safe(fn, fallback) {
   try { return fn(); } catch (e) { return fallback; }
 }
 
-class TriumphPanelProvider {
+class GaiaPanelProvider {
   /**
    * @param {object} deps
    * @param {object} [deps.actions] src/actions.js module (subtask 4). May be
@@ -116,7 +116,7 @@ class TriumphPanelProvider {
   }
 
   _refreshHostsDefault() {
-    const def = safe(() => vscode.workspace.getConfiguration('triumph').get('defaultHost'), null);
+    const def = safe(() => vscode.workspace.getConfiguration('gaia').get('defaultHost'), null);
     this.state.hosts.default = def || 'all';
   }
 
@@ -154,7 +154,7 @@ class TriumphPanelProvider {
     };
   }
 
-  /** Open (or reuse) the singleton 'triumphReport' WebviewPanel. */
+  /** Open (or reuse) the singleton 'gaiaReport' WebviewPanel. */
   _openReportPanel(htmlPath) {
     const html = fs.readFileSync(htmlPath, 'utf8');
     if (this._reportPanel) {
@@ -167,7 +167,7 @@ class TriumphPanelProvider {
       this._reportPanel = null; // stale reference (panel disposed without firing onDidDispose)
     }
     const panel = vscode.window.createWebviewPanel(
-      'triumphReport', 'TRIUMPH 3-Court Report', vscode.ViewColumn.One, { enableScripts: true }
+      'gaiaReport', 'Gaia 3-Court Report', vscode.ViewColumn.One, { enableScripts: true }
     );
     panel.webview.html = html;
     this._reportPanel = panel;
@@ -246,7 +246,7 @@ class TriumphPanelProvider {
 <meta http-equiv="Content-Security-Policy" content="${csp}">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="stylesheet" href="${cssHref}">
-<title>TRIUMPH</title>
+<title>Gaia</title>
 </head>
 <body>
 <div id="root"></div>
@@ -321,7 +321,7 @@ class TriumphPanelProvider {
   reveal(opts = {}) {
     safe(() => {
       if (vscode.commands && typeof vscode.commands.executeCommand === 'function') {
-        Promise.resolve(vscode.commands.executeCommand('triumph.panel.focus')).catch(() => {});
+        Promise.resolve(vscode.commands.executeCommand('gaia.panel.focus')).catch(() => {});
       }
     }, undefined);
     if (this._ready) this._doReveal(opts);
@@ -345,7 +345,7 @@ class TriumphPanelProvider {
    */
   async runJob(kind, label, fn) {
     if (this.state.job) {
-      this.postError(`A TRIUMPH job is already running (${this.state.job.label}).`);
+      this.postError(`A Gaia job is already running (${this.state.job.label}).`);
       return undefined;
     }
     this.state.job = { kind, label, startedAt: new Date().toISOString() };
@@ -366,16 +366,16 @@ class TriumphPanelProvider {
 
 function resultSummary(court, result) {
   if (!result) return 'no result';
-  if (court === 'REDLINE' && result.summary) {
+  if (court === 'WITNESS' && result.summary) {
     const s = result.summary;
     return `${s.green} green / ${s.red} red / ${s.yellow} yellow of ${s.total}`;
   }
-  if (court === 'SPLITBRAIN') {
+  if (court === 'TRUSTGAP') {
     if (result.status === 'started') return `mutation job ${result.job_id} started`;
     if (result.trustGap != null) return `trust gap ${result.trustGap}`;
     return result.status || 'done';
   }
-  if (court === 'WARPATH') {
+  if (court === 'TRIAGE') {
     return result.incidentWindow ? `incident window ${result.incidentWindow}` : (result.status || 'done');
   }
   return 'done';
@@ -389,7 +389,7 @@ function resultSummary(court, result) {
  * provider.reveal({dispatch})) go through the same whitelist and validation.
  *
  * @param {{type: string, [k: string]: any}} msg
- * @param {{provider: TriumphPanelProvider, actions?: object, repoRoot?: Function,
+ * @param {{provider: GaiaPanelProvider, actions?: object, repoRoot?: Function,
  *   enginePath?: Function, dashboardCmd?: object, context?: object}} deps
  */
 async function handleMessage(msg, deps) {
@@ -470,13 +470,13 @@ async function handleMessage(msg, deps) {
         // generateReport runs all three courts — notify with the input payload.
         if (deps.onCourtResult && result) {
           const input = safe(() => {
-            const p = require('path').join(ctx.root, 'reports', 'triumph', 'triumph-input.json');
+            const p = require('path').join(ctx.root, 'reports', 'gaia', 'gaia-input.json');
             return JSON.parse(require('fs').readFileSync(p, 'utf8'));
           }, null);
           if (input) {
-            safe(() => deps.onCourtResult('redline', input.redline), undefined);
-            safe(() => deps.onCourtResult('splitbrain', input.splitbrain), undefined);
-            safe(() => deps.onCourtResult('warpath', input.warpath), undefined);
+            safe(() => deps.onCourtResult('witness', input.witness), undefined);
+            safe(() => deps.onCourtResult('trustgap', input.trustgap), undefined);
+            safe(() => deps.onCourtResult('triage', input.triage), undefined);
           }
         }
         return result;
@@ -497,7 +497,7 @@ async function handleMessage(msg, deps) {
   if (type === 'openConfig') {
     if (!ctx.root) { provider.postError('Open a workspace folder first.'); return; }
     const status = actions.configStatus(ctx.root);
-    if (!status.exists) { provider.postError('TRIUMPH: no config found — run "Detect config" first.'); return; }
+    if (!status.exists) { provider.postError('Gaia: no config found — run "Detect config" first.'); return; }
     provider.state.config = status;
     const doc = await vscode.workspace.openTextDocument(status.path);
     await vscode.window.showTextDocument(doc);
@@ -508,7 +508,7 @@ async function handleMessage(msg, deps) {
   if (type === 'openLastReport') {
     if (!ctx.root) { provider.postError('Open a workspace folder first.'); return; }
     const report = actions.findLastReport(ctx.root);
-    if (!report) { provider.postError('TRIUMPH: no report yet — run "Generate report".'); return; }
+    if (!report) { provider.postError('Gaia: no report yet — run "Generate report".'); return; }
     provider.state.lastReport = report;
     if (params.format === 'html') {
       provider._openReportPanel(report.htmlPath);
@@ -522,7 +522,7 @@ async function handleMessage(msg, deps) {
 
   if (type === 'dashboardOpen') {
     const url = provider.state.dashboard.url;
-    if (!url) { provider.postError('TRIUMPH: no dashboard run yet.'); return; }
+    if (!url) { provider.postError('Gaia: no dashboard run yet.'); return; }
     await ctx.openExternal(url);
     return;
   }
@@ -534,4 +534,4 @@ async function handleMessage(msg, deps) {
   }
 }
 
-module.exports = { TriumphPanelProvider, handleMessage };
+module.exports = { GaiaPanelProvider, handleMessage };

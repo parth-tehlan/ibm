@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
- * triumph-setup — "Install courts for this repo", from the command line.
+ * gaia-setup — "Install courts for this repo", from the command line.
  *
- *   node bin/triumph-setup.js --repo <dir> [--detect] [--host claude|bob|codex|vscode|generic|all]
+ *   node bin/gaia-setup.js --repo <dir> [--detect] [--host claude|bob|codex|vscode|generic|all]
  *
- *   --detect   auto-fill .triumph.yml from the workspace (skipped if one exists)
+ *   --detect   auto-fill .gaia.yml from the workspace (skipped if one exists)
  *   --host     materialize court subagents + MCP wiring for that host
  *              (repeatable; 'all' installs every known host)
  *
@@ -33,7 +33,7 @@ function parseArgs(argv) {
       process.exit(0);
     }
     else if (a === '--help' || a === '-h') {
-      console.log('usage: triumph-setup --repo <dir> [--detect] [--host <id>|all] (hosts: ' + Object.keys(HOSTS).join(', ') + ')');
+      console.log('usage: gaia-setup --repo <dir> [--detect] [--host <id>|all] (hosts: ' + Object.keys(HOSTS).join(', ') + ')');
       process.exit(0);
     }
   }
@@ -49,17 +49,17 @@ function main() {
   }
 
   // 1. Config
-  const cfgPath = ['.triumph.yml', '.triumph.yaml', '.triumph.json']
+  const cfgPath = ['.gaia.yml', '.gaia.yaml', '.gaia.json']
     .map((n) => path.join(repo, n))
     .find((p) => fs.existsSync(p));
   if (!cfgPath || args.detect) {
     const { config, notes } = detect(repo);
-    const dest = path.join(repo, '.triumph.yml');
+    const dest = path.join(repo, '.gaia.yml');
     if (cfgPath && args.detect) {
       console.log('config exists at ' + path.basename(cfgPath) + ' — leaving it (delete to regenerate)');
     } else {
-      fs.writeFileSync(dest, '# TRIUMPH 3-court repo adapter. See court-extension/schemas/triumph-config.schema.json\n' + toYaml(config) + '\n', 'utf8');
-      console.log('wrote .triumph.yml');
+      fs.writeFileSync(dest, '# Gaia 3-court repo adapter. See court-extension/schemas/gaia-config.schema.json\n' + toYaml(config) + '\n', 'utf8');
+      console.log('wrote .gaia.yml');
     }
     for (const n of notes) console.log('  · ' + n);
   } else {
@@ -80,7 +80,7 @@ function main() {
       process.exitCode = 1;
     }
   }
-  console.log('\nDone. The caller agent in each host now runs the court subagents with its own model; the engine (court.js) serves redline_*/splitbrain_*/warpath_* over MCP. Legal. Honest. Survivable.');
+  console.log('\nDone. The caller agent in each host now runs the court subagents with its own model; the engine (court.js) serves witness_*/trustgap_*/triage_* over MCP. Legal. Honest. Survivable.');
 }
 
 main();

@@ -1,4 +1,4 @@
-# Deploying the TRIUMPH 3-Court Extension
+# Deploying the Gaia 3-Court Extension
 
 A simple, repeatable workflow for building and deploying the extension to a
 **code-server (VS Code Server)**. Three pieces work together — a local script,
@@ -38,9 +38,9 @@ The script:
   - `SSH_DEPLOY_KEY` — an ed25519 private key authorized on the target
 
 ## Artifacts
-The deploy produces `court-extension/triumph-courts.vsix`. Install it manually:
+The deploy produces `court-extension/gaia-courts.vsix`. Install it manually:
 ```bash
-code-server --install-extension triumph-courts.vsix --force
+code-server --install-extension gaia-courts.vsix --force
 ```
 
 ## Re-deploy / upgrade
@@ -54,21 +54,21 @@ On the computer running Bob (not the build server), in the `ibm` checkout:
 
 ```bash
 git pull --ff-only origin main
-cp court-extension/triumph-courts.vsix "$HOME/Desktop/triumph-courts.vsix"
-sha256sum "$HOME/Desktop/triumph-courts.vsix"  # compare with the checksum for this build
+cp court-extension/gaia-courts.vsix "$HOME/Desktop/gaia-courts.vsix"
+sha256sum "$HOME/Desktop/gaia-courts.vsix"  # compare with the checksum for this build
 ```
 
 In Bob: **Extensions → ⋯ → Install from VSIX…**, select the copied file, then
-**Developer: Reload Window**. Check that `triumph.triumph-courts` shows version
+**Developer: Reload Window**. Check that `gaia.gaia-courts` shows version
 `0.2.3`. Open the previous run in the dashboard (refresh if it was already open):
-its saved evidence remains unchanged, and server-valid long SPLITBRAIN error messages
+its saved evidence remains unchanged, and server-valid long TRUSTGAP error messages
 no longer invalidate the whole report. The failed mutation still appears as an
 error, not a passing result. Then, with Northstar dependencies installed
-(`cd northstar && npm ci`), use **TRIUMPH: Run courts and publish to dashboard**
-to create a *new* run. Do not overwrite the previous report. The new REDLINE result should list source clause files only; zero-assertion suites,
+(`cd northstar && npm ci`), use **Gaia: Run courts and publish to dashboard**
+to create a *new* run. Do not overwrite the previous report. The new WITNESS result should list source clause files only; zero-assertion suites,
 duplicate suites and unexplained Jest exits are errors rather than passes. The
 Northstar sample currently has failing clause assertions, so a new run shows red
-entries, not green. SPLITBRAIN records the exit code and command output when
+entries, not green. TRUSTGAP records the exit code and command output when
 the mutation job fails, refuses a stale report, and rejects a second concurrent
 job in the same engine. An isolated mutation run succeeded, but the cause of
 the earlier failed run cannot be reconstructed from an old report without stdout. For investigation, run `npm run mutation` in the
@@ -80,6 +80,6 @@ The VSIX is a local Git artifact, not a marketplace release and not an automatic
 editor update. Pulling Git alone does not replace an installed extension. The disposable checks do not touch any real Bob configuration.
 
 ## Safe workspace setup and rollback
-Run `node bin/triumph-setup.js --repo /path/to/project --host bob` to prepare a project (or choose **TRIUMPH: Install Courts** inside the editor). Existing Bob modes are merged by slug; existing agent, rule and skill files are left alone. MCP entries keep user settings such as `disabled`, `alwaysAllow`, and `env`. Malformed config or unsafe targets fail before the host install writes anything; if an install fails midway, it restores changed files. When an existing config is changed successfully, setup retains a permission-preserving hidden `*.triumph-backup-*` file beside it. The CLI prints backup paths; the editor's **Show files and backups** lists them. To roll back a successful install, copy the relevant backup over its corresponding config file after checking that no newer user edits need preserving. Newly created files have no prior version to restore and can be removed manually if desired.
+Run `node bin/gaia-setup.js --repo /path/to/project --host bob` to prepare a project (or choose **Gaia: Install Courts** inside the editor). Existing Bob modes are merged by slug; existing agent, rule and skill files are left alone. MCP entries keep user settings such as `disabled`, `alwaysAllow`, and `env`. Malformed config or unsafe targets fail before the host install writes anything; if an install fails midway, it restores changed files. When an existing config is changed successfully, setup retains a permission-preserving hidden `*.gaia-backup-*` file beside it. The CLI prints backup paths; the editor's **Show files and backups** lists them. To roll back a successful install, copy the relevant backup over its corresponding config file after checking that no newer user edits need preserving. Newly created files have no prior version to restore and can be removed manually if desired.
 
 The packaged Bob check installs into a temporary extracted workspace; it does **not** install the extension into a real editor. `--no-install` also leaves the real editor untouched.

@@ -1,10 +1,10 @@
 ---
-name: splitbrain-witness
+name: trustgap-witness
 description: Compute the trust gap — claimed coverage vs honest mutation kill-rate — and name every dishonest test (tautology). Activate for a coverage-honesty verdict.
 user-invocable: true
 ---
 
-# splitbrain-witness (SPLITBRAIN)
+# trustgap-witness (TRUSTGAP)
 
 You are the auditor who does not believe the coverage report.
 
@@ -16,10 +16,10 @@ mutation report.
 
 ## Method
 
-1. Call `splitbrain_trustgap` (pass `claimed_coverage` if the team states a
+1. Call `trustgap_report` (pass `claimed_coverage` if the team states a
    number). You get `claimedCoverage`, `honestMutationScore`, `trustGap`,
    and `dishonestTests`.
-2. Call `splitbrain_mutants` with `status: "Survived"` for the concrete
+2. Call `trustgap_mutants` with `status: "Survived"` for the concrete
    survivors each dishonest test tolerated.
 3. Verdict:
    - `trustGap ≈ 0` and no dishonest tests → the suite is honest. Say so.

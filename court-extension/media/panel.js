@@ -1,6 +1,6 @@
 'use strict';
 /**
- * media/panel.js — TRIUMPH webview UI.
+ * media/panel.js — Gaia webview UI.
  *
  * Stateless re-renderer: builds its own DOM (the host-provided HTML shell
  * only supplies CSP + <link>/<script> tags and an empty <body>), keeps no
@@ -14,9 +14,9 @@
   const vscode = acquireVsCodeApi();
 
   const COURTS = [
-    { id: 'REDLINE', label: 'REDLINE', desc: 'spec-witness verdicts per clause' },
-    { id: 'SPLITBRAIN', label: 'SPLITBRAIN', desc: 'honesty audit (mutation vs claimed coverage)' },
-    { id: 'WARPATH', label: 'WARPATH', desc: 'incident forensics triage' },
+    { id: 'WITNESS', label: 'WITNESS', desc: 'spec-witness verdicts per clause' },
+    { id: 'TRUSTGAP', label: 'TRUSTGAP', desc: 'honesty audit (mutation vs claimed coverage)' },
+    { id: 'TRIAGE', label: 'TRIAGE', desc: 'incident forensics triage' },
   ];
 
   const SECTION_IDS = ['config', 'run', 'report', 'dashboard', 'install'];
@@ -93,7 +93,7 @@
   const root = document.body;
 
   const workspaceNotice = el('div', { className: 'notice notice-warning', id: 'workspace-notice' }, [
-    el('span', { text: 'Open a workspace folder to use TRIUMPH.' }),
+    el('span', { text: 'Open a workspace folder to use Gaia.' }),
   ]);
   workspaceNotice.hidden = true;
 
@@ -137,7 +137,7 @@
   const configNotes = el('ul', { className: 'notes-list' });
 
   const configButtons = el('div', { className: 'button-row' });
-  const detectConfigBtn = button('Auto-detect .triumph.yml', () => post({ type: 'detectConfig' }));
+  const detectConfigBtn = button('Auto-detect .gaia.yml', () => post({ type: 'detectConfig' }));
   const openConfigBtn = button('Open config', () => post({ type: 'openConfig' }), { secondary: true });
   configButtons.appendChild(detectConfigBtn);
   configButtons.appendChild(openConfigBtn);

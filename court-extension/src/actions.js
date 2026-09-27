@@ -1,6 +1,6 @@
 'use strict';
 /**
- * src/actions.js — TRIUMPH action logic, extracted from the old
+ * src/actions.js — Gaia action logic, extracted from the old
  * src/extension.js cmd* command handlers so the persistent panel (and the
  * thin command wrappers) can call the same code.
  *
@@ -30,8 +30,8 @@ const fs = require('fs');
 const DefaultMcpClient = require('./mcp-client').McpClient;
 const DefaultDashboardCmd = require('./dashboard');
 
-const COURTS = ['REDLINE', 'SPLITBRAIN', 'WARPATH'];
-const CONFIG_NAMES = ['.triumph.yml', '.triumph.yaml', '.triumph.json'];
+const COURTS = ['WITNESS', 'TRUSTGAP', 'TRIAGE'];
+const CONFIG_NAMES = ['.gaia.yml', '.gaia.yaml', '.gaia.json'];
 
 function emit(ctx, level, text) {
   if (ctx && typeof ctx.emit === 'function') {
@@ -65,10 +65,10 @@ async function detectConfig(ctx) {
   const root = requireRoot(ctx);
   const { detect, toYaml } = require('../lib/detect');
   const { config, notes } = detect(root);
-  const dest = path.join(root, '.triumph.yml');
-  const header = '# TRIUMPH 3-court repo adapter. See schemas/triumph-config.schema.json in the extension.\n';
+  const dest = path.join(root, '.gaia.yml');
+  const header = '# Gaia 3-court repo adapter. See schemas/gaia-config.schema.json in the extension.\n';
   fs.writeFileSync(dest, header + toYaml(config) + '\n', 'utf8');
-  emit(ctx, 'info', `.triumph.yml written. ${notes.join(' · ')}`);
+  emit(ctx, 'info', `.gaia.yml written. ${notes.join(' · ')}`);
   return { path: dest, notes };
 }
 
@@ -90,18 +90,18 @@ async function installCourts(ctx, { host } = {}) {
       emit(ctx, 'info', `${h}: installed`);
     } catch (e) {
       errors.push({ host: h, message: e.message });
-      emit(ctx, 'error', `TRIUMPH ${h}: ${e.message}`);
+      emit(ctx, 'error', `Gaia ${h}: ${e.message}`);
     }
   }
   const extVersion = require('../package.json').version;
   emit(ctx, 'info', `files written: ${written.join(', ') || '(none)'}`);
   emit(ctx, 'info',
-    `TRIUMPH courts installed (${hosts.join(', ')}) — extension v${extVersion}. ${written.length} files written. ` +
+    `Gaia courts installed (${hosts.join(', ')}) — extension v${extVersion}. ${written.length} files written. ` +
     `If you expected skills/rules/modes and only see agents+mcp.json, reload the window (Developer: Reload Window) so the host picks up the current extension build.`);
   return { hosts, files: written, errors };
 }
 
-/** Same engine calls as old cmdRunCourt. No splitbrain_status polling. */
+/** Same engine calls as old cmdRunCourt. No trustgap_status polling. */
 async function runCourt(ctx, { court } = {}) {
   const root = requireRoot(ctx);
   if (!COURTS.includes(court)) throw new Error(`Unknown court: ${court}`);
@@ -110,27 +110,27 @@ async function runCourt(ctx, { court } = {}) {
   try {
     await client.start();
     let result;
-    if (court === 'REDLINE') {
-      emit(ctx, 'info', 'REDLINE running witness suites…');
-      result = await client.call('redline_verdict_all');
+    if (court === 'WITNESS') {
+      emit(ctx, 'info', 'WITNESS running witness suites…');
+      result = await client.call('witness_verdict_all');
       const s = result && result.summary;
       emit(ctx, 'info', s
-        ? `REDLINE done: ${s.green} green / ${s.red} red / ${s.yellow} yellow of ${s.total}`
-        : 'REDLINE done');
-    } else if (court === 'SPLITBRAIN') {
-      emit(ctx, 'info', 'SPLITBRAIN starting mutation testing…');
-      const start = await client.call('splitbrain_mutate');
+        ? `WITNESS done: ${s.green} green / ${s.red} red / ${s.yellow} yellow of ${s.total}`
+        : 'WITNESS done');
+    } else if (court === 'TRUSTGAP') {
+      emit(ctx, 'info', 'TRUSTGAP starting mutation testing…');
+      const start = await client.call('trustgap_mutate');
       if (start.status === 'started') {
         emit(ctx, 'info', `mutation job ${start.job_id} started`);
         result = start;
       } else {
-        result = await client.call('splitbrain_trustgap');
-        emit(ctx, 'info', 'SPLITBRAIN trustgap done');
+        result = await client.call('trustgap_report');
+        emit(ctx, 'info', 'TRUSTGAP trustgap done');
       }
     } else {
-      emit(ctx, 'info', 'WARPATH triage running…');
-      result = await client.call('warpath_triage');
-      emit(ctx, 'info', 'WARPATH done');
+      emit(ctx, 'info', 'TRIAGE triage running…');
+      result = await client.call('triage_run');
+      emit(ctx, 'info', 'TRIAGE done');
     }
     return result;
   } finally {
@@ -147,26 +147,26 @@ async function generateReport(ctx) {
   try {
     await client.start();
     const input = { repo: path.basename(root), repoRootAbs: root, generated: new Date().toISOString() };
-    emit(ctx, 'info', 'REDLINE running…');
-    input.redline = await client.call('redline_verdict_all');
-    const rs = input.redline && input.redline.summary;
+    emit(ctx, 'info', 'WITNESS running…');
+    input.witness = await client.call('witness_verdict_all');
+    const rs = input.witness && input.witness.summary;
     emit(ctx, 'info', rs
-      ? `REDLINE done: ${rs.green} green / ${rs.red} red / ${rs.yellow} yellow of ${rs.total}`
-      : 'REDLINE done');
-    emit(ctx, 'info', 'SPLITBRAIN running…');
-    input.splitbrain = await client.call('splitbrain_trustgap');
-    emit(ctx, 'info', input.splitbrain && input.splitbrain.trustGap != null
-      ? `SPLITBRAIN done: trust gap ${input.splitbrain.trustGap}`
-      : 'SPLITBRAIN done');
-    emit(ctx, 'info', 'WARPATH running…');
-    input.warpath = await client.call('warpath_triage');
-    emit(ctx, 'info', input.warpath && input.warpath.incidentWindow
-      ? `WARPATH done: incident window ${input.warpath.incidentWindow}`
-      : 'WARPATH done');
+      ? `WITNESS done: ${rs.green} green / ${rs.red} red / ${rs.yellow} yellow of ${rs.total}`
+      : 'WITNESS done');
+    emit(ctx, 'info', 'TRUSTGAP running…');
+    input.trustgap = await client.call('trustgap_report');
+    emit(ctx, 'info', input.trustgap && input.trustgap.trustGap != null
+      ? `TRUSTGAP done: trust gap ${input.trustgap.trustGap}`
+      : 'TRUSTGAP done');
+    emit(ctx, 'info', 'TRIAGE running…');
+    input.triage = await client.call('triage_run');
+    emit(ctx, 'info', input.triage && input.triage.incidentWindow
+      ? `TRIAGE done: incident window ${input.triage.incidentWindow}`
+      : 'TRIAGE done');
 
-    const outDir = path.join(root, 'reports', 'triumph');
+    const outDir = path.join(root, 'reports', 'gaia');
     fs.mkdirSync(outDir, { recursive: true });
-    fs.writeFileSync(path.join(outDir, 'triumph-input.json'), JSON.stringify(input, null, 2) + '\n', 'utf8');
+    fs.writeFileSync(path.join(outDir, 'gaia-input.json'), JSON.stringify(input, null, 2) + '\n', 'utf8');
     const { mdPath, htmlPath } = writeReports(input, outDir);
     emit(ctx, 'info', `report written: ${htmlPath}, ${mdPath}`);
     return { htmlPath, mdPath, generatedAt: input.generated };
@@ -176,21 +176,21 @@ async function generateReport(ctx) {
 }
 
 /**
- * Stat reports/triumph/triumph-report.html (+.md) → summary/metadata, or
+ * Stat reports/gaia/gaia-report.html (+.md) → summary/metadata, or
  * null if no report has ever been generated for this root.
  */
 function findLastReport(root) {
   if (!root) return null;
-  const outDir = path.join(root, 'reports', 'triumph');
-  const htmlPath = path.join(outDir, 'triumph-report.html');
+  const outDir = path.join(root, 'reports', 'gaia');
+  const htmlPath = path.join(outDir, 'gaia-report.html');
   if (!fs.existsSync(htmlPath)) return null;
   const stat = fs.statSync(htmlPath);
-  const mdPath = path.join(outDir, 'triumph-report.md');
+  const mdPath = path.join(outDir, 'gaia-report.md');
   let summary = null;
   try {
-    const raw = JSON.parse(fs.readFileSync(path.join(outDir, 'triumph-input.json'), 'utf8'));
-    if (raw && raw.redline && raw.redline.summary) summary = raw.redline.summary;
-  } catch { /* no triumph-input.json, or unparsable — summary stays null */ }
+    const raw = JSON.parse(fs.readFileSync(path.join(outDir, 'gaia-input.json'), 'utf8'));
+    if (raw && raw.witness && raw.witness.summary) summary = raw.witness.summary;
+  } catch { /* no gaia-input.json, or unparsable — summary stays null */ }
   return {
     htmlPath,
     mdPath: fs.existsSync(mdPath) ? mdPath : null,
@@ -209,7 +209,7 @@ async function dashboardRun(ctx) {
   const { url } = await dashboardCmdMod.runAndPublish(ctx.vscode, {
     root,
     enginePath: ctx.enginePath,
-    requested: ['redline', 'splitbrain', 'warpath'],
+    requested: ['witness', 'trustgap', 'triage'],
     existingRun: null,
     historyDir,
     openExternal: ctx.openExternal,

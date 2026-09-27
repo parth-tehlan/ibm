@@ -60,12 +60,12 @@ class DashboardServer {
     }
     const child = fork(SERVER_ENTRY, [], { stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
       cwd: DASHBOARD_DIR,
-      env: { ...process.env, PORT: '0', TRIUMPH_HOST: '127.0.0.1',
+      env: { ...process.env, PORT: '0', GAIA_HOST: '127.0.0.1',
         ...(this.historyDir ? { XDG_DATA_HOME: this.historyDir } : {}) } });
     this.child = child;
     child.stderr.on('data', (d) => process.stderr.write('[dashboard] ' + d));
     try {
-      const ready = await this.wait((m) => m?.type === 'triumph.ready', 15000);
+      const ready = await this.wait((m) => m?.type === 'gaia.ready', 15000);
       if (!/^http:\/\/127\.0\.0\.1:\d+$/.test(ready.url)) throw new Error('Invalid dashboard ready URL');
       this.url = ready.url;
       return this;
@@ -76,14 +76,14 @@ class DashboardServer {
     if (!this.child?.connected) throw new Error('Dashboard IPC disconnected');
     const requestId = crypto.randomUUID();
     const registration = this.wait((m) => m?.requestId === requestId &&
-      ['triumph.registered', 'triumph.registrationError'].includes(m.type), 10000);
-    try { this.child.send({ type: 'triumph.register', requestId, project }); }
+      ['gaia.registered', 'gaia.registrationError'].includes(m.type), 10000);
+    try { this.child.send({ type: 'gaia.register', requestId, project }); }
     catch (e) { // The waiter has an exit/disconnect listener and will settle there.
       registration.catch(() => {});
       throw e;
     }
     const reg = await registration;
-    if (reg.type !== 'triumph.registered') throw new Error(reg.error);
+    if (reg.type !== 'gaia.registered') throw new Error(reg.error);
     if (reg.project?.id !== project.id || !/^[a-f0-9]{64}$/.test(reg.token)) throw new Error('Invalid dashboard registration');
     return reg.token;
   }

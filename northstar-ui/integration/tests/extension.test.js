@@ -11,7 +11,7 @@ const empty = (state = 'not_run') => ({ state, collectedAt: null, sourceGenerate
 const report = (project, runId, overrides = {}) => ({
   schemaVersion: 2, project, runId, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
   revision: 0, state: 'complete', checkedOutCommit: null, branch: null, workingTreeDirty: null,
-  producer: { name: 'editor-test', version: '1' }, redline: empty(), splitbrain: empty(), warpath: empty(), ...overrides,
+  producer: { name: 'editor-test', version: '1' }, witness: empty(), trustgap: empty(), triage: empty(), ...overrides,
 });
 async function fixture(t) {
   const dir = await mkdtemp(path.join(os.tmpdir(), 'extension-sdk-'));
@@ -61,21 +61,21 @@ test('browser run request is acknowledged; callback submits only actual evidence
     assert.throws(() => submit(report(project, randomUUID())), /runId/);
     await submit(report(project, request.runId, {
       createdAt: request.createdAt, updatedAt: request.createdAt, revision: 1,
-      redline: { state: 'complete', collectedAt: request.createdAt, sourceGeneratedAt: null,
+      witness: { state: 'complete', collectedAt: request.createdAt, sourceGeneratedAt: null,
         payload: { observed: 'from-real-collector' }, errors: [] },
     }));
   } });
   t.after(() => sdk.stop());
   const response = await fetch(`${sdk.url}/api/projects/${project.id}/run`, {
-    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ courts: ['redline'] }),
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ courts: ['witness'] }),
   });
   assert.equal(response.status, 202);
   const { runId, requestId } = await response.json();
   await eventually(async () => (await sdk.history.load(project.id, runId))?.state === 'complete');
   assert.equal(calls.length, 1);
   assert.equal(calls[0].requestId, requestId);
-  assert.deepEqual(calls[0].courts, ['redline']);
-  assert.equal((await sdk.history.load(project.id, runId)).redline.payload.observed, 'from-real-collector');
+  assert.deepEqual(calls[0].courts, ['witness']);
+  assert.equal((await sdk.history.load(project.id, runId)).witness.payload.observed, 'from-real-collector');
   assert.throws(() => sdk.bridge.poll({ projectId: project.id, token: 'bad' }), { code: 'FORBIDDEN' });
 });
 
@@ -83,21 +83,21 @@ test('callback return value submits a snapshot once, without synthesizing eviden
   const { dir, project } = await fixture(t);
   const sdk = await startExtension({ dir, project, pollIntervalMs: 10, onRun: async (request) =>
     report(project, request.runId, { revision: 1, createdAt: request.createdAt,
-      updatedAt: request.createdAt, splitbrain: {
+      updatedAt: request.createdAt, trustgap: {
         state: 'unavailable', collectedAt: request.createdAt, sourceGeneratedAt: null,
         payload: null, errors: ['No mutation report was produced.'],
       } }),
   });
   t.after(() => sdk.stop());
   const response = await fetch(`${sdk.url}/api/projects/${project.id}/run`, {
-    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ courts: ['splitbrain'] }),
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ courts: ['trustgap'] }),
   });
   assert.equal(response.status, 202);
   const { runId } = await response.json();
   await eventually(async () => (await sdk.history.load(project.id, runId))?.revision === 1);
   const stored = await sdk.history.load(project.id, runId);
-  assert.equal(stored.splitbrain.state, 'unavailable');
-  assert.equal(stored.redline.state, 'not_run');
+  assert.equal(stored.trustgap.state, 'unavailable');
+  assert.equal(stored.witness.state, 'not_run');
 });
 
 test('callback errors do not manufacture success; stop interrupts running work', async (t) => {
@@ -108,7 +108,7 @@ test('callback errors do not manufacture success; stop interrupts running work',
   });
   t.after(() => sdk.stop());
   const response = await fetch(`${sdk.url}/api/projects/${project.id}/run`, {
-    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ courts: ['warpath'] }),
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ courts: ['triage'] }),
   });
   assert.equal(response.status, 202);
   const { runId } = await response.json();
@@ -118,21 +118,21 @@ test('callback errors do not manufacture success; stop interrupts running work',
   await sdk.stop();
   const interrupted = await sdk.history.load(project.id, runId);
   assert.equal(interrupted.state, 'interrupted');
-  assert.notEqual(interrupted.warpath.state, 'complete');
+  assert.notEqual(interrupted.triage.state, 'complete');
 });
 
 test('restart recovers interrupted reports before accepting new connections', async (t) => {
   const { dir, project } = await fixture(t);
   const history = createHistory({ dir });
-  const running = report(project, randomUUID(), { state: 'running', redline: empty('running') });
+  const running = report(project, randomUUID(), { state: 'running', witness: empty('running') });
   await history.save(running);
   const sdk = await startExtension({ project, history });
   t.after(() => sdk.stop());
   const restored = await history.load(project.id, running.runId);
   assert.equal(restored.state, 'interrupted');
   assert.equal(restored.revision, 1);
-  assert.equal(restored.redline.state, 'error');
-  assert.deepEqual(restored.redline.errors, ['Extension connection lost on server restart.']);
+  assert.equal(restored.witness.state, 'error');
+  assert.deepEqual(restored.witness.errors, ['Extension connection lost on server restart.']);
 });
 
 test('startup failure rolls back registration and listener', async (t) => {
@@ -157,7 +157,7 @@ test('stop aborts in-flight callback; subsequent submit is rejected', async (t) 
     return new Promise(() => {});
   } });
   t.after(() => sdk.stop());
-  const request = await sdk.bridge.requestRun({ projectId: project.id, courts: ['redline'] });
+  const request = await sdk.bridge.requestRun({ projectId: project.id, courts: ['witness'] });
   await sdk.pollNow();
   await eventually(() => context);
   await sdk.stop();
