@@ -134,6 +134,20 @@
   root.appendChild(workspaceNotice);
   root.appendChild(errorBanner);
 
+  // -- spec-missing notice (shown after install when spec.path doesn't exist) --
+  const specNotice = el('div', { className: 'banner', id: 'spec-notice', attrs: { role: 'alert' } });
+  specNotice.hidden = true;
+  specNotice.setAttribute('aria-hidden', 'true');
+  const specNoticeText = el('span', { className: 'banner-text', text: 'No spec file found. REDLINE cannot run until a spec contract exists.' });
+  const specNoticeCreate = button('Create spec', () => { post({ type: 'createSpec' }); }, { secondary: false });
+  const specNoticeDismiss = button('Dismiss', () => { specNotice.hidden = true; specNotice.setAttribute('aria-hidden', 'true'); }, { secondary: true });
+  specNoticeDismiss.classList.add('banner-dismiss');
+  specNoticeCreate.classList.add('banner-dismiss');
+  specNotice.appendChild(specNoticeText);
+  specNotice.appendChild(specNoticeCreate);
+  specNotice.appendChild(specNoticeDismiss);
+  root.appendChild(specNotice);
+
   const layout = el('div', { className: 'layout' });
   root.appendChild(layout);
 
@@ -807,6 +821,11 @@
         break;
       case 'focus':
         focusSection(msg.section, msg.preselect);
+        break;
+      case 'specPrompt':
+        specNoticeText.textContent = `No spec file found at '${msg.specPath || 'docs/api-spec.md'}'. REDLINE cannot run until a spec contract exists.`;
+        specNotice.hidden = false;
+        specNotice.removeAttribute('aria-hidden');
         break;
       default:
         // Unknown message types from the host are ignored.

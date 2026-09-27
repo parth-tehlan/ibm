@@ -26,6 +26,7 @@ const FALLBACK_COURTS = ['REDLINE', 'SPLITBRAIN', 'WARPATH'];
 const WHITELIST = new Set([
   'ready', 'detectConfig', 'openConfig', 'installCourts', 'runCourt',
   'generateReport', 'openLastReport', 'dashboardRun', 'dashboardOpen', 'dashboardStatus',
+  'createSpec',
 ]);
 
 // The single job slot is shared by these five message types (section D).
@@ -580,6 +581,9 @@ async function handleMessage(msg, deps) {
       if (type === 'installCourts') {
         const result = await actions.installCourts(ctx, { host: params.host });
         provider.state.config = actions.configStatus(ctx.root);
+        if (result && result.specMissing) {
+          provider._post({ type: 'specPrompt', specPath: result.specPath || 'docs/api-spec.md' });
+        }
         return result;
       }
       if (type === 'runCourt') {
@@ -674,6 +678,22 @@ async function handleMessage(msg, deps) {
   if (type === 'dashboardStatus') {
     provider._refreshDashboardConnected();
     provider.postState();
+    return;
+  }
+
+  if (type === 'createSpec') {
+    const choice = await vscode.window.showInformationMessage(
+      'No spec file found. Use the spec-author skill to generate one for this repo.',
+      'Open spec-author instructions',
+      'Dismiss'
+    );
+    if (choice === 'Open spec-author instructions') {
+      const skillPath = require('path').join(provider.extensionUri.fsPath, '..', '..', '.bob', 'skills', 'spec-author', 'SKILL.md');
+      safe(async () => {
+        const doc = await vscode.workspace.openTextDocument(skillPath);
+        await vscode.window.showTextDocument(doc);
+      }, undefined);
+    }
     return;
   }
 }

@@ -200,6 +200,36 @@ function makeFakeActions(overrides) {
     assert.ok(provider.state.log.some((l) => l.level === 'error' && /host must be one of/.test(l.text)));
   });
 
+  await t('installCourts: specMissing in result posts specPrompt to webview', async () => {
+    const actions = makeFakeActions({
+      installCourts: async (ctx, { host }) => {
+        ctx.emit({ level: 'info', text: `installed ${host}` });
+        return { hosts: [host], files: [], errors: [], specMissing: true, specPath: 'docs/spec.md' };
+      },
+    });
+    const posted = [];
+    const provider = new TriumphPanelProvider({ actions, repoRoot: () => '/repo', enginePath: () => '/e.js' });
+    provider._view = { webview: { postMessage: (m) => { posted.push(m); return Promise.resolve(true); } } };
+    await handleMessage({ type: 'installCourts', host: 'all' }, { provider, actions });
+    const prompt = posted.find((m) => m.type === 'specPrompt');
+    assert.ok(prompt, 'expected a specPrompt message when specMissing is true');
+    assert.strictEqual(prompt.specPath, 'docs/spec.md');
+  });
+
+  await t('installCourts: no specPrompt posted when specMissing is false', async () => {
+    const actions = makeFakeActions({
+      installCourts: async (ctx, { host }) => {
+        ctx.emit({ level: 'info', text: `installed ${host}` });
+        return { hosts: [host], files: [], errors: [], specMissing: false, specPath: null };
+      },
+    });
+    const posted = [];
+    const provider = new TriumphPanelProvider({ actions, repoRoot: () => '/repo', enginePath: () => '/e.js' });
+    provider._view = { webview: { postMessage: (m) => { posted.push(m); return Promise.resolve(true); } } };
+    await handleMessage({ type: 'installCourts', host: 'all' }, { provider, actions });
+    assert.ok(!posted.some((m) => m.type === 'specPrompt'), 'no specPrompt when spec exists');
+  });
+
   await t('runCourt job: legacy single court opens JSON result doc + logs one-line summary', async () => {
     const actions = makeFakeActions();
     const provider = new TriumphPanelProvider({ actions, repoRoot: () => '/repo', enginePath: () => '/e.js' });

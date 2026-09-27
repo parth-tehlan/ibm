@@ -133,9 +133,35 @@ async function installCourts(ctx, { host } = {}) {
   emit(ctx, 'info',
     `TRIUMPH courts installed (${hosts.join(', ')}) — extension v${extVersion}. ${written.length} files written. ` +
     `If you expected skills/rules/modes and only see agents+mcp.json, reload the window (Developer: Reload Window) so the host picks up the current extension build.`);
+
+  // Check whether the spec file referenced in .triumph.yml actually exists.
+  // If not, signal the UI so it can prompt the user to create one.
+  let specMissing = false;
+  let specPath = null;
+  try {
+    const cfgPath = findConfigPath(root);
+    if (cfgPath) {
+      const { loadConfig } = require('../lib/config');
+      // loadConfig validates spec.path existence and throws — catch that and
+      // re-check manually so we can report the path rather than rethrow.
+      try { loadConfig(root); } catch (e) {
+        if (e && e.validationErrors && e.validationErrors.some((m) => /spec\.path/.test(m))) {
+          // Extract the configured path from the raw config (no validation).
+          const raw = require('../lib/config').findConfigFile(root);
+          const text = raw ? require('fs').readFileSync(raw, 'utf8') : '';
+          const m = /spec:\s*\n\s+path:\s*(.+)/.exec(text) || /spec:\s*\{[^}]*path:\s*([^\s,}]+)/.exec(text);
+          specPath = m ? m[1].trim() : 'docs/api-spec.md';
+          specMissing = true;
+          step(ctx, 'warn', `Spec file '${specPath}' not found — REDLINE cannot run until a spec exists`);
+          emit(ctx, 'warn', `spec.path '${specPath}' does not exist. Use the spec-author skill to generate one.`);
+        }
+      }
+    }
+  } catch { /* spec check is best-effort; never block install */ }
+
   step(ctx, errors.length ? 'warn' : 'success',
     `Install complete — ${written.length} files written (${hosts.join(', ')})`);
-  return { hosts, files: written, errors };
+  return { hosts, files: written, errors, specMissing, specPath };
 }
 
 // ---------------------------------------------------------------------------
