@@ -317,6 +317,8 @@ async function runMutationJob(cfg, jobId, claimedOverride) {
   const job = JOBS.get(jobId);
   try {
     if (!cfg.mutation.command) throw new Error('mutation.command is not set in .triumph.yml');
+    const depErr = runners.checkNodeModules(cfg.repoRoot);
+    if (depErr) throw new Error(depErr.error);
     const before = cfg.mutation.absReport && fs.existsSync(cfg.mutation.absReport)
       ? fs.statSync(cfg.mutation.absReport) : null;
     const startedAt = Date.now();

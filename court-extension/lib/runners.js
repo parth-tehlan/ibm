@@ -83,6 +83,23 @@ function resolveJestCli(repoRoot) {
 }
 
 /**
+ * Return a clear error result when node_modules is absent from the repo.
+ * Both jest (REDLINE) and stryker (SPLITBRAIN) live in node_modules; without
+ * them the spawned command crashes immediately and leaves no report file,
+ * which surfaces as a parse error in every downstream court tool.
+ */
+function checkNodeModules(repoRoot) {
+  const nm = path.join(repoRoot, 'node_modules');
+  if (!fs.existsSync(nm)) {
+    return {
+      ok: false, code: null, stdout: '', stderr: '',
+      error: `node_modules not found in ${repoRoot} — run npm install in the repo first`,
+    };
+  }
+  return null;
+}
+
+/**
  * Run `jest <jestArgs>` for this repo and return spawnCollect's result
  * shape. Prefers jest's own CLI entry via `node <entry> <args>` (no shell,
  * no npx, no batch file — safe for any argv, including the regex
@@ -100,6 +117,8 @@ function resolveJestCli(repoRoot) {
  * guessing through a shell.
  */
 async function runJestCli(repoRoot, jestArgs, spawnOpts) {
+  const depErr = checkNodeModules(repoRoot);
+  if (depErr) return depErr;
   const cli = resolveJestCli(repoRoot);
   if (cli) return spawnCollect(process.execPath, [cli, ...jestArgs], spawnOpts);
   if (process.platform === 'win32') {
@@ -378,4 +397,4 @@ async function runTests(cfg, clauseId) {
   }
 }
 
-module.exports = { runTests, runJestFiles, listJestTests, spawnCollect, extractJson, clauseFileRegex, allClauseFilesRegex, isClauseTestFile, execSync, runJestCli, resolveJestCli };
+module.exports = { runTests, runJestFiles, listJestTests, spawnCollect, extractJson, clauseFileRegex, allClauseFilesRegex, isClauseTestFile, execSync, runJestCli, resolveJestCli, checkNodeModules };

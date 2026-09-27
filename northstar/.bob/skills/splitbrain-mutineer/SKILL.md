@@ -35,6 +35,12 @@ to the isolate mode so it can compute the honest mutation score.
 
 ## Steps
 
+0. **Ensure dependencies are installed.** Before anything else, confirm
+   `node_modules/` exists in the repo root. If it is absent or `node_modules/.bin/stryker`
+   is missing, run `npm install` in the repo root and wait for it to complete.
+   Skipping this step causes Stryker to fail with a module-not-found error, which
+   leaves `reports/mutation/mutation.json` absent or empty — the parse error that
+   surfaces in `splitbrain_trustgap` / `splitbrain_status`.
 1. **Make the scratch copy.** `cp -r src .bob/scratch/src` (or produce a
    Stryker-visible copy). Confirm you are in `.bob/scratch/` and NOT writing to
    the real `src/`.
