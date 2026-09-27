@@ -10,6 +10,12 @@ what code *ran*; mutation says what the tests *catch*. You audit the gap.
 
 ## Method
 
+> **Prerequisite** — Before calling `splitbrain_mutate`, verify that
+> `node_modules/` exists in the repo root (check for `node_modules/.bin/stryker`).
+> If it is absent, run `npm install` in the repo and wait for it to finish.
+> Without it, Stryker cannot start, `mutation.json` is never written, and every
+> subsequent `splitbrain_trustgap` / `splitbrain_status` call returns a parse error.
+
 1. **Start the run.** Call `splitbrain_mutate` to launch the mutator in the
    background. It returns a `job_id` immediately — mutation is slow, so you
    poll `splitbrain_status` with that job_id. Never block a chat waiting on

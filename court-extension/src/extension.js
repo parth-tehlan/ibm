@@ -268,45 +268,11 @@ function notifyCourtResult(court, result) {
 
 /** Build a compact status bar label from the current court state. */
 function buildStatusText() {
-  const parts = [];
-
-  if (_courtState.redline) {
-    const r = _courtState.redline;
-    const icon = r.red > 0 ? '$(error)' : r.yellow > 0 ? '$(warning)' : '$(pass)';
-    parts.push(`${icon} R:${r.green}↑${r.red}↓`);
-  }
-
-  if (_courtState.splitbrain) {
-    const sb = _courtState.splitbrain;
-    const score = sb.honestMutationScore != null ? Math.round(sb.honestMutationScore * 100) : null;
-    const gap = sb.trustGap != null ? sb.trustGap : null;
-    if (score != null) {
-      const icon = score >= 80 ? '$(shield)' : score >= 50 ? '$(warning)' : '$(error)';
-      parts.push(`${icon} SB:${score}%`);
-    }
-    if (gap != null && gap > 0) parts.push(`$(diff) gap:${gap}`);
-  }
-
-  if (_courtState.warpath) {
-    const icon = _courtState.warpath.hasIncident ? '$(flame)' : '$(check)';
-    parts.push(`${icon} WP`);
-  }
-
-  // Live mutation execution: a climbing counter is the single most
-  // glanceable signal that a long SPLITBRAIN run is alive.
-  if (_mutationLive && _mutationLive.status !== 'done') {
-    const m = _mutationLive;
-    const progress = m.tested != null ? (m.total != null ? `${m.tested}/${m.total}` : `${m.tested}`) : null;
-    const rate = m.killRate != null ? ` ${m.killRate}% killed` : '';
-    parts.push(`$(beaker) ${progress != null ? progress : '…'}${rate}`);
-  }
-
-  if (dashboardCmd.isConnected()) parts.push('$(radio-tower)');
-
-  if (_lastRun) parts.push(`$(sync~spin) ${shortJobLabel(_lastRun.label)}`);
-
-  if (parts.length === 0) return '$(shield) TRIUMPH';
-  return '$(shield) ' + parts.join('  ');
+  if (_lastRun) return '$(sync~spin) TRIUMPH: ' + shortJobLabel(_lastRun.label);
+  if (_courtState.redline && _courtState.redline.red > 0) return '$(error) TRIUMPH: findings';
+  if (_courtState.warpath && _courtState.warpath.hasIncident) return '$(warning) TRIUMPH: incident';
+  if (_courtState.redline && _courtState.redline.yellow > 0) return '$(warning) TRIUMPH: incomplete';
+  return '$(shield) TRIUMPH: open courts';
 }
 
 /** Trim a runJob label ("runCourt {…}") to a scannable status-bar token. */
@@ -330,17 +296,17 @@ function buildStatusTooltip() {
   if (_courtState.splitbrain) {
     const sb = _courtState.splitbrain;
     const score = sb.honestMutationScore != null ? `${Math.round(sb.honestMutationScore * 100)}%` : 'n/a';
-    lines.push(`SPLITBRAIN: mutation score ${score}${sb.trustGap != null ? `  trust gap ${sb.trustGap}` : ''}`);
+    lines.push(`SPLITBRAIN: mutation score ${score}${sb.trustGap != null ? `  trust gap ${sb.trustGap} percentage points` : ''}`);
   }
   if (_courtState.warpath) {
-    lines.push(`WARPATH: ${_courtState.warpath.hasIncident ? 'incident window active' : 'clear'}`);
+    lines.push(`WARPATH: ${_courtState.warpath.hasIncident ? 'incident window detected' : 'no incident detected in last signal (not a verified clear)'}`);
   }
   if (_mutationLive && _mutationLive.status !== 'done') {
     const m = _mutationLive;
     lines.push(`MUTATION LIVE: ${m.tested != null ? m.tested : 0}${m.total != null ? `/${m.total}` : ''} tested` +
       (m.killRate != null ? ` — ${m.killRate}% kill rate` : ''));
   }
-  if (dashboardCmd.isConnected()) lines.push('Dashboard connected — browser "Run again" is live.');
+  if (dashboardCmd.isConnected()) lines.push('Local dashboard connected.');
   if (_lastRun) lines.push(`Running: ${_lastRun.label} (started ${new Date(_lastRun.startedAt).toLocaleTimeString()})`);
   if (lines.length === 1) lines.push('Click to run courts or open dashboard.');
   return lines.join('\n');
@@ -433,12 +399,21 @@ function activate(context) {
   context.subscriptions.push(
     vscode.commands.registerCommand('triumph.detectConfig', () =>
       provider.reveal({ section: 'config', dispatch: () => handleMessage({ type: 'detectConfig' }, provider._deps()) })),
-    vscode.commands.registerCommand('triumph.installCourts', () => {
-      const defaultHost = vscode.workspace.getConfiguration('triumph').get('defaultHost') || 'all';
-      provider.reveal({ section: 'install', preselect: { host: defaultHost } });
+    vscode.commands.registerCommand('triumph.installCourts', async () => {
+      const { HOSTS } = require('../lib/hosts');
+      const choice = await vscode.window.showQuickPick(Object.keys(HOSTS).map(host => ({label: host, host})),
+        { placeHolder: 'Select an agent host to preview integration files' });
+      if (!choice) return;
+      provider.reveal({ section: 'install', preselect: { host: choice.host },
+        dispatch: () => handleMessage({ type: 'installPreview', host: choice.host }, provider._deps()) });
     }),
-    vscode.commands.registerCommand('triumph.runCourt', () =>
-      provider.reveal({ section: 'run' })),
+    vscode.commands.registerCommand('triumph.runCourt', async () => {
+      const picked = await vscode.window.showQuickPick(['REDLINE', 'SPLITBRAIN', 'WARPATH'].map(court => ({label: court, court})),
+        { placeHolder: 'Choose courts to run (local evidence is always saved)', canPickMany: true });
+      if (!picked || !picked.length) return;
+      const courts = picked.map(item => item.court);
+      provider.reveal({ section: 'run', dispatch: () => handleMessage({ type: 'runCourt', courts, outputTarget: 'local' }, provider._deps()) });
+    }),
     vscode.commands.registerCommand('triumph.generateReport', () =>
       provider.reveal({ section: 'run', dispatch: () => handleMessage({ type: 'generateReport' }, provider._deps()) })),
     vscode.commands.registerCommand('triumph.openReport', () =>

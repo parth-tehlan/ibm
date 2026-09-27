@@ -17,7 +17,14 @@ const Module = require('module');
 const EXT = path.resolve(__dirname, '..');
 
 let passed = 0, failed = 0;
-const t = (n, f) => Promise.resolve().then(f).then(() => { passed++; console.log('  ok  ' + n); }).catch((e) => { failed++; console.error('  FAIL ' + n + ' — ' + (e.stack || e.message)); });
+// The old direct-MCP and auto-open-on-run contracts were retired when all
+// entry points moved to the shared run coordinator. Their behavior is covered
+// in tests/run-coordinator.js and tests/panel-ui.js; do not claim these legacy
+// assertions still verify the new execution path.
+const retired = /^(runCourt job:|runCourt REDLINE:|runCourt SPLITBRAIN:|runCourt: multiple courts run)/;
+const t = (n, f) => retired.test(n)
+  ? Promise.resolve().then(() => console.log('  skip ' + n + ' (retired contract; see run-coordinator and panel-ui tests)'))
+  : Promise.resolve().then(f).then(() => { passed++; console.log('  ok  ' + n); }).catch((e) => { failed++; console.error('  FAIL ' + n + ' — ' + (e.stack || e.message)); });
 
 // --- vscode mock + fresh-require helper (same convention as tests/extension.js) ---
 
@@ -310,7 +317,7 @@ function makeFakeActions(overrides) {
   await t('dashboardOpen: url set -> openExternal called', async () => {
     const actions = makeFakeActions();
     const provider = new TriumphPanelProvider({ actions, repoRoot: () => '/repo', enginePath: () => '/e.js' });
-    provider.state.dashboard.url = 'http://dash/9';
+    provider.state.dashboard.url = 'http://127.0.0.1:45123/runs/9';
     routerRec.opened.length = 0;
     await handleMessage({ type: 'dashboardOpen' }, { provider, actions });
     assert.strictEqual(routerRec.opened.length, 1);
@@ -322,6 +329,25 @@ function makeFakeActions(overrides) {
     await handleMessage({ type: 'dashboardStatus' }, { provider, actions });
     assert.strictEqual(provider.state.dashboard.connected, true);
     assert.strictEqual(provider.state.job, null);
+  });
+
+  await t('dashboardStart: reconnects transport without running courts, rejects untrusted workspace', async () => {
+    let starts = 0, runs = 0, connected = false;
+    const actions = makeFakeActions({runCourt: () => { runs++; throw new Error('Unexpected run'); }});
+    const dashboardCmd = {isConnected: () => connected, startSession: async (_vscode, opts) => {
+      starts++; assert.strictEqual(opts.root, '/repo'); connected = true;
+      return {dash: {url: 'http://127.0.0.1:39999'}};
+    }};
+    const provider = new TriumphPanelProvider({actions, repoRoot: () => '/repo', enginePath: () => '/e.js', dashboardCmd});
+    await handleMessage({type: 'dashboardStart'}, {provider, actions});
+    assert.strictEqual(starts, 1); assert.strictEqual(runs, 0);
+    assert.strictEqual(provider.state.dashboard.connected, true);
+    assert.strictEqual(provider.state.dashboard.url, 'http://127.0.0.1:39999');
+    const untrusted = new TriumphPanelProvider({actions, repoRoot: () => '/repo', enginePath: () => '/e.js', dashboardCmd});
+    untrusted._actionsCtx = () => ({root: '/repo', trusted: false, enginePath: '/e.js'});
+    await handleMessage({type: 'dashboardStart'}, {provider: untrusted, actions});
+    assert.strictEqual(starts, 1);
+    assert.ok(untrusted.state.log.some(l => l.level === 'error' && /Trust this workspace/.test(l.text)));
   });
 
   await t('openConfig: no workspace -> "Open a workspace folder first." error', async () => {
@@ -559,7 +585,7 @@ function makeFakeActions(overrides) {
       assert.ok(report);
       assert.strictEqual(report.htmlPath, path.join(outDir, 'triumph-report.html'));
       assert.strictEqual(report.mdPath, path.join(outDir, 'triumph-report.md'));
-      assert.ok(!isNaN(Date.parse(report.generatedAt)), 'generatedAt must be a parseable ISO date');
+      assert.strictEqual(report.generatedAt, null, 'legacy files without source timestamps must not invent one');
       assert.deepStrictEqual(report.summary, { green: 2, red: 1, yellow: 0, total: 3 });
       // Verdict scorecard data: per-court payloads exposed verbatim.
       assert.strictEqual(report.splitbrain.trustGap, 0.12);
