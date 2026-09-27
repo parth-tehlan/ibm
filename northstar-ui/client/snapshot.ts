@@ -30,7 +30,7 @@ const nullableDate = (v: unknown) => v === null || date(v);
 const fail = (v: unknown): v is { title: string; message: string } => record(v) && smallString(v.title) && string(v.message);
 const clause = (v: unknown): v is Redline['results'][number] => record(v) && smallString(v.clause) && ['red', 'yellow', 'green'].includes(String(v.status)) && count(v.passed) && count(v.failed) && count(v.total) && v.passed + v.failed <= v.total && (v.status !== 'green' || (v.total > 0 && v.passed === v.total)) && (v.status !== 'red' || v.failed > 0) && (v.status !== 'yellow' || (v.failed === 0 && (v.total === 0 || v.passed !== v.total))) && smallString(v.spec_anchor) && (v.spec_text === undefined || string(v.spec_text)) && arr(v.failures, fail);
 export const redline = (v: unknown): v is Redline => record(v) && v.court === 'REDLINE' && record(v.summary) && count(v.summary.green) && count(v.summary.red) && count(v.summary.total) && arr(v.results, clause) && v.summary.total === v.results.length && v.summary.green === v.results.filter((r) => r.status === 'green').length && v.summary.red === v.results.filter((r) => r.status === 'red').length;
-export const splitbrain = (v: unknown): v is Splitbrain => record(v) && v.court === 'SPLITBRAIN' && v.status === 'ok' && fraction(v.claimedCoverage) && fraction(v.honestMutationScore) && number(v.trustGap) && v.trustGap >= -1 && v.trustGap <= 1 && Math.abs(v.trustGap - (v.claimedCoverage - v.honestMutationScore)) < 0.000001 && arr(v.dishonestTests, smallString) && Array.isArray(v.mutants) && v.mutants.length <= 5000 && (v.summary === undefined || v.summary === null || string(v.summary)) && (v.itLedger === undefined || arr(v.itLedger, ledger)) && (v.suiteLevelTotals === undefined || v.suiteLevelTotals === null || suite(v.suiteLevelTotals)) && (v.stale === undefined || typeof v.stale === 'boolean') && (v.warnings === undefined || arr(v.warnings, smallString)) && (v.codeCommitAt === undefined || v.codeCommitAt === null || date(v.codeCommitAt));
+export const splitbrain = (v: unknown): v is Splitbrain => record(v) && v.schemaVersion !== 1 && v.court === 'SPLITBRAIN' && v.status === 'ok' && fraction(v.claimedCoverage) && fraction(v.honestMutationScore) && number(v.trustGap) && v.trustGap >= -1 && v.trustGap <= 1 && Math.abs(v.trustGap - (v.claimedCoverage - v.honestMutationScore)) < 0.000001 && arr(v.dishonestTests, smallString) && Array.isArray(v.mutants) && v.mutants.length <= 5000 && (v.summary === undefined || v.summary === null || string(v.summary)) && (v.itLedger === undefined || arr(v.itLedger, ledger)) && (v.suiteLevelTotals === undefined || v.suiteLevelTotals === null || suite(v.suiteLevelTotals)) && (v.stale === undefined || typeof v.stale === 'boolean') && (v.warnings === undefined || arr(v.warnings, smallString)) && (v.codeCommitAt === undefined || v.codeCommitAt === null || date(v.codeCommitAt));
 export const warpath = (v: unknown): v is Warpath => {
   if (!record(v) || !record(v.context) || !record(v.triage)) return false;
   const { context, triage } = v;
@@ -54,7 +54,7 @@ export const engineWarpath = (v: unknown): v is EngineWarpath => record(v) && v.
 // Once recognized, retain the full guard (including bounds and consistency):
 // invalid known-schema metrics must not silently fall back to generic evidence.
 const recognizedSplitbrain = (p: Record<string, unknown>): boolean =>
-  p.court === 'SPLITBRAIN' && p.status === 'ok' && 'claimedCoverage' in p && 'honestMutationScore' in p && 'trustGap' in p && arr(p.dishonestTests, smallString) && Array.isArray(p.mutants);
+  p.schemaVersion !== 1 && p.court === 'SPLITBRAIN' && p.status === 'ok' && 'claimedCoverage' in p && 'honestMutationScore' in p && 'trustGap' in p && arr(p.dishonestTests, smallString) && Array.isArray(p.mutants);
 function result<T>(v: unknown, guard: (v: unknown) => v is T, recognized: (v: Record<string, unknown>) => boolean, generic = false): v is CourtResult<T> {
   if (!record(v)) return false;
   return ['not_run', 'running', 'complete', 'error', 'unavailable'].includes(String(v.state)) && nullableDate(v.collectedAt) && nullableDate(v.sourceGeneratedAt) && errors(v.errors) && (v.state === 'complete' ? (generic && record(v.payload) && !recognized(v.payload) ? true : guard(v.payload)) : v.payload === null || record(v.payload));
@@ -87,7 +87,16 @@ export function normalizeSnapshot(value: unknown): Snapshot {
   return { schemaVersion: 2, project: { id: legacyProjectId(report.repository), name: report.repository }, runId: report.runId, createdAt: report.createdAt, updatedAt: report.createdAt, revision: 0, state: report.state, checkedOutCommit: report.checkedOutCommit, branch: null, workingTreeDirty: report.workingTreeDirty, producer: { name: 'legacy-snapshot', version: '1' }, redline: report.redline, splitbrain: report.splitbrain, warpath: report.warpath };
 }
 export function prettyTime(value: string | null | undefined): string { if (!value) return 'Not recorded'; const time = new Date(value); return Number.isFinite(time.getTime()) ? time.toLocaleString() : 'Invalid timestamp'; }
-export function pct(value: number): string { return `${(value * 100).toFixed(1)}%`; }
+// Explicit source units: legacy dashboard artifacts use fractions; native engine
+// ledgers use 0–100 percent. Never choose an adapter from numeric magnitude.
+export function formatMetric(value: number | null | undefined, unit: 'percent' | 'percentage_points' | 'count'): string {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return 'Not recorded';
+  return `${Number(value.toFixed(2))}${unit === 'percent' ? '%' : unit === 'percentage_points' ? ' pp' : ''}`;
+}
+export function fractionPercent(value: number): string { return Number.isFinite(value) ? `${(value * 100).toFixed(1)}%` : 'Not recorded'; }
+export function fractionGap(value: number): string { return formatMetric(value * 100, 'percentage_points'); }
+// Compatibility alias. Only for the validated legacy fractional payload schema.
+export const pct = fractionPercent;
 export function text(value: unknown): string {
   if (value === null || value === undefined) return 'Not recorded';
   if (typeof value === 'string') return value;

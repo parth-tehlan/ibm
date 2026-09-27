@@ -18,15 +18,14 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const { HOSTS } = require('../lib/hosts');
+const { TYPES, decodeMessage, allowedDashboardUrl } = require('./panel-protocol');
+const { summarizeRun, summarizeCourt } = require('../lib/run-summary');
 
 const LOG_LIMIT = 200;
 const STEP_LIMIT = 200;
 const FALLBACK_COURTS = ['REDLINE', 'SPLITBRAIN', 'WARPATH'];
 
-const WHITELIST = new Set([
-  'ready', 'detectConfig', 'openConfig', 'installCourts', 'runCourt',
-  'generateReport', 'openLastReport', 'dashboardRun', 'dashboardOpen', 'dashboardStatus',
-]);
+const WHITELIST = new Set(Object.keys(TYPES));
 
 // The single job slot is shared by these five message types (section D).
 const JOB_TYPES = new Set(['detectConfig', 'installCourts', 'runCourt', 'generateReport', 'dashboardRun']);
@@ -87,11 +86,18 @@ class TriumphPanelProvider {
     this._pendingReveal = null;
     this._disposables = [];
     this._reportPanel = null;
+    this._requests = new Map();
+    this._historyLimit = 10;
+    this._output = safe(() => vscode.window.createOutputChannel('TRIUMPH'), null);
 
     this.state = {
       workspace: { root: null, name: null },
       config: { exists: false, path: null, notes: [] },
-      hosts: { available: ['all', ...Object.keys(HOSTS)], labels: hostLabels(), default: 'all' },
+      hosts: { available: ['all', ...Object.keys(HOSTS)], labels: hostLabels(), default: null },
+      protocolVersion: 2,
+      readiness: null, activeRun: null, selectedRun: null, recentRuns: [],
+      configPreview: null, installPreview: null,
+      capabilities: { cancellation: false },
       lastReport: null,
       dashboard: { connected: false, url: null },
       job: null,
@@ -103,6 +109,11 @@ class TriumphPanelProvider {
     this._refreshWorkspace();
     this._refreshHostsDefault();
     this._refreshDashboardConnected();
+    if (this.actions && typeof this.actions.onRunEvent === 'function') {
+      this._disposables.push(this.actions.onRunEvent(event => this._onRunEvent(event)));
+    } else {
+      this._disposables.push(require('./run-coordinator').onRunEvent(event => this._onRunEvent(event)));
+    }
 
     // No polling: dashboard.js notifies on session start / server exit /
     // stopAll. Push the change into panel state (and log it) as it happens,
@@ -130,12 +141,20 @@ class TriumphPanelProvider {
 
   _refreshWorkspace() {
     const root = safe(() => (typeof this.repoRoot === 'function' ? this.repoRoot() : null), null);
-    this.state.workspace = { root, name: root ? path.basename(root) : null };
+    const previous = this.state.workspace.root;
+    this.state.workspace = { root, workspaceId: root ? safe(() => fs.realpathSync(root), root) : null, name: root ? path.basename(root) : null, trusted: vscode.workspace.isTrusted !== false };
+    if (previous !== root) {
+      this.state.lastReport = null; this.state.selectedRun = null; this.state.activeRun = null;
+      this.state.recentRuns = []; this.state.dashboard = { connected: false, url: null };
+      this.state.steps = []; this.state.mutations = null;
+      this.state.configPreview = null; this.state.installPreview = null;
+      this._historyLimit = 10;
+    }
   }
 
   _refreshHostsDefault() {
     const def = safe(() => vscode.workspace.getConfiguration('triumph').get('defaultHost'), null);
-    this.state.hosts.default = def || 'all';
+    this.state.hosts.default = def && (def === 'all' || HOSTS[def]) ? def : null;
   }
 
   _refreshDashboardConnected() {
@@ -156,6 +175,70 @@ class TriumphPanelProvider {
       this.state.config = safe(() => this.actions.configStatus(root), this.state.config);
       this.state.lastReport = safe(() => this.actions.findLastReport(root), this.state.lastReport);
     }
+    this._refreshEvidence();
+    this.state.readiness = { courts: this.state.config.readiness || {}, timeoutSeconds: this.state.config.timeoutSeconds || 900, timeoutSource: this.state.config.timeoutSource || 'configuration' };
+  }
+
+  _refreshEvidence() {
+    const root = this.state.workspace.root;
+    if (!root) return;
+    const store = require('../lib/run-store');
+    const coordinator = require('./run-coordinator');
+    this.state.capabilities = coordinator.capabilities();
+    const active = safe(() => coordinator.getActiveRun(root), null);
+    this.state.activeRun = active ? this._presentRun(active) : null;
+    const selected = safe(() => store.selectedRun(root), null);
+    this.state.selectedRun = selected ? this._presentRun(selected) : null;
+    this.state.recentRuns = safe(() => store.listRuns(root, { limit: this._historyLimit }), []);
+    this.state.recentRunsHasMore = safe(() => store.listRuns(root, { limit: 1, offset: this._historyLimit }).length > 0, false);
+    const latest = safe(() => store.latestRun(root), null);
+    this.state.latestRun = latest ? this._presentRun(latest) : null;
+    if (selected) this.state.dashboard.url = selected.publication?.state === 'published' ? selected.publication.url : null;
+    if (this.onCourtResult) for (const court of FALLBACK_COURTS) {
+      safe(() => this.onCourtResult(court, (active || selected)?.courts[court] || { execution: 'not_run', payload: null }), undefined);
+    }
+  }
+
+  _presentRun(record) {
+    const summary = summarizeRun(record);
+    const courts = {};
+    for (const [court, value] of Object.entries(summary.courts)) {
+      const { payload, ...compact } = value;
+      compact.findings = (value.findings || []).slice(0, 20).map(f => {
+        const source = f.payload || f;
+        return { clause: f.clause || source.clause || null, status: f.status || source.status || null,
+          detail: String(source.reason || source.detail || source.note || source.description || '').slice(0, 2000),
+          passed: source.passed ?? null, failed: source.failed ?? null, total: source.total ?? null };
+      });
+      if (compact.clauses) compact.clauses = compact.findings;
+      compact.progress = record.courts?.[court]?.progress || null;
+      courts[court] = compact;
+    }
+    return { ...require('../lib/run-store').summary(record), courts, summary: { ...summary, courts }, label: summary.label, tone: summary.tone };
+  }
+
+  _onRunEvent(event) {
+    if (!event || !this.state.workspace.root) return;
+    const root = safe(() => fs.realpathSync(this.state.workspace.root), this.state.workspace.root);
+    if (event.root !== root) return;
+    if (!this._runSequences) this._runSequences = new Map();
+    if (event.sequence <= (this._runSequences.get(event.runId) || 0)) return;
+    this._runSequences.set(event.runId, event.sequence);
+    if (this._runSequences.size > 100) this._runSequences.delete(this._runSequences.keys().next().value);
+    this._refreshEvidence();
+    if (event.kind === 'settled') {
+      this.state.activeRun = null;
+      safe(() => require('../lib/run-store').selectRun(root, event.runId), null);
+      this._refreshEvidence();
+      this.state.activeRun = null;
+      this.state.lastReport = safe(() => this.actions.findLastReport(root), this.state.lastReport);
+      if (this.onJobChange) this.onJobChange(null);
+    } else if (this.state.activeRun && this.onJobChange) {
+      this.onJobChange({ label: 'Running ' + this.state.activeRun.requestedCourts.join(' + '), startedAt: this.state.activeRun.startedAt });
+    }
+    // Full payloads stay on disk. The sidebar receives bounded summaries only.
+    this._post({ type: 'run.event', runId: event.runId, sequence: event.sequence, kind: event.kind, payload: { phase: event.phase, court: event.payload?.court } });
+    this.postState();
   }
 
   /** Build the ctx object src/actions.js functions expect. */
@@ -165,6 +248,9 @@ class TriumphPanelProvider {
     return {
       root,
       enginePath,
+      trusted: vscode.workspace.isTrusted !== false,
+      trigger: 'sidebar',
+      onRunEvent: (event) => this._onRunEvent(event),
       emit: (e) => this.log((e && e.level) || 'info', e && e.text),
       // Steps feed the agent-activity timeline AND mirror into the raw
       // console log so the audit trail never loses a narrative line.
@@ -177,7 +263,10 @@ class TriumphPanelProvider {
         if (this.onMutation) safe(() => this.onMutation(event, signal), undefined);
       },
       globalStoragePath: this.context && this.context.globalStorageUri ? this.context.globalStorageUri.fsPath : null,
-      openExternal: (url) => safe(() => vscode.env.openExternal(vscode.Uri.parse(url)), undefined),
+      openExternal: (url) => {
+        if (!allowedDashboardUrl(url)) throw new Error('Refusing an invalid local dashboard URL.');
+        return vscode.env.openExternal(vscode.Uri.parse(url));
+      },
       vscode,
     };
   }
@@ -195,7 +284,7 @@ class TriumphPanelProvider {
       this._reportPanel = null; // stale reference (panel disposed without firing onDidDispose)
     }
     const panel = vscode.window.createWebviewPanel(
-      'triumphReport', 'TRIUMPH 3-Court Report', vscode.ViewColumn.One, { enableScripts: true }
+      'triumphReport', 'TRIUMPH 3-Court Report', vscode.ViewColumn.One, { enableScripts: false, localResourceRoots: [] }
     );
     panel.webview.html = html;
     this._reportPanel = panel;
@@ -247,6 +336,7 @@ class TriumphPanelProvider {
     this._disposables = [];
     if (this._connectionSub) safe(() => this._connectionSub.dispose(), undefined);
     this._connectionSub = null;
+    if (this._output) this._output.dispose();
   }
 
   _deps() {
@@ -291,6 +381,10 @@ class TriumphPanelProvider {
   getState() {
     const s = this.state;
     return {
+      protocolVersion: 2,
+      readiness: s.readiness, capabilities: { ...s.capabilities },
+      activeRun: s.activeRun, selectedRun: s.selectedRun, latestRun: s.latestRun, recentRuns: s.recentRuns, recentRunsHasMore: s.recentRunsHasMore,
+      configPreview: s.configPreview, installPreview: s.installPreview,
       workspace: { ...s.workspace },
       config: { ...s.config, notes: [...s.config.notes] },
       hosts: { ...s.hosts, labels: { ...s.hosts.labels } },
@@ -309,7 +403,8 @@ class TriumphPanelProvider {
 
   /** Append to the 200-entry ring buffer and push it immediately. */
   log(level, text) {
-    const entry = { ts: new Date().toISOString(), level, text };
+    const entry = { ts: new Date().toISOString(), level, text: String(text || '') };
+    if (this._output) this._output.appendLine(`${entry.ts} [${level}] ${entry.text}`);
     this.state.log.push(entry);
     if (this.state.log.length > LOG_LIMIT) this.state.log.splice(0, this.state.log.length - LOG_LIMIT);
     this.postLog(entry);
@@ -417,8 +512,8 @@ class TriumphPanelProvider {
    * posts an `error` instead of running. State is pushed on set + clear.
    */
   async runJob(kind, label, fn) {
-    if (this.state.job) {
-      this.postError(`A TRIUMPH job is already running (${this.state.job.label}).`);
+    if (this.state.job || this.state.activeRun?.lifecycle === 'running') {
+      this.postError(`A TRIUMPH job is already running (${this.state.job?.label || this.state.activeRun.runId}).`);
       return undefined;
     }
     // New run: clear the activity feed (append-only *during* a run) and reset
@@ -475,7 +570,7 @@ function resultSummary(court, result) {
  * @param {{provider: TriumphPanelProvider, actions?: object, repoRoot?: Function,
  *   enginePath?: Function, dashboardCmd?: object, context?: object}} deps
  */
-async function handleMessage(msg, deps) {
+async function dispatchMessage(msg, deps) {
   const provider = deps && deps.provider;
   if (!provider) throw new Error('handleMessage: deps.provider is required');
 
@@ -522,6 +617,7 @@ async function handleMessage(msg, deps) {
       return;
     }
     params = { courts: selected };
+    if (msg.publishToDashboard !== undefined) params.outputTarget = msg.publishToDashboard ? 'dashboard' : 'local';
     if (msg.outputTarget !== undefined) {
       if (msg.outputTarget !== 'local' && msg.outputTarget !== 'dashboard') {
         provider.postError(`runCourt: outputTarget must be 'local' or 'dashboard'`);
@@ -582,8 +678,7 @@ async function handleMessage(msg, deps) {
         if (result && result.dashboardUrl) provider.state.dashboard.url = result.dashboardUrl;
         provider._refreshDashboardConnected();
         provider.state.lastReport = safe(() => actions.findLastReport(ctx.root), provider.state.lastReport);
-        const doc = await vscode.workspace.openTextDocument({ content: JSON.stringify(result, null, 2), language: 'json' });
-        await vscode.window.showTextDocument(doc, { preview: true });
+        provider._refreshEvidence();
         const outcomes = (result && result.courts) || {};
         for (const c of params.courts) {
           // actions.runCourt keys outcomes by the uppercase court id.
@@ -671,6 +766,79 @@ async function handleMessage(msg, deps) {
     provider.postState();
     return;
   }
+}
+
+// Requests from the sidebar cross an untrusted boundary. Validate the complete
+// message before resolving any workspace path or invoking an action.
+async function handleMessage(raw, deps) {
+  const provider = deps && deps.provider;
+  if (!provider) throw new Error('handleMessage: deps.provider is required');
+  const requestId = raw && raw.requestId;
+  let msg;
+  try { msg = decodeMessage(raw); }
+  catch (e) {
+    if (raw && typeof raw.type === 'string') provider.log('warn', `unknown message type or invalid payload: ${raw.type}`);
+    provider.postError(e.message);
+    if (typeof requestId === 'string') provider._post({ type: 'response', requestId, status: 'rejected', error: { message: e.message } });
+    return;
+  }
+  const response = (status, data, error) => {
+    if (msg.requestId) provider._post({ type: 'response', requestId: msg.requestId, status, ...(data !== undefined ? { data } : {}), ...(error ? { error: { code: error.code || 'ERROR', message: error.message || String(error) } } : {}) });
+  };
+  if (msg.type === 'ready') { provider.markReady(); response('ok'); return; }
+  const special = new Set(['cancelRun', 'publishRun', 'selectRun', 'loadMoreRuns', 'openArtifact', 'openLogs', 'configValidate', 'configPreview', 'configApply', 'installPreview', 'installApply', 'openFolder', 'manageTrust', 'refresh', 'dashboardStart']);
+  if (!special.has(msg.type)) {
+    if (JOB_TYPES.has(msg.type)) response('accepted');
+    try { const result = await dispatchMessage(msg, deps); response('ok', result); }
+    catch (e) { provider.postError(e.message || String(e)); response('rejected', undefined, e); }
+    return;
+  }
+  try {
+    const actions = deps.actions || provider.actions;
+    const ctx = provider._actionsCtx();
+    const root = ctx.root;
+    const writable = () => { if (!root) throw new Error('Open a workspace folder first.'); if (!ctx.trusted) throw new Error('Trust this workspace first.'); };
+    let data;
+    switch (msg.type) {
+      case 'refresh': provider._refreshAll(); break;
+      case 'openFolder': await vscode.commands.executeCommand('vscode.openFolder'); break;
+      case 'manageTrust': await vscode.commands.executeCommand('workbench.trust.manage'); break;
+      case 'dashboardStart': {
+        writable();
+        if (provider.state.job || provider.state.activeRun) throw new Error('Wait for the current run before starting the dashboard.');
+        if (!provider.dashboardCmd || typeof provider.dashboardCmd.startSession !== 'function') throw new Error('Local dashboard is unavailable in this host.');
+        const session = await provider.dashboardCmd.startSession(vscode, {root, enginePath: ctx.enginePath});
+        provider.state.dashboard.url = session.dash.url;
+        provider._refreshDashboardConnected();
+        data = {connected: provider.state.dashboard.connected};
+        break;
+      }
+      case 'configValidate': data = actions.validateConfig(ctx); provider.state.config = data; break;
+      case 'configPreview': writable(); data = actions.previewConfig(ctx); provider.state.configPreview = data; break;
+      case 'configApply': writable(); data = actions.applyConfig(ctx, { previewId: msg.previewId, expectedConfigRevision: msg.expectedConfigRevision ?? null, confirmReplace: true }); provider.state.configPreview = null; provider.state.config = actions.configStatus(root); break;
+      case 'installPreview': writable(); data = actions.previewInstall(ctx, { host: msg.host }); provider.state.installPreview = data; break;
+      case 'installApply': writable(); data = await actions.installCourts(ctx, { previewId: msg.previewId }); provider.state.installPreview = null; break;
+      case 'cancelRun': writable(); data = await actions.cancelRun(ctx, { runId: msg.runId }); break;
+      case 'publishRun': writable(); data = await actions.publishRun(ctx, { runId: msg.runId }); break;
+      case 'selectRun': if (!root) throw new Error('Open a workspace folder first.'); data = {run: provider._presentRun(actions.selectRun(root, msg.runId))}; provider.state.selectedRun = data.run; break;
+      case 'loadMoreRuns': if (!root) throw new Error('Open a workspace folder first.'); provider._historyLimit = Math.min(provider._historyLimit + 10, 100); break;
+      case 'openLogs': if (provider._output && provider._output.show) provider._output.show(true); break;
+      case 'openArtifact': {
+        if (!root) throw new Error('Open a workspace folder first.');
+        const store = require('../lib/run-store');
+        const run = actions.readRun(root, msg.runId);
+        const artifact = run.artifacts.find(a => (a.artifactId || a.id) === msg.artifactId && a.status === 'ready');
+        if (!artifact || !artifact.path) throw new Error('Artifact unavailable for this run.');
+        const dir = fs.realpathSync(store.runDirectory(root, msg.runId));
+        const file = fs.realpathSync(artifact.path);
+        if (!file.startsWith(dir + path.sep)) throw new Error('Artifact is outside its run directory.');
+        if (artifact.kind === 'html') provider._openReportPanel(file);
+        else { const doc = await vscode.workspace.openTextDocument(file); await vscode.window.showTextDocument(doc); }
+        break;
+      }
+    }
+    provider._refreshAll(); provider.postState(); response('ok', data);
+  } catch (e) { provider.postError(e.message || String(e)); response('rejected', undefined, e); }
 }
 
 module.exports = { TriumphPanelProvider, handleMessage };

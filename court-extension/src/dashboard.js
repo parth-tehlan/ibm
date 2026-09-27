@@ -66,186 +66,56 @@ function projectFor(_vscode, root) {
   return { id: projectId(require('url').pathToFileURL(canonical).href), name: path.basename(canonical) };
 }
 
-/** Read git provenance from the repo (null-safe; never throws).
- *  A clean tree is a real answer: workingTreeDirty=false, not null. */
-function gitProvenance(root) {
-  const run = (args) => new Promise((res) => {
-    execFile('git', args, { cwd: root, timeout: 3000, stdio: ['ignore', 'pipe', 'ignore'] },
-      (e, out) => res(e ? null : String(out).trim()));
-  });
-  return (async () => {
-    const [commit, branch, status] = await Promise.all([
-      run(['rev-parse', 'HEAD']),
-      run(['rev-parse', '--abbrev-ref', 'HEAD']),
-      run(['status', '--porcelain']),
-    ]);
-    return {
-      checkedOutCommit: commit || null,
-      branch: !branch || branch === 'HEAD' ? null : branch, // detached or failed → null
-      workingTreeDirty: status === null ? null : status.length > 0, // clean ('' ) → false
-    };
-  })();
-}
+// Execution, preflight and freshness are owned by the same coordinator as the
+// sidebar and command adapters. These aliases preserve existing public tests.
+const coordinator = require('./run-coordinator');
+const { preflight, collectCourts, outcome, gitProvenance } = coordinator;
 
-/**
- * Preflight: decide which courts are *able* to run. A court is 'unavailable'
- * when a verified precondition is absent — never run it and call it a pass.
- * Returns { runnable, reasons, cfg }.
- */
-function preflight(root) {
-  const reasons = {};
-  let cfg;
-  try {
-    if (!findConfigFile(root)) throw new Error('No TRIUMPH configuration found');
-    cfg = loadConfig(root);
-  } catch (e) {
-    for (const court of ALL) reasons[court] = `Invalid TRIUMPH configuration: ${e.message}`;
-    return { runnable: [], reasons };
-  }
-  if (!fs.existsSync(cfg.spec.absPath)) reasons.redline = 'spec.path missing';
-  if (!fs.existsSync(cfg.tests.absDir)) reasons.redline = 'tests.dir missing';
-  if (!(cfg.mutation.absReport && fs.existsSync(cfg.mutation.absReport)) &&
-      !fs.existsSync(cfg.evidence.trustgap) && !cfg.mutation.command) {
-    reasons.splitbrain = 'no mutation report, TrustGap ledger or mutation command';
-  }
-  if (!cfg.fixtures.metrics || !fs.existsSync(cfg.fixtures.metrics)) reasons.warpath = 'metrics fixture missing';
-  else if (!cfg.fixtures.deploys || !fs.existsSync(cfg.fixtures.deploys)) reasons.warpath = 'deploy fixture missing';
-  const runnable = ALL.filter((c) => !reasons[c]);
-  return { runnable, reasons, cfg };
-}
-
-/** Classify a court's engine payload as complete/unavailable/error evidence. */
-function outcome(court, payload) {
-  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return { kind: 'error', errors: ['Engine returned no object evidence'] };
-  if (court === 'redline' && (payload.status === 'error' || !Array.isArray(payload.results))) {
-    return { kind: 'error', errors: [String(payload.detail || 'REDLINE produced no verdicts')], payload };
-  }
-  if (court === 'splitbrain' && payload.status !== 'ok') return {
-    kind: payload.status === 'not-run' || payload.status === 'unconfigured' ? 'unavailable' : 'error',
-    errors: [String(payload.note || payload.error || `SPLITBRAIN status: ${payload.status || 'missing'}`)], payload,
-  };
-  if (court === 'warpath' && (payload.status || !payload.incidentWindow)) return {
-    kind: payload.status === 'no-signal-window' ? 'unavailable' : 'error',
-    errors: [String(payload.detail || `WARPATH status: ${payload.status || 'missing incident window'}`)], payload,
-  };
-  return { kind: 'complete', payload };
-}
-
-/** Collect the requested courts from the engine. Returns { court: outcome }.
- *  A configured mutation command makes a rerun fresh; without one, the
- *  precomputed report/ledger is shown as evidence (never pretend it reran). */
-async function collectCourts(client, root, requested, reasons, cfg, signal, onMutationProgress) {
-  const outcomes = {};
-  for (const court of ALL) {
-    if (!requested.includes(court)) { outcomes[court] = { kind: 'not_run' }; continue; }
-    if (reasons[court]) { outcomes[court] = { kind: 'unavailable', errors: [reasons[court]] }; continue; }
-    if (signal?.aborted) { outcomes[court] = { kind: 'error', errors: ['Extension stopped'] }; continue; }
-    try {
-      let payload;
-      if (court === 'redline') payload = await client.call('redline_verdict_all');
-      else if (court === 'warpath') payload = await client.call('warpath_triage');
-      else {
-        if (cfg.mutation.command) {
-          const startedAt = Date.now();
-          const started = await client.call('splitbrain_mutate');
-          if (started.status !== 'started' || !started.job_id) { outcomes[court] = outcome(court, started); continue; }
-          const jobId = started.job_id;
-          const deadline = Date.now() + (cfg.mutation.timeoutSeconds || 900) * 1000 + 10_000;
-          let status;
-          let lastProgressIdx = 0; // track which events we have already forwarded
-          do {
-            if (signal?.aborted) throw new Error('Extension stopped');
-            if (Date.now() > deadline) throw new Error('Mutation job timed out');
-            await new Promise((resolve) => setTimeout(resolve, 1000));
-            status = await client.call('splitbrain_status', { job_id: jobId });
-            // Forward any new progress events to the dashboard's mutation bus.
-            if (onMutationProgress && Array.isArray(status.progress)) {
-              const newEvents = status.progress.slice(lastProgressIdx);
-              lastProgressIdx = status.progress.length;
-              for (const ev of newEvents) onMutationProgress(jobId, ev);
-            }
-          } while (status.status === 'running');
-          if (status.status !== 'done') { outcomes[court] = { kind: 'error', errors: [String(status.error || `Mutation status: ${status.status}`)], payload: status }; continue; }
-          if (!cfg.mutation.absReport || !fs.existsSync(cfg.mutation.absReport) ||
-              fs.statSync(cfg.mutation.absReport).mtimeMs < startedAt - 2000) {
-            outcomes[court] = { kind: 'error', errors: ['Mutation finished without a fresh report'], payload: status }; continue;
-          }
-          // Signal completion to the bus.
-          if (onMutationProgress) onMutationProgress(jobId, null, 'done');
-        }
-        payload = await client.call('splitbrain_trustgap');
-      }
-      outcomes[court] = outcome(court, payload);
-    } catch (e) {
-      outcomes[court] = { kind: 'error', errors: [String(e.message || e)] };
-    }
-  }
-  return outcomes;
-}
-
-/** Run the requested courts and publish a complete snapshot via the session. */
 async function execute(session, requested, existingRun, openExternal) {
-  const { root, enginePath, dash, project, controller } = session;
-  const { reasons, cfg } = preflight(root);
-  const client = new McpClient(enginePath, root);
-  let outcomes;
+  const result = await coordinator.runCourt({root: session.root, enginePath: session.enginePath,
+    vscode: session.vscode, historyDir: session.historyDir,
+    onMutationProgress(jobId, event, signal, runId) {
+      const runKey = `${session.project.id}:${runId}`;
+      const child = sharedServer && sharedServer.child;
+      try {
+        if (child?.connected) child.send(signal === 'done'
+          ? {type: 'triumph.mutationDone', runKey, status: 'done', error: null}
+          : {type: 'triumph.mutationProgress', runKey, event});
+        if (session.historyDir) {
+          const dir = path.join(session.historyDir, 'mutation-events');
+          fs.mkdirSync(dir, {recursive: true});
+          fs.appendFileSync(path.join(dir, runKey.replace(/[^A-Za-z0-9-]/g, '_') + '.jsonl'), JSON.stringify({type: signal === 'done' ? 'done' : 'progress', event, ts: Date.now()}) + '\n');
+        }
+      } catch { /* progress transport must not affect evidence */ }
+    }
+  }, {courts: requested.map(c => c.toUpperCase()), trigger: existingRun ? 'dashboard' : 'command',
+    runId: existingRun?.runId, requestId: existingRun?.requestId,
+    publishToDashboard: true, session, existingRun});
+  if (result.publicationError) throw new Error(result.publicationError);
+  if (openExternal) await openExternal(result.dashboardUrl);
+  return {runId: result.runId, url: result.dashboardUrl, outcomes: coordinator.legacyOutcomes(result.run), run: result.run, runRecord: result.run, report: result.report};
+}
 
-  // Determine the run ID up front so the SSE relay key (projectId:runId)
-  // is known before collectCourts starts the mutation job.
-  const runId = existingRun?.runId || crypto.randomUUID();
-
-  // Relay mutation progress from splitbrain_status poll responses to the
-  // dashboard server's MutationBus via the IPC channel on the shared child.
-  // Uses `runKey` (projectId:runId) — the same key the browser uses to
-  // subscribe via /api/projects/:id/runs/:runId/mutation-stream.
-  const runKey = `${project.id}:${runId}`;
-  function relayProgress(_jobId, event, signal) {
-    const child = sharedServer && sharedServer.child;
-    if (!child || !child.connected) return;
-    try {
-      if (signal === 'done') {
-        child.send({ type: 'triumph.mutationDone', runKey, status: 'done', error: null });
-      } else if (event) {
-        child.send({ type: 'triumph.mutationProgress', runKey, event });
-      }
-    } catch { /* IPC gone — not fatal */ }
-  }
-
-  // Warm-cache demo guardrail: persist every relayed event to a per-run JSONL
-  // log under the session history dir. A stage demo can replay the exact
-  // event stream even if the live runner is slow or the server restarted.
-  const mutationLogDir = session.historyDir ? path.join(session.historyDir, 'mutation-events') : null;
-  const mutationLogPath = mutationLogDir ? path.join(mutationLogDir, `${runKey.replace(/[^A-Za-z0-9-]/g, '_')}.jsonl`) : null;
-  function logMutationEvent(frame) {
-    if (!mutationLogPath) return;
-    try {
-      fs.mkdirSync(mutationLogDir, { recursive: true });
-      fs.appendFileSync(mutationLogPath, JSON.stringify({ ...frame, ts: Date.now() }) + '\n', 'utf8');
-    } catch { /* the live stream is primary; the cache must never block it */ }
-  }
-  function relayAndLog(jobId, event, signal) {
-    if (signal === 'done') logMutationEvent({ type: 'done', status: 'done', error: null });
-    else if (event) logMutationEvent({ type: 'progress', event });
-    relayProgress(jobId, event, signal);
-  }
-
-  try {
-    // Preflight failures are evidence of unavailability, not a passing court.
-    if (ALL.some((c) => requested.includes(c) && !reasons[c])) await client.start();
-    outcomes = await collectCourts(client, root, requested, reasons, cfg, controller.signal, relayAndLog);
-  } catch (e) {
-    outcomes = Object.fromEntries(ALL.map((c) => [c, requested.includes(c)
-      ? { kind: 'error', errors: [String(e.message || e)] } : { kind: 'not_run' }]));
-  } finally { client.dispose(); }
-  if (controller.signal.aborted) throw new Error('Dashboard disconnected before the run could be published');
+/** Transport-only API. It must NEVER call the MCP engine. Strict snapshot-v2
+ * fields are produced exclusively through the existing converter. */
+async function publishEvidence(vscode, opts) {
+  const session = opts.session || await startSession(vscode, opts);
+  const {run} = opts;
+  if (session.controller.signal.aborted) throw new Error('Dashboard disconnected before publication');
+  if (session.project.id !== run.workspaceId) throw new Error('Run belongs to another workspace');
   const now = new Date().toISOString();
-  const snap = toSnapshot({ projectId: project.id, projectName: project.name, runId,
-    createdAt: existingRun?.createdAt || now, revision: existingRun ? 1 : 0,
-    state: 'complete', ...(await gitProvenance(root)), producer: PRODUCER }, outcomes, now);
-  const stored = await dash.publish(snap);
-  const url = dash.runUrl(stored.runId);
-  if (openExternal) await openExternal(url);
-  return { runId: stored.runId, url, outcomes };
+  const snap = toSnapshot({projectId: session.project.id, projectName: session.project.name,
+    runId: run.runId, createdAt: opts.existingRun?.createdAt || run.startedAt,
+    revision: opts.existingRun ? 1 : 0, state: run.lifecycle === 'interrupted' ? 'interrupted' : 'complete',
+    ...run.provenance, producer: PRODUCER}, coordinator.legacyOutcomes(run), now);
+  // Preserve source collection times rather than turning retry time into freshness.
+  for (const c of ALL) {
+    const original = run.courts[c.toUpperCase()];
+    snap[c].collectedAt = original.collectedAt;
+    snap[c].sourceGeneratedAt = original.sourceGeneratedAt;
+  }
+  const stored = await session.dash.publish(snap);
+  return {runId: stored.runId, url: session.dash.runUrl(stored.runId)};
 }
 
 /**
@@ -287,7 +157,7 @@ async function startSession(vscode, { root, enginePath, historyDir, onError, pol
       server.child.once('error', gone);
     }, () => { if (sharedServer === server) sharedServer = null; });
   }
-  const session = { root, enginePath, project, onError, controller: new AbortController(), busy: false, historyDir };
+  const session = { root: fs.realpathSync(root), enginePath, vscode, project, onError, controller: new AbortController(), busy: false, historyDir };
   // Reserve synchronously so concurrent commands never register duplicate children.
   const promise = (async () => {
     const dash = new DashboardClient({ project, server: sharedServer, onError });
@@ -301,12 +171,16 @@ async function startSession(vscode, { root, enginePath, historyDir, onError, pol
           const request = await dash.poll();
           if (!request) return;
           if (request.projectId !== project.id || !Array.isArray(request.courts) ||
-              !request.courts.length || request.courts.some((c) => !ALL.includes(c))) throw new Error('Invalid dashboard request');
+              !request.courts.length || new Set(request.courts).size !== request.courts.length || request.courts.some((c) => !ALL.includes(c))) throw new Error('Invalid dashboard request');
           await dash.acknowledge(request.requestId);
           try { await execute(session, request.courts, request, null); }
           catch (e) {
             if (!session.controller.signal.aborted && dash.connected) {
-              // Truthful failure: submit an errored run rather than fabricate success.
+              // A saved run already contains the real (possibly partial) evidence.
+              // Never overwrite it with a generic transport error snapshot.
+              try { coordinator.readRun(root, request.runId); await dash.abandonRun(); onError?.(e); return; }
+              catch (readError) { if (readError.code !== 'NOT_FOUND') throw readError; }
+              // Rejected-before-execution requests still get durable error evidence.
               const now = new Date().toISOString();
               const courts = Object.fromEntries(ALL.map((c) => [c, request.courts.includes(c)
                 ? { kind: 'error', errors: [String(e.message || e)] } : { kind: 'not_run' }]));
@@ -375,5 +249,5 @@ async function runAndPublish(vscode, opts) {
   finally { session.busy = false; }
 }
 
-module.exports = { runAndPublish, startSession, ensureSession, stopAll, stopSession,
+module.exports = { publishEvidence, runAndPublish, startSession, ensureSession, stopAll, stopSession,
   isConnected, onConnectionChange, preflight, projectFor, collectCourts, outcome, gitProvenance };
