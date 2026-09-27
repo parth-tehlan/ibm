@@ -134,7 +134,7 @@ function outcome(court, payload) {
 /** Collect the requested courts from the engine. Returns { court: outcome }.
  *  A configured mutation command makes a rerun fresh; without one, the
  *  precomputed report/ledger is shown as evidence (never pretend it reran). */
-async function collectCourts(client, root, requested, reasons, cfg, signal) {
+async function collectCourts(client, root, requested, reasons, cfg, signal, onMutationProgress) {
   const outcomes = {};
   for (const court of ALL) {
     if (!requested.includes(court)) { outcomes[court] = { kind: 'not_run' }; continue; }
@@ -149,24 +149,36 @@ async function collectCourts(client, root, requested, reasons, cfg, signal) {
           const startedAt = Date.now();
           const started = await client.call('splitbrain_mutate');
           if (started.status !== 'started' || !started.job_id) { outcomes[court] = outcome(court, started); continue; }
+          const jobId = started.job_id;
           const deadline = Date.now() + (cfg.mutation.timeoutSeconds || 900) * 1000 + 10_000;
           let status;
+          let lastProgressIdx = 0; // track which events we have already forwarded
           do {
             if (signal?.aborted) throw new Error('Extension stopped');
             if (Date.now() > deadline) throw new Error('Mutation job timed out');
             await new Promise((resolve) => setTimeout(resolve, 1000));
-            status = await client.call('splitbrain_status', { job_id: started.job_id });
+            status = await client.call('splitbrain_status', { job_id: jobId });
+            // Forward any new progress events to the dashboard's mutation bus.
+            if (onMutationProgress && Array.isArray(status.progress)) {
+              const newEvents = status.progress.slice(lastProgressIdx);
+              lastProgressIdx = status.progress.length;
+              for (const ev of newEvents) onMutationProgress(jobId, ev);
+            }
           } while (status.status === 'running');
           if (status.status !== 'done') { outcomes[court] = { kind: 'error', errors: [String(status.error || `Mutation status: ${status.status}`)], payload: status }; continue; }
           if (!cfg.mutation.absReport || !fs.existsSync(cfg.mutation.absReport) ||
               fs.statSync(cfg.mutation.absReport).mtimeMs < startedAt - 2000) {
             outcomes[court] = { kind: 'error', errors: ['Mutation finished without a fresh report'], payload: status }; continue;
           }
+          // Signal completion to the bus.
+          if (onMutationProgress) onMutationProgress(jobId, null, 'done');
         }
         payload = await client.call('splitbrain_trustgap');
       }
       outcomes[court] = outcome(court, payload);
-    } catch (e) { outcomes[court] = { kind: 'error', errors: [String(e.message || e)] }; }
+    } catch (e) {
+      outcomes[court] = { kind: 'error', errors: [String(e.message || e)] };
+    }
   }
   return outcomes;
 }
@@ -177,17 +189,38 @@ async function execute(session, requested, existingRun, openExternal) {
   const { reasons, cfg } = preflight(root);
   const client = new McpClient(enginePath, root);
   let outcomes;
+
+  // Determine the run ID up front so the SSE relay key (projectId:runId)
+  // is known before collectCourts starts the mutation job.
+  const runId = existingRun?.runId || crypto.randomUUID();
+
+  // Relay mutation progress from splitbrain_status poll responses to the
+  // dashboard server's MutationBus via the IPC channel on the shared child.
+  // Uses `runKey` (projectId:runId) — the same key the browser uses to
+  // subscribe via /api/projects/:id/runs/:runId/mutation-stream.
+  const runKey = `${project.id}:${runId}`;
+  function relayProgress(_jobId, event, signal) {
+    const child = sharedServer && sharedServer.child;
+    if (!child || !child.connected) return;
+    try {
+      if (signal === 'done') {
+        child.send({ type: 'triumph.mutationDone', runKey, status: 'done', error: null });
+      } else if (event) {
+        child.send({ type: 'triumph.mutationProgress', runKey, event });
+      }
+    } catch { /* IPC gone — not fatal */ }
+  }
+
   try {
     // Preflight failures are evidence of unavailability, not a passing court.
     if (ALL.some((c) => requested.includes(c) && !reasons[c])) await client.start();
-    outcomes = await collectCourts(client, root, requested, reasons, cfg, controller.signal);
+    outcomes = await collectCourts(client, root, requested, reasons, cfg, controller.signal, relayProgress);
   } catch (e) {
     outcomes = Object.fromEntries(ALL.map((c) => [c, requested.includes(c)
       ? { kind: 'error', errors: [String(e.message || e)] } : { kind: 'not_run' }]));
   } finally { client.dispose(); }
   if (controller.signal.aborted) throw new Error('Dashboard disconnected before the run could be published');
   const now = new Date().toISOString();
-  const runId = existingRun?.runId || crypto.randomUUID();
   const snap = toSnapshot({ projectId: project.id, projectName: project.name, runId,
     createdAt: existingRun?.createdAt || now, revision: existingRun ? 1 : 0,
     state: 'complete', ...(await gitProvenance(root)), producer: PRODUCER }, outcomes, now);

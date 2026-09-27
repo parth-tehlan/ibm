@@ -61,6 +61,11 @@
         "command": "triumph.dashboardRun",
         "title": "TRIUMPH: Run courts and publish to dashboard",
         "category": "TRIUMPH"
+      },
+      {
+        "command": "triumph.statusBarAction",
+        "title": "TRIUMPH: Status bar quick-action menu",
+        "category": "TRIUMPH"
       }
     ],
     "menus": {
@@ -82,6 +87,12 @@
         },
         {
           "command": "triumph.dashboardRun"
+        }
+      ],
+      "statusBar/windowIndicator": [
+        {
+          "command": "triumph.statusBarAction",
+          "group": "navigation"
         }
       ]
     },
