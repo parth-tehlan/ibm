@@ -46,8 +46,14 @@ function previewConfig(ctx) {
   if (path.dirname(dest) !== root) throw fail('INVALID_REQUEST', 'Configuration outside the workspace is read-only in Setup.');
   const expectedConfigRevision = revision(dest);
   const content = dest.endsWith('.json') ? JSON.stringify(config, null, 2) + '\n' : '# Gaia repo adapter. Review before applying.\n' + toYaml(config) + '\n';
+  // The webview gates the apply step on expectedConfigRevision being a string
+  // (media/panel.js renderPreview) and labels replacement from replacesExisting,
+  // so surface both: missingConfig marks creation, where null is a valid
+  // expected revision the UI could not otherwise distinguish from omission.
   return remember({kind: 'config', previewId: crypto.randomUUID(), root, path: dest, content, notes,
-    expectedConfigRevision, replace: expectedConfigRevision !== null, files: [dest], createdAt: Date.now()});
+    expectedConfigRevision, missingConfig: expectedConfigRevision === null,
+    replace: expectedConfigRevision !== null, replacesExisting: expectedConfigRevision !== null,
+    files: [dest], createdAt: Date.now()});
 }
 function applyConfig(ctx, {previewId, expectedConfigRevision, confirmReplace = false} = {}) {
   const root = rootFor(ctx, true);
@@ -91,7 +97,7 @@ function previewInstall(ctx, {host} = {}) {
   if (host !== 'all' && !Object.hasOwn(HOSTS, host)) throw fail('INVALID_REQUEST', 'Choose an integration host explicitly.');
   const hosts = host === 'all' ? Object.keys(HOSTS) : [host];
   const files = [...new Set(hosts.flatMap(h => hostFiles(root, h)))].map(file => ({path: file, revision: revision(file), action: fs.existsSync(file) ? 'merge-or-preserve' : 'create'}));
-  return remember({kind: 'install', previewId: crypto.randomUUID(), root, hosts, files, createdAt: Date.now()});
+  return remember({kind: 'install', previewId: crypto.randomUUID(), root, hosts, host: hosts.length === 1 ? hosts[0] : 'all', files, createdAt: Date.now()});
 }
 async function installCourts(ctx, {host, previewId} = {}) {
   const root = rootFor(ctx, true);

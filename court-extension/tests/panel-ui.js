@@ -136,6 +136,19 @@ test('Setup validates read-only, preview requires confirmation and exact revisio
   assert.equal(h.last('configApply').previewId, 'preview-config-1'); assert.equal(h.last('configApply').expectedConfigRevision, 'revision-1');
   h.response('configApply', { message: 'Configuration written' }); assert.equal(h.d.getElementById('config-apply'), null); assert.equal(h.last('runCourt'), undefined);
 });
+test('config creation preview with null revision and bare install preview can apply', h => {
+  h.state(fixtures.ready({ config: { exists: false, valid: false } })); h.click('setup-nav'); h.click('config-preview');
+  // Host shape for a missing config: expectedConfigRevision null + missingConfig flag.
+  h.response('configPreview', { previewId: 'preview-new-1', expectedConfigRevision: null, missingConfig: true, files: [{ path: '.gaia.yml', action: 'create', content: 'version: 1' }] });
+  assert.match(h.d.body.textContent, /Create configuration/); assert.doesNotMatch(h.d.body.textContent, /Preview token or revision unavailable/);
+  h.click('config-confirm'); h.click('config-apply');
+  assert.equal(h.last('configApply').previewId, 'preview-new-1'); assert.equal(h.last('configApply').expectedConfigRevision, null);
+  // Bare install preview: no revision field at all — must not be flagged invalid.
+  const select = h.d.getElementById('host-select'); select.value = 'all'; select.dispatchEvent(new h.dom.window.Event('change'));
+  h.click('install-preview'); assert.ok(h.last('installPreview'));
+  h.response('installPreview', { previewId: 'integration-2', files: [{ path: '.bob/mcp.json', action: 'create' }] });
+  h.click('install-confirm'); h.click('install-apply'); assert.equal(h.last('installApply').previewId, 'integration-2');
+});
 test('stale preview and untrusted workspace cannot apply', h => {
   h.state(fixtures.ready({ configPreview: fixtures.preview() })); h.click('setup-nav'); h.click('config-confirm');
   h.state(fixtures.ready({ config: { exists: true, revision: 'revision-2' }, configPreview: fixtures.preview() }));

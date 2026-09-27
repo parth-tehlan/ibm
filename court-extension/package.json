@@ -2,7 +2,7 @@
 "name": "gaia-courts",
   "displayName": "Gaia 3-Court Dev Tool",
   "description": "WITNESS / TRUSTGAP / TRIAGE courts for any repo and any model — spec-witness tests, honest coverage, incident forensics. Path-1: installs court subagents into the agent hosts you already have; never calls a model itself.",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "publisher": "gaia",
   "repository": {
     "type": "git",

@@ -515,7 +515,11 @@
     const type = kind === 'config' ? 'configApply' : 'installApply';
     const revision = p.expectedConfigRevision !== undefined ? p.expectedConfigRevision : p.configRevision;
     const stale = p.stale || (state.config && state.config.revision !== undefined && revision !== undefined && state.config.revision !== revision);
-    const valid = !!p.previewId && revision !== undefined && !usedPreviews.has(p.previewId) && !stale;
+    // Revision null is valid for creating a config that does not exist yet;
+    // integration previews carry no revision at all. Invalid only when the
+    // token is gone, the token was already applied, or the config changed.
+    const revisionMissing = kind === 'config' && !p.missingConfig && typeof revision !== 'string';
+    const valid = !!p.previewId && !revisionMissing && !usedPreviews.has(p.previewId) && !stale;
     const box = node('section', { className: 'preview', id: kind + '-preview-result' }, [heading(kind === 'config' ? 'Configuration preview' : 'Integration preview', 3)]);
     if (stale) box.appendChild(text('This preview is stale. Preview again before applying.', 'warning'));
     if (p.content || p.diff) box.appendChild(node('pre', { text: p.diff || p.content }));
