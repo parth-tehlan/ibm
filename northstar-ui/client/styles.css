@@ -8,3 +8,27 @@
 .history-filters{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin:0 7px 9px}.history-filters select,.history-filters input{min-width:0;width:100%;border:1px solid #525970;border-radius:5px;padding:6px 4px;background:#222a3d;color:#eee;font-size:10px}.history-filters select:focus-visible,.history-filters input:focus-visible{outline:2px solid #bda6f7}.history-filters input::placeholder{color:#aeb5c8}@media(max-width:800px){.history-filters{grid-template-columns:repeat(4,minmax(0,1fr));width:100%}}@media(max-width:620px){.history-filters{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .project-list,.run-list{display:grid;gap:4px;overflow-y:auto;min-height:0;max-height:22vh;margin-bottom:12px}.project-item,.run-item{width:100%;display:flex;align-items:center;gap:10px;text-align:left;border:0;border-radius:8px;background:transparent;color:#d3d4e0;padding:11px 12px;min-width:0}.project-item:hover,.run-item:hover{background:#282e40}.project-item.active,.run-item.active{background:#343048;box-shadow:inset 3px 0 #c5adff}.project-name,.run-item>span:last-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:750}.project-name small,.run-item small{display:block;font-size:10px;color:#989fb0;font-weight:400;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.run-item strong{font-size:11px;font-weight:650}.project-dot,.run-indicator{width:8px;height:8px;border-radius:50%;background:#a0a7b8;flex-shrink:0}.project-dot.connected,.run-complete{background:#78c99b}.run-running{background:#d0b4ff}.run-interrupted{background:#e6a175}.side-hint{color:#a3aabd;font-size:11px;line-height:1.55;padding:0 12px;margin:5px 0 13px}.history-label,.courts-label{margin-top:15px}.connection-error>span,.connection-disconnected>span{background:#dc897a;box-shadow:0 0 0 3px #fbe7e2}.connection-loading>span{background:#b4a5d5;box-shadow:0 0 0 3px #eee8fa}.breadcrumb{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}.header-right{flex-shrink:0;margin-left:15px}
 @media(max-width:800px){.sidebar{display:flex;flex-direction:column}.sidebar>.side-label{display:block;padding:0 4px;margin:10px 0 5px}.project-list,.run-list{display:flex;overflow-x:auto;max-height:none;margin:0 0 6px}.project-item,.run-item{flex:0 0 190px}.side-actions .side-hint{max-width:200px}.nav{width:100%}}@media(max-width:620px){.side-actions{flex-wrap:wrap}.header-right{max-width:110px}.connection{font-size:9px}.topbar{gap:8px}.breadcrumb span{margin:0 4px}}
+
+/* ---- Live mutation execution stream (SPLITBRAIN) ---- */
+.mutation-live{margin:0 0 22px;border:1px solid #e3d9f6;background:#fbf9ff;border-radius:10px;padding:16px 18px;display:flex;flex-direction:column;gap:10px}
+.mutation-live.is-live{border-color:#c9b2ef;box-shadow:0 4px 18px #7d5cb314}
+.mutation-live-head{display:flex;align-items:center;gap:10px;font-size:13px;color:#2a2440}
+.mutation-dot{width:9px;height:9px;border-radius:50%;background:#9f8bd4;flex:0 0 auto}
+.mutation-dot.pulse{animation:mutation-pulse 1.2s ease-in-out infinite;background:#8b64d8}
+.mutation-dot.dot-done{background:#4e9d74}
+.mutation-dot.dot-error{background:#c65f49}
+@keyframes mutation-pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.5);opacity:.55}}
+.mutation-counter{margin-left:auto;font-variant-numeric:tabular-nums;font-weight:800;font-size:12px;color:#5e4c7d}
+.mutation-replay-badge{font-size:9px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;border:1px solid #ddd0f5;color:#7a63a8;border-radius:5px;padding:3px 7px;background:#f5f0ff}
+.mutation-track{height:8px;border-radius:5px;background:#ece6f7;overflow:hidden}
+.mutation-fill{height:100%;border-radius:5px;background:linear-gradient(90deg,#b39ce8,#8b64d8);transition:width .2s ease}
+.mutation-meta{display:flex;flex-wrap:wrap;gap:14px;font-size:11px;color:#6f6787;font-variant-numeric:tabular-nums}
+.mutation-error{color:#a4443a;font-weight:700}
+.mutation-ticker{max-height:150px;overflow-y:auto;border-top:1px solid #ece5f8;padding-top:8px;display:flex;flex-direction:column;gap:3px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px}
+.mutation-tick{display:flex;gap:8px;align-items:baseline;color:#544b6e}
+.tick-mark{flex:0 0 12px;text-align:center;font-weight:800}
+.tick-killed .tick-mark{color:#3f8a63}
+.tick-survived .tick-mark{color:#b9862f}
+.tick-timeout .tick-mark{color:#c65f49}
+.tick-progress .tick-mark{color:#9a8fc0}
+.tick-text{min-width:0;overflow-wrap:anywhere}

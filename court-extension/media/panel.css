@@ -1,6 +1,7 @@
-/* media/panel.css — TRIUMPH webview panel styling.
+/* media/panel.css — TRIUMPH webview panel styling (tabbed redesign).
  * Colors are exclusively var(--vscode-*) theme tokens; no hardcoded colors.
- * Designed to remain usable at narrow (sidebar) widths.
+ * Layout: vertical icon tab bar on the left, scrolling content on the right.
+ * All transitions 150ms ease. Narrow (<320px): tiles stack, labels hide.
  */
 
 html, body {
@@ -13,26 +14,32 @@ html, body {
 }
 
 body {
-  padding: 8px 10px 16px;
+  padding: 0;
   box-sizing: border-box;
+  height: 100vh;
+  overflow: hidden;
 }
 
 *, *::before, *::after {
   box-sizing: border-box;
 }
 
-.panel {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  max-width: 100%;
+/* ------------------------------------------------------------------ notice/banner */
+
+/* The [hidden] attribute alone loses to any `display:` rule on the element;
+ * make it authoritative so the banner/drawers genuinely collapse. */
+[hidden] {
+  display: none !important;
 }
 
-/* ------------------------------------------------------------------ notice/banner */
+.banner:empty,
+.banner:not([aria-hidden="false"])[hidden] {
+  display: none !important;
+}
 
 .notice {
   padding: 8px 10px;
-  margin-bottom: 8px;
+  margin: 8px 10px 0;
   border: 1px solid var(--vscode-inputValidation-errorBorder, var(--vscode-panel-border));
   border-radius: 3px;
   font-size: 0.95em;
@@ -49,7 +56,7 @@ body {
   justify-content: space-between;
   gap: 8px;
   padding: 8px 10px;
-  margin-bottom: 8px;
+  margin: 8px 10px 0;
   border: 1px solid var(--vscode-inputValidation-errorBorder, var(--vscode-errorForeground));
   background-color: var(--vscode-inputValidation-errorBackground, transparent);
   border-radius: 3px;
@@ -65,26 +72,85 @@ body {
   flex: 0 0 auto;
 }
 
-/* ------------------------------------------------------------------ cards */
+/* ------------------------------------------------------------------ layout */
 
-.card {
-  border: 1px solid var(--vscode-panel-border);
-  border-radius: 4px;
-  padding: 10px 12px;
-  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+/* Hidden tab panels must not occupy space even if a UA stylesheet or an
+ * extension theme overrides their display. */
+.tab-panel[hidden] {
+  display: none !important;
 }
 
-.card > h2 {
-  margin: 0 0 8px;
-  font-size: 1.05em;
-  font-weight: 600;
+#mutation-live[hidden] {
+  display: none !important;
+}
+
+.layout {
+  display: flex;
+  height: 100vh;
+  min-height: 0;
+}
+
+.tabbar {
+  flex: 0 0 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 0;
+  border-right: 1px solid var(--vscode-panel-border);
+  background-color: var(--vscode-sideBar-background, transparent);
+  overflow: hidden;
+}
+
+.tab-item {
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 2px;
+  border: none;
+  border-left: 2px solid transparent;
+  background: transparent;
+  color: var(--vscode-descriptionForeground);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.72em;
+  transition: color 150ms ease, background-color 150ms ease, border-color 150ms ease;
+}
+
+.tab-item:hover {
   color: var(--vscode-foreground);
+  background-color: var(--vscode-list-hoverBackground, transparent);
 }
 
-.card > h3 {
-  margin: 10px 0 6px;
-  font-size: 0.95em;
-  font-weight: 600;
+.tab-item.active {
+  color: var(--vscode-foreground);
+  border-left-color: var(--vscode-focusBorder);
+}
+
+.tab-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.tab-label {
+  text-transform: none;
+}
+
+.content {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 10px 12px 16px;
+}
+
+.tab-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
 }
 
 .section-highlight {
@@ -125,30 +191,14 @@ body {
   color: var(--vscode-editorWarning-foreground);
 }
 
-.notes-list, .summary-list {
-  margin: 4px 0 8px;
-  padding-left: 18px;
-  color: var(--vscode-descriptionForeground);
-}
-
-.notes-list li, .summary-list li {
-  margin-bottom: 2px;
-  overflow-wrap: anywhere;
-}
-
-.summary-key {
-  color: var(--vscode-descriptionForeground);
-}
-
-.summary-value {
-  color: var(--vscode-foreground);
-  font-weight: 600;
-}
-
 .empty-state {
   color: var(--vscode-descriptionForeground);
   font-style: italic;
   margin: 4px 0 8px;
+}
+
+.report-generated {
+  font-size: 0.95em;
 }
 
 /* ------------------------------------------------------------------ buttons */
@@ -171,6 +221,11 @@ body {
   color: var(--vscode-button-foreground);
   background-color: var(--vscode-button-background);
   min-height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: background-color 150ms ease, opacity 150ms ease;
 }
 
 .btn:hover:not(:disabled) {
@@ -195,38 +250,157 @@ body {
 .btn:focus-visible,
 input:focus-visible,
 select:focus-visible,
-summary:focus-visible {
+summary:focus-visible,
+.court-tile:focus-visible,
+.tab-item:focus-visible {
   outline: 1px solid var(--vscode-focusBorder);
   outline-offset: 2px;
 }
 
-/* ------------------------------------------------------------------ run / court selector */
-
-.court-fieldset {
-  border: 1px solid var(--vscode-panel-border);
-  border-radius: 3px;
-  padding: 8px 10px 10px;
-  margin: 0 0 8px;
+.run-btn-row {
+  display: flex;
 }
 
-.court-fieldset > legend {
-  padding: 0 4px;
+#run-btn {
+  flex: 1 1 auto;
+  min-height: 30px;
+  font-weight: 600;
+}
+
+/* ------------------------------------------------------------------ court tiles */
+
+.court-tiles {
+  display: flex;
+  gap: 8px;
+}
+
+.court-tile {
+  flex: 1 1 0;
+  min-width: 0;
+  appearance: none;
+  text-align: left;
+  font-family: inherit;
+  font-size: inherit;
+  cursor: pointer;
+  padding: 8px 10px;
+  border: 1px solid var(--vscode-panel-border);
+  border-left: 2px solid var(--vscode-panel-border);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--vscode-foreground);
+  transition: border-color 150ms ease, background-color 150ms ease;
+}
+
+.court-tile:hover {
+  background-color: var(--vscode-list-hoverBackground, transparent);
+}
+
+.court-tile.selected {
+  border-left-color: var(--vscode-focusBorder);
+  background: color-mix(in srgb, var(--vscode-list-activeSelectionBackground) 40%, transparent);
+}
+
+.tile-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.tile-name {
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.tile-desc {
+  margin-top: 2px;
   color: var(--vscode-descriptionForeground);
+  font-size: 0.9em;
+  overflow-wrap: anywhere;
+}
+
+.tile-badge {
+  flex: 0 0 auto;
+  padding: 1px 7px;
+  border-radius: 9px;
+  font-size: 0.78em;
+  font-weight: 600;
+  border: 1px solid var(--vscode-panel-border);
+  color: var(--vscode-descriptionForeground);
+}
+
+.tile-badge.badge-passed {
+  color: var(--vscode-testing-iconPassed, var(--vscode-foreground));
+  border-color: var(--vscode-testing-iconPassed, var(--vscode-panel-border));
+}
+
+.tile-badge.badge-failed {
+  color: var(--vscode-errorForeground);
+  border-color: var(--vscode-errorForeground);
+}
+
+.tile-badge.badge-running {
+  color: var(--vscode-editorWarning-foreground);
+  border-color: var(--vscode-editorWarning-foreground);
+}
+
+.tile-badge.badge-gap {
+  color: var(--vscode-editorWarning-foreground);
+  border-color: var(--vscode-editorWarning-foreground);
+}
+
+/* ------------------------------------------------------------------ options */
+
+.options-block {
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 3px;
+  padding: 6px 10px;
+}
+
+.options-block > summary {
+  cursor: pointer;
+  color: var(--vscode-descriptionForeground);
+  list-style: none;
+}
+
+.options-block > summary::-webkit-details-marker {
+  display: none;
+}
+
+.options-block > summary .summary-arrow {
+  display: inline-block;
+  transition: transform 150ms ease;
+}
+
+.options-block[open] > summary .summary-arrow {
+  transform: rotate(90deg);
+}
+
+.options-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+}
+
+.opt-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.opt-label {
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.9em;
+  font-weight: 600;
 }
 
 .radio-option {
   display: flex;
   align-items: flex-start;
   gap: 6px;
-  padding: 3px 0;
-}
-
-.radio-option label {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2px;
+  padding: 2px 0;
   cursor: pointer;
-  min-width: 0;
 }
 
 .radio-title {
@@ -237,25 +411,37 @@ summary:focus-visible {
   color: var(--vscode-descriptionForeground);
 }
 
-/* ------------------------------------------------------------------ job indicator */
+.format-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
 
-.job-indicator {
+.check-option {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 8px;
-  padding: 6px 8px;
-  border: 1px solid var(--vscode-panel-border);
-  border-radius: 3px;
+  gap: 5px;
+  cursor: pointer;
 }
 
-.job-label {
-  font-weight: 600;
+.number-input {
+  width: 110px;
+  color: var(--vscode-input-foreground);
+  background-color: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+  border-radius: 2px;
+  padding: 3px 6px;
+  font-family: inherit;
+  font-size: inherit;
 }
 
-.job-elapsed {
-  color: var(--vscode-descriptionForeground);
+input[type="radio"], input[type="checkbox"] {
+  accent-color: var(--vscode-focusBorder);
+  margin-top: 2px;
+  flex: 0 0 auto;
 }
+
+/* ------------------------------------------------------------------ spinner */
 
 .spinner {
   width: 10px;
@@ -265,21 +451,190 @@ summary:focus-visible {
   border-top-color: var(--vscode-focusBorder);
   animation: triumph-spin 0.8s linear infinite;
   flex: 0 0 auto;
+  display: inline-block;
 }
 
 @keyframes triumph-spin {
   to { transform: rotate(360deg); }
 }
 
-/* ------------------------------------------------------------------ log */
+/* ------------------------------------------------------------------ mutation live */
 
-.log-heading {
+.mutation-live {
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 3px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mutation-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mutation-heading {
+  font-weight: 600;
+}
+
+.mutation-pct {
+  margin-left: auto;
+  color: var(--vscode-foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+.progress-track {
+  height: 6px;
+  border-radius: 3px;
+  background-color: var(--vscode-panel-border);
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  width: 0;
+  background-color: var(--vscode-testing-iconPassed, var(--vscode-focusBorder));
+  transition: width 150ms ease;
+}
+
+.mutation-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.9em;
+  font-variant-numeric: tabular-nums;
+}
+
+.mutation-line {
+  flex: 1 1 100%;
+  font-family: var(--vscode-editor-font-family, monospace);
+  overflow-wrap: anywhere;
+}
+
+/* ------------------------------------------------------------------ activity feed */
+
+.feed-heading {
+  margin: 2px 0 0;
+  font-size: 0.95em;
+  font-weight: 600;
+}
+
+.feed-container {
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 3px;
+}
+
+.feed-list {
+  list-style: none;
+  margin: 0;
+  padding: 4px 8px;
+}
+
+.feed-empty {
+  color: var(--vscode-descriptionForeground);
+  font-style: italic;
+  padding: 6px 0;
+}
+
+.feed-entry {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 2px 0;
+  min-width: 0;
+}
+
+.step-icon {
+  flex: 0 0 12px;
+  text-align: center;
+  font-weight: 700;
+}
+
+.step-icon .spinner {
+  width: 8px;
+  height: 8px;
+  border-width: 1.5px;
+}
+
+.step-success {
+  color: var(--vscode-testing-iconPassed, var(--vscode-foreground));
+}
+
+.step-warn {
+  color: var(--vscode-editorWarning-foreground);
+}
+
+.step-error {
+  color: var(--vscode-errorForeground);
+}
+
+.step-pending {
+  color: var(--vscode-descriptionForeground);
+}
+
+.feed-text {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow-wrap: anywhere;
+  color: var(--vscode-descriptionForeground);
+  transition: color 150ms ease;
+}
+
+.feed-text.feed-done {
   color: var(--vscode-foreground);
 }
 
+.feed-ts {
+  flex: 0 0 auto;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.85em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------------------------ console log drawer */
+
+.log-drawer {
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 3px;
+  padding: 6px 10px;
+  margin-top: auto;
+}
+
+.log-drawer > summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.log-drawer > summary::-webkit-details-marker {
+  display: none;
+}
+
+.log-drawer > summary .summary-arrow {
+  display: inline-block;
+  transition: transform 150ms ease;
+}
+
+.log-drawer[open] > summary .summary-arrow {
+  transform: rotate(90deg);
+}
+
+.log-count {
+  color: var(--vscode-descriptionForeground);
+}
+
 .log-container {
-  max-height: 220px;
+  max-height: 180px;
   overflow-y: auto;
+  margin-top: 6px;
   border: 1px solid var(--vscode-panel-border);
   border-radius: 3px;
   background-color: var(--vscode-editor-background, transparent);
@@ -356,6 +711,104 @@ summary:focus-visible {
   border-color: var(--vscode-panel-border);
 }
 
+/* ------------------------------------------------------------------ scorecard (Report tab) */
+
+.scorecard {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 3px;
+}
+
+.score-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.score-row:last-child {
+  border-bottom: none;
+}
+
+.score-name {
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  flex: 0 0 auto;
+}
+
+.score-verdict {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.score-last {
+  flex: 0 0 auto;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.85em;
+}
+
+.score-none {
+  color: var(--vscode-descriptionForeground);
+  font-style: italic;
+}
+
+.pill {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 9px;
+  font-size: 0.82em;
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+
+.pill-pass {
+  color: var(--vscode-testing-iconPassed, var(--vscode-foreground));
+  border-color: var(--vscode-testing-iconPassed, var(--vscode-panel-border));
+}
+
+.pill-fail {
+  color: var(--vscode-errorForeground);
+  border-color: var(--vscode-errorForeground);
+}
+
+.pill-skip {
+  color: var(--vscode-editorWarning-foreground);
+  border-color: var(--vscode-editorWarning-foreground);
+}
+
+.gap-track {
+  display: inline-block;
+  width: 72px;
+  height: 6px;
+  border-radius: 3px;
+  background-color: var(--vscode-panel-border);
+  overflow: hidden;
+  vertical-align: middle;
+}
+
+.gap-fill {
+  display: block;
+  height: 100%;
+  background-color: var(--vscode-editorWarning-foreground);
+  transition: width 150ms ease;
+}
+
+/* ------------------------------------------------------------------ setup */
+
+.setup-divider {
+  border: none;
+  border-top: 1px solid var(--vscode-panel-border);
+  margin: 4px 0;
+  width: 100%;
+}
+
 /* ------------------------------------------------------------------ inputs */
 
 .dropdown {
@@ -370,15 +823,13 @@ summary:focus-visible {
   max-width: 100%;
 }
 
-input[type="radio"] {
-  accent-color: var(--vscode-focusBorder);
-  margin-top: 2px;
-  flex: 0 0 auto;
-}
-
 /* ------------------------------------------------------------------ narrow widths */
 
-@media (max-width: 360px) {
+@media (max-width: 320px) {
+  .court-tiles {
+    flex-direction: column;
+  }
+
   .button-row {
     flex-direction: column;
     align-items: stretch;
@@ -386,6 +837,14 @@ input[type="radio"] {
 
   .btn {
     width: 100%;
+  }
+
+  .tabbar {
+    flex-basis: 36px;
+  }
+
+  .tab-label {
+    display: none;
   }
 
   .field-row {

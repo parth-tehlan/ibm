@@ -21,7 +21,7 @@ await mkdir(output, { recursive: true });
 await writeFile(marker, 'TRIUMPH dashboard runtime\n');
 for (const entry of [
   'dist', 'server/index.js', 'server/app.js', 'server/history.js', 'server/bridge.js',
-  'contracts/report.js', 'reports/export.js', 'package.json', 'package-lock.json',
+  'server/mutation-bus.js', 'contracts/report.js', 'reports/export.js', 'package.json', 'package-lock.json',
 ]) {
   const destination = path.join(output, entry);
   await mkdir(path.dirname(destination), { recursive: true });

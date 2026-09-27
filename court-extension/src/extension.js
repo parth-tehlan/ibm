@@ -235,6 +235,14 @@ const _courtState = {
   warpath: null,   // { hasIncident: bool } | null
 };
 
+/** Set while any panel job runs — drives the active-court indicator and
+ *  the amber "working" tint on the status bar. */
+let _lastRun = null; // { label, startedAt } | null
+
+/** Live SPLITBRAIN mutation metrics while (and after) a mutation job
+ *  streams — { tested, total, killed, killRate, status } | null. */
+let _mutationLive = null;
+
 /**
  * Called from the panel's job completion hook (injected via onCourtResult) or
  * after cmdRunCourt / cmdGenerateReport settle. Updates the ambient court
@@ -284,10 +292,32 @@ function buildStatusText() {
     parts.push(`${icon} WP`);
   }
 
+  // Live mutation execution: a climbing counter is the single most
+  // glanceable signal that a long SPLITBRAIN run is alive.
+  if (_mutationLive && _mutationLive.status !== 'done') {
+    const m = _mutationLive;
+    const progress = m.tested != null ? (m.total != null ? `${m.tested}/${m.total}` : `${m.tested}`) : null;
+    const rate = m.killRate != null ? ` ${m.killRate}% killed` : '';
+    parts.push(`$(beaker) ${progress != null ? progress : '…'}${rate}`);
+  }
+
   if (dashboardCmd.isConnected()) parts.push('$(radio-tower)');
+
+  if (_lastRun) parts.push(`$(sync~spin) ${shortJobLabel(_lastRun.label)}`);
 
   if (parts.length === 0) return '$(shield) TRIUMPH';
   return '$(shield) ' + parts.join('  ');
+}
+
+/** Trim a runJob label ("runCourt {…}") to a scannable status-bar token. */
+function shortJobLabel(label) {
+  if (!label) return 'working';
+  if (label.startsWith('runCourt')) {
+    const m = /"([^"]+)"/.exec(label);
+    return m ? `running ${m[1]}` : 'running courts';
+  }
+  const head = label.split(' ')[0];
+  return head.length > 18 ? head.slice(0, 17) + '…' : head;
 }
 
 /** Build tooltip text from current court state. */
@@ -305,7 +335,13 @@ function buildStatusTooltip() {
   if (_courtState.warpath) {
     lines.push(`WARPATH: ${_courtState.warpath.hasIncident ? 'incident window active' : 'clear'}`);
   }
+  if (_mutationLive && _mutationLive.status !== 'done') {
+    const m = _mutationLive;
+    lines.push(`MUTATION LIVE: ${m.tested != null ? m.tested : 0}${m.total != null ? `/${m.total}` : ''} tested` +
+      (m.killRate != null ? ` — ${m.killRate}% kill rate` : ''));
+  }
   if (dashboardCmd.isConnected()) lines.push('Dashboard connected — browser "Run again" is live.');
+  if (_lastRun) lines.push(`Running: ${_lastRun.label} (started ${new Date(_lastRun.startedAt).toLocaleTimeString()})`);
   if (lines.length === 1) lines.push('Click to run courts or open dashboard.');
   return lines.join('\n');
 }
@@ -321,7 +357,9 @@ function updateStatusBar() {
   // Color coding: red if any REDLINE failures or critical trust gap.
   const hasRed = _courtState.redline && _courtState.redline.red > 0;
   const hasBadGap = _courtState.splitbrain && _courtState.splitbrain.trustGap > 20;
-  const hasWarn = _courtState.redline && (_courtState.redline.red === 0 && _courtState.redline.yellow > 0);
+  const hasWarn = (_courtState.redline && (_courtState.redline.red === 0 && _courtState.redline.yellow > 0)) ||
+    (_courtState.warpath && _courtState.warpath.hasIncident) ||
+    Boolean(_lastRun); // a live job is an "in-flight" state: amber, not idle
   if (hasRed || hasBadGap) {
     _status.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground');
   } else if (hasWarn) {
@@ -350,6 +388,24 @@ function registerPanel(context) {
     // Update the ambient status bar metrics whenever a court result arrives
     // via the panel's runCourt or generateReport job.
     onCourtResult: notifyCourtResult,
+    // Job slot transitions drive the active-court indicator; mutation
+    // progress drives the live kill-rate counter.
+    onJobChange: (job) => { _lastRun = job; if (!job) _mutationLive = null; updateStatusBar(); },
+    onMutation: (event, signal) => {
+      if (signal === 'done' || event == null) {
+        _mutationLive = _mutationLive ? { ..._mutationLive, status: 'done' } : null;
+      } else {
+        const prev = _mutationLive || {};
+        _mutationLive = {
+          status: 'running',
+          tested: event.tested != null ? event.tested : (prev.tested ?? null),
+          total: event.total != null ? event.total : (prev.total ?? null),
+          killed: event.killed != null ? event.killed : (prev.killed ?? null),
+          killRate: event.killRate != null ? event.killRate : (prev.killRate ?? null),
+        };
+      }
+      updateStatusBar();
+    },
   });
   // Releases the provider's dashboard onConnectionChange listener on deactivate.
   context.subscriptions.push(provider);
@@ -406,6 +462,7 @@ function activate(context) {
         { label: '$(run) Run REDLINE',    action: 'redline' },
         { label: '$(beaker) Run SPLITBRAIN', action: 'splitbrain' },
         { label: '$(warning) Run WARPATH',  action: 'warpath' },
+        { label: '$(checklist) Run all courts', action: 'all' },
         dashConnected && dashUrl
           ? { label: '$(radio-tower) Open Dashboard', action: 'openDashboard' }
           : { label: '$(graph) Open Dashboard (not connected)', action: 'dashboardRun' },
@@ -415,10 +472,11 @@ function activate(context) {
       const pick = await vscode.window.showQuickPick(items, { placeHolder: 'TRIUMPH: choose an action' });
       if (!pick) return;
 
-      if (pick.action === 'redline' || pick.action === 'splitbrain' || pick.action === 'warpath') {
+      if (pick.action === 'redline' || pick.action === 'splitbrain' || pick.action === 'warpath' || pick.action === 'all') {
+        const selected = pick.action === 'all' ? ['REDLINE', 'SPLITBRAIN', 'WARPATH'] : [pick.action.toUpperCase()];
         provider.reveal({
           section: 'run',
-          dispatch: () => handleMessage({ type: 'runCourt', court: pick.action.toUpperCase() }, provider._deps()),
+          dispatch: () => handleMessage({ type: 'runCourt', courts: selected }, provider._deps()),
         });
       } else if (pick.action === 'openDashboard') {
         if (dashUrl) vscode.env.openExternal(vscode.Uri.parse(dashUrl));

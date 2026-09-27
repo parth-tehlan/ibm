@@ -211,10 +211,28 @@ async function execute(session, requested, existingRun, openExternal) {
     } catch { /* IPC gone — not fatal */ }
   }
 
+  // Warm-cache demo guardrail: persist every relayed event to a per-run JSONL
+  // log under the session history dir. A stage demo can replay the exact
+  // event stream even if the live runner is slow or the server restarted.
+  const mutationLogDir = session.historyDir ? path.join(session.historyDir, 'mutation-events') : null;
+  const mutationLogPath = mutationLogDir ? path.join(mutationLogDir, `${runKey.replace(/[^A-Za-z0-9-]/g, '_')}.jsonl`) : null;
+  function logMutationEvent(frame) {
+    if (!mutationLogPath) return;
+    try {
+      fs.mkdirSync(mutationLogDir, { recursive: true });
+      fs.appendFileSync(mutationLogPath, JSON.stringify({ ...frame, ts: Date.now() }) + '\n', 'utf8');
+    } catch { /* the live stream is primary; the cache must never block it */ }
+  }
+  function relayAndLog(jobId, event, signal) {
+    if (signal === 'done') logMutationEvent({ type: 'done', status: 'done', error: null });
+    else if (event) logMutationEvent({ type: 'progress', event });
+    relayProgress(jobId, event, signal);
+  }
+
   try {
     // Preflight failures are evidence of unavailability, not a passing court.
     if (ALL.some((c) => requested.includes(c) && !reasons[c])) await client.start();
-    outcomes = await collectCourts(client, root, requested, reasons, cfg, controller.signal, relayProgress);
+    outcomes = await collectCourts(client, root, requested, reasons, cfg, controller.signal, relayAndLog);
   } catch (e) {
     outcomes = Object.fromEntries(ALL.map((c) => [c, requested.includes(c)
       ? { kind: 'error', errors: [String(e.message || e)] } : { kind: 'not_run' }]));
@@ -269,7 +287,7 @@ async function startSession(vscode, { root, enginePath, historyDir, onError, pol
       server.child.once('error', gone);
     }, () => { if (sharedServer === server) sharedServer = null; });
   }
-  const session = { root, enginePath, project, onError, controller: new AbortController(), busy: false };
+  const session = { root, enginePath, project, onError, controller: new AbortController(), busy: false, historyDir };
   // Reserve synchronously so concurrent commands never register duplicate children.
   const promise = (async () => {
     const dash = new DashboardClient({ project, server: sharedServer, onError });
