@@ -211,6 +211,41 @@ function fakeWebviewView(posted) {
     assert.ok(registered.statusBar.text, 'status bar text must be non-empty');
   });
 
+  await t('status bar ticker: job lifecycle drives the running indicator; mutation events drive the live counter', async () => {
+    const { vscode: v2, rec } = mkVscode();
+    const ext2 = freshExtension(v2);
+    ext2.activate({ subscriptions: [] });
+    const provider = rec.webviewProviders[0].provider;
+    const bar = rec.statusBar;
+    assert.ok(bar, 'status bar item must exist');
+    assert.ok(/TRIUMPH/.test(bar.text), 'idle state shows the TRIUMPH brand');
+    assert.ok(!/sync~spin/.test(bar.text), 'no running indicator while idle');
+
+    // Job start → active-court indicator spins on the bar.
+    provider.state.job = { kind: 'runCourt', label: 'runCourt {"courts":["REDLINE"]}', startedAt: new Date().toISOString() };
+    if (provider.onJobChange) provider.onJobChange(provider.state.job);
+    assert.ok(/sync~spin/.test(bar.text), 'running job must show the spinner segment, got: ' + bar.text);
+    assert.ok(/running/i.test(bar.text), 'the active court is named, got: ' + bar.text);
+    assert.ok(bar.backgroundColor && bar.backgroundColor.id === 'statusBarItem.warningBackground', 'in-flight job tints the bar amber');
+
+    // Live mutation events climb the kill-rate counter.
+    if (provider.onMutation) provider.onMutation({ tested: 12, total: 40, killed: 9, killRate: 75, line: '12/40 Mutants' });
+    assert.ok(/12\/40/.test(bar.text), 'live tested/total counter must appear');
+    assert.ok(/75% killed/.test(bar.text), 'live kill-rate must appear');
+    assert.ok(/MUTATION LIVE/.test(bar.tooltip), 'tooltip explains the live stream');
+
+    // Done signal clears the live segment; job clear removes the spinner.
+    if (provider.onMutation) provider.onMutation(null, 'done');
+    if (provider.onJobChange) provider.onJobChange(null);
+    assert.ok(!/12\/40/.test(bar.text), 'finished mutation stream leaves the bar');
+    assert.ok(!/sync~spin/.test(bar.text), 'job clear removes the running indicator');
+
+    // Court results recolor the bar: red clauses → error background.
+    if (provider.onCourtResult) provider.onCourtResult('redline', { summary: { green: 2, red: 1, yellow: 0, total: 3 } });
+    assert.ok(/R:2↑1↓/.test(bar.text), 'redline verdict counts render');
+    assert.ok(bar.backgroundColor && bar.backgroundColor.id === 'statusBarItem.errorBackground', 'red clauses tint the bar red');
+  });
+
   await t('deactivate() resolves and stopSession is safe + idempotent', async () => {
     const dash = require('../src/dashboard.js');
     assert.strictEqual(typeof dash.stopSession, 'function', 'stopSession must be exported');

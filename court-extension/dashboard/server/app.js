@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { ZodError, z } from 'zod';
 import { createHistory } from './history.js';
 import { createBridge } from './bridge.js';
+import { createMutationBus } from './mutation-bus.js';
 import { normalizeReport } from '../contracts/report.js';
 import { exportSnapshot } from '../reports/export.js';
 
@@ -26,11 +27,12 @@ function handleError(error, req, res, next) {
 /** Browser surface only. Extension registration is deliberately NOT an HTTP route:
  * trusted editor-host code calls app.locals.bridge.registerProject() in-process.
  */
-export function createApp({ history = createHistory(), bridge = createBridge({ history }), allowedHosts = (process.env.TRIUMPH_ALLOWED_HOSTS || '').split(',').map((value) => value.trim().toLowerCase()).filter(Boolean), devOrigins = ['http://127.0.0.1:5173', 'http://localhost:5173', ...allowedHosts.map((hostname) => `http://${hostname}:5173`)] } = {}) {
+export function createApp({ history = createHistory(), bridge = createBridge({ history }), mutationBus = createMutationBus(), allowedHosts = (process.env.TRIUMPH_ALLOWED_HOSTS || '').split(',').map((value) => value.trim().toLowerCase()).filter(Boolean), devOrigins = ['http://127.0.0.1:5173', 'http://localhost:5173', ...allowedHosts.map((hostname) => `http://${hostname}:5173`)] } = {}) {
   const app = express();
   const trustedHostnames = new Set(['127.0.0.1', 'localhost', ...allowedHosts]);
   app.locals.history = history;
   app.locals.bridge = bridge;
+  app.locals.mutationBus = mutationBus;
   app.disable('x-powered-by');
   app.use((req, res, next) => {
     const host = req.headers.host;
@@ -85,6 +87,59 @@ export function createApp({ history = createHistory(), bridge = createBridge({ h
       await history.save(report);
     } });
     res.status(202).json({ runId: request.runId, requestId: request.requestId });
+  }));
+  // --- Live mutation execution stream (SPLITBRAIN) --------------------------
+  // Server-Sent Events fed by the trusted editor host over IPC (see
+  // server/index.js). The bus is keyed `${projectId}:${runId}` — exactly the
+  // runKey the extension computes when it relays splitbrain_status progress.
+  app.get('/api/projects/:id/runs/:runId/mutation-stream', route(async (req, res) => {
+    if (!uuid.safeParse(req.params.id).success || !uuid.safeParse(req.params.runId).success) return bad(res);
+    const runKey = `${req.params.id.toLowerCase()}:${req.params.runId.toLowerCase()}`;
+    res.status(200);
+    res.set({
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+      'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    });
+    res.flushHeaders();
+    let closed = false;
+    const send = (frame) => {
+      if (closed) return;
+      let data;
+      try { data = JSON.stringify(frame); } catch { return; }
+      if (data.length > mutationBus.SSE_MAX_BYTES) data = JSON.stringify({ type: 'progress', event: { line: '(oversized event dropped)' } });
+      try { res.write(`data: ${data}\n\n`); } catch { closed = true; }
+    };
+    const unsubscribe = mutationBus.subscribe(runKey, (frame) => {
+      send(frame);
+      if (frame.type === 'done') cleanup();
+    });
+    const heartbeat = setInterval(() => { try { res.write(': hb\n\n'); } catch { cleanup(); } }, 15000);
+    heartbeat.unref?.();
+    function cleanup() {
+      if (closed) return;
+      closed = true;
+      clearInterval(heartbeat);
+      unsubscribe();
+      try { res.end(); } catch { /* already closed */ }
+    }
+    req.on('close', cleanup);
+    // No buffered events and no terminal state yet: leave the stream open —
+    // the extension will begin relaying as soon as the mutation job starts.
+  }));
+  // Warm-cache demo guardrail: replay a run's event log so a live pitch never
+  // stalls on stage. Live in-memory events win; the extension-written JSONL
+  // log under the history dir is the durable fallback across restarts.
+  app.get('/api/projects/:id/runs/:runId/mutation-stream/replay', route(async (req, res) => {
+    if (!uuid.safeParse(req.params.id).success || !uuid.safeParse(req.params.runId).success) return bad(res);
+    const runKey = `${req.params.id.toLowerCase()}:${req.params.runId.toLowerCase()}`;
+    const live = mutationBus.replay(runKey);
+    if (live) return res.json({ ...live, source: 'live' });
+    const cached = typeof history.loadMutationEvents === 'function'
+      ? await history.loadMutationEvents(req.params.id, req.params.runId) : null;
+    if (!cached) return res.status(404).json({ error: 'No mutation event log for this run' });
+    res.json({ ...cached, source: 'cache' });
   }));
   app.get('/api/runs/:id/export', route(async (req, res) => {
     if (!uuid.safeParse(req.params.id).success) return bad(res);

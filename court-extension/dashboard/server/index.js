@@ -10,7 +10,7 @@ const host = process.env.TRIUMPH_HOST || '127.0.0.1';
 // app must exist before the maintenance interval closes over app.locals.bridge.
 const app = createApp({ history });
 const maintenance = setInterval(async () => {
-  try { await history.renewOwned(); await app.locals.bridge.sweep(); await history.recoverInterrupted(); }
+  try { await history.renewOwned(); await app.locals.bridge.sweep(); await history.recoverInterrupted(); app.locals.mutationBus.sweep(); }
   catch (error) { console.error('Dashboard maintenance failed:', error); }
 }, 10_000);
 maintenance.unref();
@@ -25,7 +25,19 @@ const server = app.listen(port, host, () => {
 
 if (process.send) {
   process.on('message', async (message) => {
-    if (!message || message.type !== 'triumph.register' || typeof message.requestId !== 'string') return;
+    if (!message || typeof message !== 'object') return;
+    // Live mutation progress relayed by the trusted editor host (Feature:
+    // real-time SPLITBRAIN execution stream). runKey is `${projectId}:${runId}`;
+    // browser SSE subscribers see exactly what the mutation runner prints.
+    if (message.type === 'triumph.mutationProgress' && typeof message.runKey === 'string') {
+      try { app.locals.mutationBus.push(message.runKey, message.event); } catch { /* never let IPC break the server */ }
+      return;
+    }
+    if (message.type === 'triumph.mutationDone' && typeof message.runKey === 'string') {
+      try { app.locals.mutationBus.done(message.runKey, message.status, message.error); } catch { /* ignore */ }
+      return;
+    }
+    if (message.type !== 'triumph.register' || typeof message.requestId !== 'string') return;
     try {
       await app.locals.bridge.sweep();
       const { project, token } = app.locals.bridge.registerProject({ project: message.project });

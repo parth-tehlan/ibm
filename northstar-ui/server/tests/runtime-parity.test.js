@@ -11,7 +11,7 @@ const root = fileURLToPath(new URL('../../', import.meta.url));
 test('opt-in packaged runtime has the same server, schema, lockfile and browser assets as source build', async (t) => {
   if (!process.env.TRIUMPH_RUNTIME_DIR) { t.skip('stage the runtime and set TRIUMPH_RUNTIME_DIR to verify parity'); return; }
   const staged = path.resolve(process.env.TRIUMPH_RUNTIME_DIR);
-  const files = ['package.json', 'package-lock.json', 'server/index.js', 'server/app.js', 'server/bridge.js', 'server/history.js', 'contracts/report.js', 'reports/export.js', 'dist/index.html'];
+  const files = ['package.json', 'package-lock.json', 'server/index.js', 'server/app.js', 'server/bridge.js', 'server/history.js', 'server/mutation-bus.js', 'contracts/report.js', 'reports/export.js', 'dist/index.html'];
   const assets = await readdir(path.join(root, 'dist/assets'));
   assert.ok(assets.some((asset) => asset.endsWith('.js')));
   files.push(...assets.map((asset) => `dist/assets/${asset}`));
@@ -30,7 +30,7 @@ test('opt-in copied extension runtime matches staged browser and server artifact
   }
   const source = path.resolve(process.env.TRIUMPH_RUNTIME_DIR);
   const target = path.resolve(process.env.TRIUMPH_COPIED_RUNTIME_DIR);
-  const files = ['package.json', 'package-lock.json', 'server/index.js', 'server/app.js', 'server/history.js', 'server/bridge.js', 'contracts/report.js', 'reports/export.js', 'dist/index.html'];
+  const files = ['package.json', 'package-lock.json', 'server/index.js', 'server/app.js', 'server/history.js', 'server/bridge.js', 'server/mutation-bus.js', 'contracts/report.js', 'reports/export.js', 'dist/index.html'];
   const assets = await readdir(path.join(source, 'dist/assets'));
   files.push(...assets.map((file) => `dist/assets/${file}`));
   assert.deepEqual((await readdir(path.join(target, 'dist/assets'))).sort(), assets.sort());

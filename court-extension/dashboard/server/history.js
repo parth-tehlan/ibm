@@ -304,5 +304,28 @@ export function createHistory({ dir = defaultHistoryDir(), legacyDir = fileURLTo
     }
     return migrated;
   }
-  return { dir: root, save, load, listProjects, listRuns, importReport, loadImport, listImports, migrateLegacy, recoverInterrupted, claimRun, assertOwned, renewOwned };
+  /**
+   * Warm-cache replay (demo guardrail): read the extension-written JSONL
+   * event log for a run (`${dataRoot}/mutation-events/<safeRunKey>.jsonl`).
+   * Returns { events, done } or null when no log exists. Corrupt trailing
+   * lines (interrupted writes) are skipped, never fatal.
+   */
+  async function loadMutationEvents(projectId, runId) {
+    const runKey = `${validId(projectId)}:${validId(runId)}`;
+    const file = path.join(root, 'mutation-events', runKey.replace(/[^A-Za-z0-9-]/g, '_') + '.jsonl');
+    let text;
+    try { text = await fs.readFile(file, 'utf8'); } catch (error) { if (error.code === 'ENOENT') return null; throw error; }
+    const events = [];
+    let done = null;
+    for (const line of text.split('\n')) {
+      if (!line.trim()) continue;
+      let frame;
+      try { frame = JSON.parse(line); } catch { continue; } // partial final line after a crash
+      if (frame && frame.type === 'progress' && frame.event && typeof frame.event === 'object') events.push(frame.event);
+      else if (frame && frame.type === 'done') done = { status: frame.status === 'error' ? 'error' : 'done', error: frame.error ? String(frame.error) : null };
+    }
+    if (!events.length && !done) return null;
+    return { events, done };
+  }
+  return { dir: root, save, load, listProjects, listRuns, importReport, loadImport, listImports, migrateLegacy, recoverInterrupted, claimRun, assertOwned, renewOwned, loadMutationEvents };
 }

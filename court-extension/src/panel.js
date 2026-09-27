@@ -20,6 +20,7 @@ const crypto = require('crypto');
 const { HOSTS } = require('../lib/hosts');
 
 const LOG_LIMIT = 200;
+const STEP_LIMIT = 200;
 const FALLBACK_COURTS = ['REDLINE', 'SPLITBRAIN', 'WARPATH'];
 
 const WHITELIST = new Set([
@@ -29,6 +30,19 @@ const WHITELIST = new Set([
 
 // The single job slot is shared by these five message types (section D).
 const JOB_TYPES = new Set(['detectConfig', 'installCourts', 'runCourt', 'generateReport', 'dashboardRun']);
+
+/** Map a raw mutation-runner progress event (lib/mutation-progress.js shape)
+ *  to an agent-feed step status. Kills are successes, survivors/no-coverage
+ *  are warnings, timeouts are errors, everything else is a running update. */
+function mutationStepStatus(event) {
+  if (!event || typeof event !== 'object') return 'running';
+  if (event.error) return 'error';
+  const v = typeof event.verdict === 'string' ? event.verdict.toLowerCase() : '';
+  if (/^timed\s*out/.test(v) || /timeout/.test(v)) return 'error';
+  if (/^killed/.test(v)) return 'success';
+  if (/^(survived|no coverage)/.test(v)) return 'warn';
+  return 'running';
+}
 
 function nonce() {
   return crypto.randomBytes(16).toString('base64');
@@ -56,7 +70,7 @@ class TriumphPanelProvider {
    *   job settles (success or failure), regardless of trigger, so the
    *   extension host's status bar stays in sync (contract H4).
    */
-  constructor({ actions, repoRoot, enginePath, dashboardCmd, context, onDashboardChange, onCourtResult } = {}) {
+  constructor({ actions, repoRoot, enginePath, dashboardCmd, context, onDashboardChange, onCourtResult, onJobChange, onMutation } = {}) {
     this.actions = actions || null;
     this.repoRoot = repoRoot;
     this.enginePath = enginePath;
@@ -64,6 +78,8 @@ class TriumphPanelProvider {
     this.context = context || null;
     this.onDashboardChange = typeof onDashboardChange === 'function' ? onDashboardChange : null;
     this.onCourtResult = typeof onCourtResult === 'function' ? onCourtResult : null;
+    this.onJobChange = typeof onJobChange === 'function' ? onJobChange : null;
+    this.onMutation = typeof onMutation === 'function' ? onMutation : null;
     this.extensionUri = this.context && this.context.extensionUri;
 
     this._view = null;
@@ -80,6 +96,8 @@ class TriumphPanelProvider {
       dashboard: { connected: false, url: null },
       job: null,
       log: [],
+      steps: [], // agent activity feed entries ({ts,status,text})
+      mutations: null, // live mutation metrics ({tested,total,killed,killRate,line,status}) or null when idle
     };
 
     this._refreshWorkspace();
@@ -148,6 +166,16 @@ class TriumphPanelProvider {
       root,
       enginePath,
       emit: (e) => this.log((e && e.level) || 'info', e && e.text),
+      // Steps feed the agent-activity timeline AND mirror into the raw
+      // console log so the audit trail never loses a narrative line.
+      emitStep: (step) => {
+        const entry = this.postStep(step);
+        if (entry) this.log(entry.status === 'error' ? 'error' : entry.status === 'warn' ? 'warn' : 'info', entry.text);
+      },
+      emitMutation: (event, signal) => {
+        this._onMutationEvent(event, signal);
+        if (this.onMutation) safe(() => this.onMutation(event, signal), undefined);
+      },
       globalStoragePath: this.context && this.context.globalStorageUri ? this.context.globalStorageUri.fsPath : null,
       openExternal: (url) => safe(() => vscode.env.openExternal(vscode.Uri.parse(url)), undefined),
       vscode,
@@ -230,6 +258,8 @@ class TriumphPanelProvider {
       dashboardCmd: this.dashboardCmd,
       context: this.context,
       onCourtResult: this.onCourtResult,
+      onJobChange: this.onJobChange,
+      onMutation: this.onMutation,
     };
   }
 
@@ -268,6 +298,8 @@ class TriumphPanelProvider {
       dashboard: { ...s.dashboard },
       job: s.job ? { ...s.job } : null,
       log: s.log.slice(-LOG_LIMIT),
+      steps: s.steps.slice(-STEP_LIMIT),
+      mutations: s.mutations ? { ...s.mutations } : null,
     };
   }
 
@@ -286,6 +318,47 @@ class TriumphPanelProvider {
 
   postLog(entry) {
     this._post({ type: 'log', entry });
+  }
+
+  /** Append an agent-activity step ({status, text}) and push it immediately.
+   *  Steps stay in the feed after completion so the full trace is visible.
+   *  Consecutive identical 'running' steps (e.g. mutation-runner lines that
+   *  repeat) coalesce into one entry rather than flooding the feed. */
+  postStep(step) {
+    if (!step || typeof step.text !== 'string' || !step.text) return null;
+    const status = step.status || 'running';
+    const last = this.state.steps[this.state.steps.length - 1];
+    if (last && last.status === 'running' && status === 'running' && last.text === step.text) {
+      last.ts = new Date().toISOString(); // refresh the timestamp, keep one line
+      this._post({ type: 'step', step: { ...last }, replace: true });
+      return last;
+    }
+    const entry = { ts: new Date().toISOString(), status, text: step.text };
+    this.state.steps.push(entry);
+    if (this.state.steps.length > STEP_LIMIT) this.state.steps.splice(0, this.state.steps.length - STEP_LIMIT);
+    this._post({ type: 'step', step: entry });
+    return entry;
+  }
+
+  /** Live mutation progress from an action's SPLITBRAIN status polling.
+   *  Updates the metrics state (pushed lazily with the next state post) and
+   *  mirrors every event into the activity feed as a step. */
+  _onMutationEvent(event, signal) {
+    if (signal === 'done' || event == null) {
+      this.state.mutations = this.state.mutations ? { ...this.state.mutations, status: 'done' } : { status: 'done' };
+      return;
+    }
+    const prev = this.state.mutations || {};
+    this.state.mutations = {
+      status: 'running',
+      tested: event.tested != null ? event.tested : (prev.tested ?? null),
+      total: event.total != null ? event.total : (prev.total ?? null),
+      killed: event.killed != null ? event.killed : (prev.killed ?? null),
+      survived: event.survived != null ? event.survived : (prev.survived ?? null),
+      killRate: event.killRate != null ? event.killRate : (prev.killRate ?? null),
+      line: typeof event.line === 'string' ? event.line : (prev.line || ''),
+    };
+    this.postStep({ status: mutationStepStatus(event), text: this.state.mutations.line || 'mutation runner progress' });
   }
 
   postError(text) {
@@ -348,8 +421,14 @@ class TriumphPanelProvider {
       this.postError(`A TRIUMPH job is already running (${this.state.job.label}).`);
       return undefined;
     }
+    // New run: clear the activity feed (append-only *during* a run) and reset
+    // live mutation metrics. Raw console log is kept (it is the audit trail).
+    this.state.steps = [];
+    this.state.mutations = null;
     this.state.job = { kind, label, startedAt: new Date().toISOString() };
+    if (this.onJobChange) safe(() => this.onJobChange(this.state.job), undefined);
     this.postState();
+    this.postStep({ status: 'running', text: label });
     try {
       return await fn();
     } catch (e) {
@@ -357,6 +436,7 @@ class TriumphPanelProvider {
       return undefined;
     } finally {
       this.state.job = null;
+      if (this.onJobChange) safe(() => this.onJobChange(null), undefined);
       this.postState();
     }
   }
@@ -366,17 +446,20 @@ class TriumphPanelProvider {
 
 function resultSummary(court, result) {
   if (!result) return 'no result';
-  if (court === 'REDLINE' && result.summary) {
-    const s = result.summary;
+  if (result.kind === 'error') return result.error || 'failed';
+  const payload = result.kind === 'complete' ? result.payload : result; // accept raw engine payloads too
+  if (!payload) return 'no evidence';
+  if (court === 'REDLINE' && payload.summary) {
+    const s = payload.summary;
     return `${s.green} green / ${s.red} red / ${s.yellow} yellow of ${s.total}`;
   }
   if (court === 'SPLITBRAIN') {
-    if (result.status === 'started') return `mutation job ${result.job_id} started`;
-    if (result.trustGap != null) return `trust gap ${result.trustGap}`;
-    return result.status || 'done';
+    if (payload.status === 'started') return `mutation job ${payload.job_id} started`;
+    if (payload.trustGap != null) return `trust gap ${payload.trustGap}`;
+    return payload.status || 'done';
   }
   if (court === 'WARPATH') {
-    return result.incidentWindow ? `incident window ${result.incidentWindow}` : (result.status || 'done');
+    return payload.incidentWindow ? `incident window ${payload.incidentWindow}` : (payload.status || 'done');
   }
   return 'done';
 }
@@ -421,11 +504,47 @@ async function handleMessage(msg, deps) {
     params = { host: msg.host };
   } else if (type === 'runCourt') {
     const courts = (deps.actions && Array.isArray(deps.actions.COURTS)) ? deps.actions.COURTS : FALLBACK_COURTS;
-    if (typeof msg.court !== 'string' || !courts.includes(msg.court)) {
+    // Accept either the legacy single-court form ({court: 'REDLINE'}) or the
+    // multi-select panel form ({courts: ['REDLINE', ...]}). Both normalize to
+    // params.courts (array, panel order).
+    let selected;
+    if (Array.isArray(msg.courts)) {
+      if (!msg.courts.length || msg.courts.some((c) => typeof c !== 'string' || !courts.includes(c)) ||
+          new Set(msg.courts).size !== msg.courts.length) {
+        provider.postError(`runCourt: courts must be a non-empty distinct subset of ${courts.join(', ')}`);
+        return;
+      }
+      selected = [...msg.courts];
+    } else if (typeof msg.court === 'string' && courts.includes(msg.court)) {
+      selected = [msg.court];
+    } else {
       provider.postError(`runCourt: court must be one of ${courts.join(', ')}`);
       return;
     }
-    params = { court: msg.court };
+    params = { courts: selected };
+    if (msg.outputTarget !== undefined) {
+      if (msg.outputTarget !== 'local' && msg.outputTarget !== 'dashboard') {
+        provider.postError(`runCourt: outputTarget must be 'local' or 'dashboard'`);
+        return;
+      }
+      params.outputTarget = msg.outputTarget;
+    }
+    if (msg.timeoutSeconds !== undefined) {
+      if (typeof msg.timeoutSeconds !== 'number' || !Number.isFinite(msg.timeoutSeconds) || msg.timeoutSeconds <= 0) {
+        provider.postError('runCourt: timeoutSeconds must be a positive number');
+        return;
+      }
+      params.timeoutSeconds = msg.timeoutSeconds;
+    }
+  } else if (type === 'generateReport') {
+    if (msg.formats !== undefined) {
+      const valid = ['html', 'md', 'json'];
+      if (!Array.isArray(msg.formats) || !msg.formats.length || msg.formats.some((f) => !valid.includes(f))) {
+        provider.postError(`generateReport: formats must be a non-empty subset of ${valid.join(', ')}`);
+        return;
+      }
+      params.formats = [...new Set(msg.formats)];
+    }
   } else if (type === 'openLastReport') {
     if (msg.format !== 'html' && msg.format !== 'md') {
       provider.postError(`openLastReport: format must be 'html' or 'md'`);
@@ -434,7 +553,9 @@ async function handleMessage(msg, deps) {
     params = { format: msg.format };
   }
 
-  const label = `${type} ${JSON.stringify(params)}`;
+  const label = type === 'runCourt'
+    ? `Running ${params.courts.join(' + ')}`
+    : `${type} ${JSON.stringify(params)}`;
   const actions = deps.actions;
   if (!actions) {
     provider.log('warn', `no actions module wired — dropping ${label}`);
@@ -457,15 +578,25 @@ async function handleMessage(msg, deps) {
         return result;
       }
       if (type === 'runCourt') {
-        const result = await actions.runCourt(ctx, { court: params.court });
+        const result = await actions.runCourt(ctx, params);
+        if (result && result.dashboardUrl) provider.state.dashboard.url = result.dashboardUrl;
+        provider._refreshDashboardConnected();
+        provider.state.lastReport = safe(() => actions.findLastReport(ctx.root), provider.state.lastReport);
         const doc = await vscode.workspace.openTextDocument({ content: JSON.stringify(result, null, 2), language: 'json' });
         await vscode.window.showTextDocument(doc, { preview: true });
-        provider.log('info', `${params.court}: ${resultSummary(params.court, result)}`);
-        if (deps.onCourtResult) safe(() => deps.onCourtResult(params.court, result), undefined);
+        const outcomes = (result && result.courts) || {};
+        for (const c of params.courts) {
+          // actions.runCourt keys outcomes by the uppercase court id.
+          const outcome = outcomes[c] !== undefined ? outcomes[c] : outcomes[c.toLowerCase()];
+          provider.log('info', `${c}: ${resultSummary(c, outcome)}`);
+          if (deps.onCourtResult && outcome !== undefined) {
+            safe(() => deps.onCourtResult(c, outcome), undefined);
+          }
+        }
         return result;
       }
       if (type === 'generateReport') {
-        const result = await actions.generateReport(ctx);
+        const result = await actions.generateReport(ctx, params);
         provider.state.lastReport = actions.findLastReport(ctx.root);
         // generateReport runs all three courts — notify with the input payload.
         if (deps.onCourtResult && result) {
@@ -485,6 +616,14 @@ async function handleMessage(msg, deps) {
       const result = await actions.dashboardRun(ctx);
       provider.state.dashboard.url = result.url;
       provider._refreshDashboardConnected();
+      // A dashboard run collects all three courts — surface their outcomes
+      // to the ambient status bar the same way a local run does.
+      if (deps.onCourtResult && result && result.outcomes) {
+        for (const c of ['redline', 'splitbrain', 'warpath']) {
+          const o = result.outcomes[c];
+          if (o && o.kind === 'complete' && o.payload) safe(() => deps.onCourtResult(c, o.payload), undefined);
+        }
+      }
       return result;
     });
     if (type === 'dashboardRun' && provider.onDashboardChange) safe(() => provider.onDashboardChange(), undefined);
