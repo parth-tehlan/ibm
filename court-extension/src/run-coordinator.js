@@ -231,7 +231,21 @@ function renderArtifacts(ctx, run, formats) {
   }
 }
 function getActiveRun(root) { const entry = active.get(store.canonicalRoot(root)); return entry?.run ? clone(entry.run) : null; }
-function capabilities() { return { cancellation: false, timeoutOverride: false }; }
+// Every message type the sidebar can dispatch (media/panel.js cap() gates on
+// these keys). Any key omitted here renders as a permanently disabled button
+// with an "updated host required" hint, so list everything this host implements.
+function capabilities() {
+  return {
+    // Verified child-process cancellation and per-run timeout overrides are
+    // genuinely unsupported by this engine.
+    cancellation: false, cancelRun: false, timeoutOverride: false,
+    // Everything else the panel can request is implemented by this host.
+    publishRun: true, selectRun: true, openLogs: true, openArtifact: true,
+    loadMoreRuns: true, configValidate: true, configPreview: true, configApply: true,
+    installPreview: true, installApply: true, openFolder: true, manageTrust: true,
+    refresh: true, dashboardStart: true, dashboardOpen: true,
+  };
+}
 function cancelRun(ctx, opts = {}) {
   trusted(typeof ctx === 'string' ? {root: ctx} : ctx);
   const run = getActiveRun(ctx);
