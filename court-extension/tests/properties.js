@@ -162,6 +162,13 @@ function withEngine(repo, calls) {
     // match, reporting "no tests found" though real ones exist on disk.
     // Canonicalize the repo root so it matches what Jest itself will report.
     const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'gaia-repo2-')));
+    // Repo-agnostic means "a repo without its own node_modules still runs its
+    // courts against a configured/global jest." Point GAIA_TOOL_PATH at the
+    // sibling northstar repo's node_modules (which has a real jest) so the
+    // scratch repo below can serve WITNESS. Restored in the finally-like tail.
+    const nsToolDir = path.resolve(__dirname, '..', '..', 'northstar', 'node_modules');
+    const prevToolPath = process.env.GAIA_TOOL_PATH;
+    if (fs.existsSync(nsToolDir)) process.env.GAIA_TOOL_PATH = nsToolDir;
     for (const d of ['docs', 'tests', 'src', 'fixtures', 'evidence']) fs.mkdirSync(path.join(dir, d));
     fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ devDependencies: { jest: '^29' } }));
     fs.writeFileSync(path.join(dir, 'docs', 'spec.md'), '# S\n\n## FR-1 — alpha\n\n1. x MUST y\n');
@@ -189,6 +196,9 @@ function withEngine(repo, calls) {
     assert.ok(verdict.results && verdict.results.some((r) => r.clause === 'FR-1' && r.status === 'green'), 'clause FR-1 not green: ' + JSON.stringify(verdict).slice(0, 300));
     const triage = JSON.parse(results[2].result.content[0].text);
     assert.strictEqual(triage.suspect.id, 'd1');
+    // Restore the caller's GAIA_TOOL_PATH so later tests are unaffected.
+    if (prevToolPath === undefined) delete process.env.GAIA_TOOL_PATH;
+    else process.env.GAIA_TOOL_PATH = prevToolPath;
   });
 
   // 7. Live mutation is deliberately NOT in the default suite. Run
