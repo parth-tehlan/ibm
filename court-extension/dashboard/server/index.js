@@ -30,11 +30,13 @@ if (process.send) {
     // real-time SPLITBRAIN execution stream). runKey is `${projectId}:${runId}`;
     // browser SSE subscribers see exactly what the mutation runner prints.
     if (message.type === 'triumph.mutationProgress' && typeof message.runKey === 'string') {
-      try { app.locals.mutationBus.push(message.runKey, message.event); } catch { /* never let IPC break the server */ }
+      try { app.locals.mutationBus.push(message.runKey, message.event); }
+      catch (error) { console.error('Dashboard mutation bus push failed:', error); }
       return;
     }
     if (message.type === 'triumph.mutationDone' && typeof message.runKey === 'string') {
-      try { app.locals.mutationBus.done(message.runKey, message.status, message.error); } catch { /* ignore */ }
+      try { app.locals.mutationBus.done(message.runKey, message.status, message.error); }
+      catch (error) { console.error('Dashboard mutation bus done failed:', error); }
       return;
     }
     if (message.type !== 'triumph.register' || typeof message.requestId !== 'string') return;

@@ -78,8 +78,13 @@ class DashboardServer {
     const registration = this.wait((m) => m?.requestId === requestId &&
       ['triumph.registered', 'triumph.registrationError'].includes(m.type), 10000);
     try { this.child.send({ type: 'triumph.register', requestId, project }); }
-    catch (e) { // The waiter has an exit/disconnect listener and will settle there.
-      registration.catch(() => {});
+    catch (e) {
+      // The waiter has an exit/disconnect listener and will settle there.
+      // Suppress its rejection explicitly so it doesn't become an unhandled
+      // promise rejection — the real error is re-thrown to the caller below.
+      registration.catch((suppressedErr) => {
+        console.error('Dashboard registration waiter settled after IPC send failure:', suppressedErr && suppressedErr.message ? suppressedErr.message : suppressedErr);
+      });
       throw e;
     }
     const reg = await registration;
@@ -192,7 +197,14 @@ class DashboardClient {
     this._stopping = (async () => {
       clearInterval(this._hb);
       if (this.connected) {
-        try { await jsonRequest('POST', this._api('/disconnect'), {}, this.token); } catch { /* child gone */ }
+        try { await jsonRequest('POST', this._api('/disconnect'), {}, this.token); }
+        catch (e) {
+          // Best-effort disconnect — server may already be gone, but log
+          // unexpected failures (wrong URL, logic bug) so they're diagnosable.
+          if (e && e.status !== 404) {
+            console.error('Dashboard disconnect request failed:', e && e.message ? e.message : e);
+          }
+        }
       }
       this.connected = false;
       this.token = null;

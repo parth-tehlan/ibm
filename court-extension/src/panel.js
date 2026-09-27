@@ -53,7 +53,10 @@ function hostLabels() {
 
 /** Best-effort call: never let a host-API quirk crash panel bookkeeping. */
 function safe(fn, fallback) {
-  try { return fn(); } catch (e) { return fallback; }
+  try { return fn(); } catch (e) {
+    console.error('[triumph] safe(): swallowed exception:', e && e.message ? e.message : e);
+    return fallback;
+  }
 }
 
 class TriumphPanelProvider {
@@ -489,7 +492,9 @@ class TriumphPanelProvider {
   reveal(opts = {}) {
     safe(() => {
       if (vscode.commands && typeof vscode.commands.executeCommand === 'function') {
-        Promise.resolve(vscode.commands.executeCommand('triumph.panel.focus')).catch(() => {});
+        Promise.resolve(vscode.commands.executeCommand('triumph.panel.focus')).catch((e) => {
+          console.error('[triumph] executeCommand triumph.panel.focus failed:', e && e.message ? e.message : e);
+        });
       }
     }, undefined);
     if (this._ready) this._doReveal(opts);
