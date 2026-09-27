@@ -98,5 +98,9 @@ test('legacy migration is deterministic, retains generic clause data, and does n
   assert.equal(first.redline, old.redline);
   assert.equal(first.branch, null);
   assert.equal(first.schemaVersion, 2);
+
+// Drift guard: this FNV-1a legacyProjectId is hand-copied from
+// contracts/report.js. Pinned vector; the contracts test asserts the same.
+assert.equal(legacyProjectId('northstar'), 'f7ba6a90-71c4-5d81-ab88-fbfb272df915');
   assert.equal(old.schemaVersion, 1);
 });

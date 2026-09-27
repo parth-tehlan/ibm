@@ -31,11 +31,15 @@ test('browser contract: two projects, detached imports, generic untrusted eviden
   const base = `http://127.0.0.1:${server.address().port}`;
   const dom = new JSDOM('<div id="root"></div>', { url: `${base}/`, pretendToBeVisual: true });
   const previous = Object.fromEntries(['window', 'document', 'navigator', 'HTMLElement', 'IS_REACT_ACT_ENVIRONMENT', 'fetch'].map((key) => [key, globalThis[key]]));
-  Object.assign(globalThis, { window: dom.window, document: dom.window.document, navigator: dom.window.navigator, HTMLElement: dom.window.HTMLElement, IS_REACT_ACT_ENVIRONMENT: true, fetch: (url, options) => previous.fetch(new URL(url, base), options) });
+  // navigator/window are getter-only globals on Node >=21 — Object.assign throws.
+  // defineProperty with configurable:true so the teardown can restore them.
+  for (const [key, value] of Object.entries({ window: dom.window, document: dom.window.document, navigator: dom.window.navigator, HTMLElement: dom.window.HTMLElement, IS_REACT_ACT_ENVIRONMENT: true, fetch: (url, options) => previous.fetch(new URL(url, base), options) })) {
+    Object.defineProperty(globalThis, key, { value, configurable: true, writable: true });
+  }
   const root = createRoot(dom.window.document.getElementById('root'));
   t.after(async () => {
     await act(async () => root.unmount());
-    for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete globalThis[key]; else globalThis[key] = value; }
+    for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete globalThis[key]; else Object.defineProperty(globalThis, key, { value, configurable: true, writable: true }); }
     dom.window.close(); await vite.close(); await new Promise((resolve) => server.close(resolve));
     await rm(dir, { recursive: true, force: true });
   });

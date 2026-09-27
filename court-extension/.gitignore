@@ -10,4 +10,7 @@ node_modules/
 # OS / editor cruft
 .DS_Store
 Thumbs.db
-*.log
+*.logdashboard/
+
+# Packaged extension binary is a build artifact (deploy.yml rebuilds it)
+triumph-courts.vsix

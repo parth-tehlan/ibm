@@ -4,15 +4,16 @@ import { createHistory } from './history.js';
 const history = createHistory(process.env.TRIUMPH_LEGACY_DIR ? { legacyDir: process.env.TRIUMPH_LEGACY_DIR } : {});
 await history.migrateLegacy(); // Non-destructive: keep old Northstar JSON in .data/.
 await history.recoverInterrupted();
+const port = Number(process.env.PORT || 4317);
+if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error('Invalid PORT');
+const host = process.env.TRIUMPH_HOST || '127.0.0.1';
+// app must exist before the maintenance interval closes over app.locals.bridge.
+const app = createApp({ history });
 const maintenance = setInterval(async () => {
   try { await history.renewOwned(); await app.locals.bridge.sweep(); await history.recoverInterrupted(); }
   catch (error) { console.error('Dashboard maintenance failed:', error); }
 }, 10_000);
 maintenance.unref();
-const port = Number(process.env.PORT || 4317);
-if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error('Invalid PORT');
-const host = process.env.TRIUMPH_HOST || '127.0.0.1';
-const app = createApp({ history });
 const server = app.listen(port, host, () => {
   const address = server.address();
   const url = `http://127.0.0.1:${address.port}`;

@@ -48,6 +48,12 @@ async function cmdDetectConfig() {
   if (!root) return vscode.window.showWarningMessage('TRIUMPH: open a workspace folder first.');
   const { config, notes } = detect(root);
   const dest = path.join(root, '.triumph.yml');
+  if (fs.existsSync(dest)) {
+    const choice = await vscode.window.showWarningMessage(
+      'TRIUMPH: .triumph.yml already exists. Overwriting discards any hand-tuned paths.',
+      { modal: true }, 'Overwrite');
+    if (choice !== 'Overwrite') return;
+  }
   const header = '# TRIUMPH 3-court repo adapter. See schemas/triumph-config.schema.json in the extension.\n';
   fs.writeFileSync(dest, header + toYaml(config) + '\n', 'utf8');
   const doc = await vscode.workspace.openTextDocument(dest);

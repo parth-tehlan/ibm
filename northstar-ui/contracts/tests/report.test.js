@@ -59,6 +59,17 @@ test('legacy v1 migration is deterministic, retains source evidence and never mu
   assert.throws(() => normalizeReport({ ...source, injected: 'not legacy' }));
 });
 
+// Drift guard: contracts/report.js legacyProjectId and client/snapshot.ts
+// legacyProjectId are two hand-copied implementations of one FNV-1a hash that
+// MUST agree bit-for-bit (offline browser imports and server imports of the
+// same legacy file must land in the same project). Pinned vector; the client
+// test asserts the identical constant.
+test('legacy project id matches the pinned cross-implementation vector', () => {
+  const source = legacy();
+  assert.equal(normalizeReport({ ...source, repository: 'northstar' }).project.id,
+    'f7ba6a90-71c4-5d81-ab88-fbfb272df915');
+});
+
 test('JSON exports complete v2 evidence from either version; text and HTML are generic and offline', () => {
   const report = v2();
   const before = structuredClone(report);
