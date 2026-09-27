@@ -24,9 +24,9 @@ export const snapshotSchema = z.object({
   branch: z.string().nullable(),
   workingTreeDirty: z.boolean().nullable(),
   producer: z.object({ name: z.string().min(1), version: z.string().min(1) }).strict(),
-  witness: courtResultSchema,
-  trustgap: courtResultSchema,
-  triage: courtResultSchema,
+  redline: courtResultSchema,
+  splitbrain: courtResultSchema,
+  warpath: courtResultSchema,
 }).strict();
 
 // The v1 contract is kept local: no dependency on the server's repository-specific
@@ -39,15 +39,15 @@ const legacySchema = z.object({
   workingTreeDirty: z.boolean().nullable(),
   createdAt: timestamp,
   state: z.enum(['running', 'complete']),
-  witness: courtResultSchema,
-  trustgap: courtResultSchema,
-  triage: courtResultSchema,
+  redline: courtResultSchema,
+  splitbrain: courtResultSchema,
+  warpath: courtResultSchema,
 }).strict();
 
 // Stable synthetic ID for legacy snapshots without a project UUID. Keep the
 // algorithm identical to the browser's offline import converter.
 function legacyProjectId(name) {
-  const bytes = new TextEncoder().encode(`gaia:legacy-project:${name}`);
+  const bytes = new TextEncoder().encode(`triumph:legacy-project:${name}`);
   const words = [2166136261, 2166136261 ^ 0x9e3779b9, 2166136261 ^ 0x85ebca6b, 2166136261 ^ 0xc2b2ae35];
   for (const byte of bytes) for (let i = 0; i < words.length; i++) words[i] = Math.imul(words[i] ^ byte, 16777619) >>> 0;
   const hex = words.map((word) => word.toString(16).padStart(8, '0')).join('');
@@ -74,8 +74,8 @@ export function normalizeReport(input) {
     branch: null,
     workingTreeDirty: old.workingTreeDirty,
     producer: { name: 'legacy-snapshot', version: '1' },
-    witness: old.witness,
-    trustgap: old.trustgap,
-    triage: old.triage,
+    redline: old.redline,
+    splitbrain: old.splitbrain,
+    warpath: old.warpath,
   });
 }

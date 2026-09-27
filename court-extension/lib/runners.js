@@ -44,7 +44,7 @@ function supportsNoWebstorageFlag(cwd) {
   } catch (e) {
     // Unexpected spawnSync failure (e.g. node not on PATH). Treat as
     // unsupported but log so the environment misconfiguration is visible.
-    console.error('[triumph] supportsNoWebstorageFlag probe failed:', e && e.message ? e.message : e);
+    console.error('[gaia] supportsNoWebstorageFlag probe failed:', e && e.message ? e.message : e);
     supported = false;
   }
   _flagSupportCache.set(key, supported);
@@ -104,7 +104,7 @@ function jestCliSource(repoRoot) {
 
 /**
  * Return a clear error result when node_modules is absent from the repo.
- * Both jest (REDLINE) and stryker (SPLITBRAIN) live in node_modules; without
+ * Both jest (WITNESS) and stryker (TRUSTGAP) live in node_modules; without
  * them the spawned command crashes immediately and leaves no report file,
  * which surfaces as a parse error in every downstream court tool.
  */
@@ -140,8 +140,12 @@ function checkNodeModules(repoRoot) {
  * reports a clear, actionable error instead of guessing through a shell.
  */
 async function runJestCli(repoRoot, jestArgs, spawnOpts) {
-  const depErr = checkNodeModules(repoRoot);
-  if (depErr) return depErr;
+  // Prefer a resolved jest (repo → GAIA_TOOL_PATH/.gaia/tool-path.json →
+  // extension dir / global) over the node_modules gate: a configured or
+  // globally-installed jest is exactly what lets a repo that was never
+  // npm-installed still run its WITNESS suite (repo-agnostic). The fail-fast
+  // npm-install error below is the fallback for when nothing is resolvable
+  // AND the repo has no node_modules to fall back through.
   const cli = resolveJestCli(repoRoot);
   if (cli) {
     // When jest came from OUTSIDE the repo and the repo has no node_modules,
@@ -181,6 +185,13 @@ async function runJestCli(repoRoot, jestArgs, spawnOpts) {
         'or add one to .gaia/tool-path.json',
     };
   }
+  // Not resolvable anywhere: fail fast with a clear npm-install prerequisite
+  // when the repo has no node_modules (jest would crash immediately and leave
+  // no report). Otherwise fall back to plain `npx` (shell:false — a real
+  // executable on PATH, so no batch-file layer is needed or used), matching
+  // the pre-existing POSIX behavior.
+  const depErr = checkNodeModules(repoRoot);
+  if (depErr) return depErr;
   return spawnCollect('npx', ['jest', ...jestArgs], spawnOpts);
 }
 

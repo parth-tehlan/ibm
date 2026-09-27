@@ -7,6 +7,10 @@ const runners = require('../lib/runners');
 
 (async () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gaia-runner-'));
+  // runJestCli gates on node_modules presence (fail-fast npm-install prereq);
+  // an empty dir satisfies the existence check so the fake-npx jest path below
+  // is exercised for the zero-assertion / crash / duplicate detection cases.
+  fs.mkdirSync(path.join(tmp, 'node_modules'), { recursive: true });
   const oldPath = process.env.PATH;
   try {
     const cfg = { repoRoot: tmp, tests: { framework: 'jest', absDir: path.join(tmp, 'tests'), clauseTestPattern: 'clause-{{clause}}.test.ts' }, spec: { clauseIdPattern: '^W\\d+$' } };

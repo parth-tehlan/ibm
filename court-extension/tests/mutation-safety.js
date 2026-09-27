@@ -7,6 +7,10 @@ const { McpClient } = require('../src/mcp-client');
 
 (async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gaia-mutation-safety-'));
+  // runMutationJob gates on node_modules presence (fail-fast npm-install
+  // prereq); an empty dir satisfies the existence check so the async job stays
+  // 'running' long enough for the concurrent busy-refusal to be exercised.
+  fs.mkdirSync(path.join(root, 'node_modules'), { recursive: true });
   const client = new McpClient(path.resolve(__dirname, '..', 'court.js'), root);
   try {
     fs.mkdirSync(path.join(root, 'reports', 'mutation'), { recursive: true });
@@ -21,7 +25,10 @@ const { McpClient } = require('../src/mcp-client');
       'mutation: { tool: stryker, report: reports/mutation/mutation.json, command: "node mutation.cjs", timeoutSeconds: 10 }',
       'wall: { denyGlobs: ["src/**"] }',
     ].join('\n') + '\n');
-    fs.writeFileSync(path.join(root, 'mutation.cjs'), 'setTimeout(() => { console.error("stryker dry-run failed"); process.exit(42) }, 250)\n');
+    // Keep the first job alive ~1s: long enough that the immediately-following
+    // second trustgap_mutate overlaps it and is refused with 'busy', yet short
+    // enough that the 30x100ms status-poll window below observes it finishing.
+    fs.writeFileSync(path.join(root, 'mutation.cjs'), 'setTimeout(() => { console.error("stryker dry-run failed"); process.exit(42) }, 1000)\n');
     await client.start();
     const started = await client.call('trustgap_mutate');
     assert.equal(started.status, 'started');
