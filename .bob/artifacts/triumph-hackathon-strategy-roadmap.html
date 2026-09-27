@@ -1,0 +1,258 @@
+
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>TRIUMPH — Hackathon Strategy Roadmap</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, "Segoe UI", system-ui, sans-serif; font-size: 14px; line-height: 1.6; color: #1f2328; background: #ffffff; }
+  .page { max-width: 760px; margin: 0 auto; padding: 40px 24px 64px; }
+
+  h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.3px; margin-bottom: 4px; }
+  .subtitle { font-size: 13px; color: #57606a; margin-bottom: 36px; }
+  h2 { font-size: 15px; font-weight: 700; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: #57606a; }
+  h3 { font-size: 14px; font-weight: 700; margin-bottom: 6px; }
+
+  .phase { margin-bottom: 40px; }
+  .phase-label { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; padding: 3px 8px; border-radius: 3px; margin-bottom: 10px; }
+  .phase-1 .phase-label { background: #e8f0fe; color: #3b82d4; }
+  .phase-2 .phase-label { background: #f3f0fe; color: #7c5cd8; }
+  .phase-3 .phase-label { background: #fff4e5; color: #b45309; }
+
+  .core-box { border: 1px solid #e5e7eb; border-left: 4px solid #3b82d4; background: #f7f8fa; padding: 16px 18px; border-radius: 4px; margin-bottom: 16px; }
+  .core-box p { font-size: 15px; font-weight: 600; line-height: 1.5; }
+  .pain-point { margin-top: 10px; font-size: 13px; color: #57606a; }
+  .pain-point strong { color: #1f2328; }
+
+  .verdict-box { border: 1px solid #d1fae5; background: #f0fdf4; padding: 10px 14px; border-radius: 4px; margin-top: 12px; font-size: 13px; }
+  .verdict-box strong { color: #065f46; }
+
+  .category { border: 1px solid #e5e7eb; border-radius: 6px; margin-bottom: 20px; overflow: hidden; }
+  .category-header { background: #f7f8fa; padding: 12px 16px; border-bottom: 1px solid #e5e7eb; display: flex; align-items: center; gap: 10px; }
+  .cat-badge { font-size: 11px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; padding: 3px 8px; border-radius: 3px; }
+  .wow .cat-badge    { background: #fef3c7; color: #92400e; }
+  .hard .cat-badge   { background: #ede9fe; color: #5b21b6; }
+  .versatt .cat-badge { background: #dcfce7; color: #166534; }
+  .cat-title { font-weight: 700; font-size: 14px; }
+  .cat-subtitle { font-size: 12px; color: #57606a; }
+
+  .feature-list { padding: 0; }
+  .feature { padding: 14px 16px; border-bottom: 1px solid #f0f0f0; }
+  .feature:last-child { border-bottom: none; }
+  .feature-name { font-weight: 700; font-size: 13px; margin-bottom: 4px; }
+  .feature-tag { display: inline-block; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 2px; margin-left: 6px; vertical-align: middle; text-transform: uppercase; letter-spacing: 0.5px; }
+  .tag-build-now { background: #fee2e2; color: #991b1b; }
+  .feature-desc { font-size: 13px; color: #444c56; }
+  .feature-why { font-size: 12px; color: #57606a; margin-top: 5px; font-style: italic; }
+
+  /* Matrix */
+  .matrix-wrap { position: relative; margin-bottom: 24px; }
+  .matrix-svg { width: 100%; display: block; }
+  .axis-label { font-size: 11px; fill: #57606a; font-family: -apple-system, "Segoe UI", system-ui, sans-serif; }
+  .dot-label { font-size: 11px; font-family: -apple-system, "Segoe UI", system-ui, sans-serif; font-weight: 600; }
+  .quadrant-label { font-size: 10px; fill: #b0b8c4; font-family: -apple-system, "Segoe UI", system-ui, sans-serif; letter-spacing: 0.5px; text-transform: uppercase; }
+
+  .build-now-block { border: 2px solid #dc2626; border-radius: 6px; padding: 16px; margin-bottom: 16px; }
+  .build-now-block h3 { color: #dc2626; font-size: 14px; }
+  .build-now-block .why-now { font-size: 13px; color: #444c56; margin-top: 8px; }
+  .build-now-block .effort { font-size: 12px; color: #57606a; margin-top: 6px; }
+  .build-now-header { display: flex; justify-content: space-between; align-items: center; }
+  .priority-badge { font-size: 11px; font-weight: 700; background: #dc2626; color: white; padding: 2px 8px; border-radius: 3px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+  hr.divider { border: none; border-top: 1px solid #e5e7eb; margin: 36px 0; }
+
+  footer { text-align: center; font-size: 12px; color: #57606a; border-top: 1px solid #e5e7eb; padding-top: 20px; margin-top: 48px; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <h1>TRIUMPH — 3-Court Dev Tool</h1>
+  <p class="subtitle">Hackathon Strategy Roadmap · YC Product Partner Analysis</p>
+
+  
+  <div class="phase phase-1">
+    <span class="phase-label">Phase 1 · Core Loop Analysis</span>
+    <div class="core-box">
+      <p>TRIUMPH is a model-agnostic VS Code extension that transforms any AI coding agent into a disciplined, spec-grounded quality auditor — running three deterministic courts (spec-witness, coverage-honesty audit, and incident forensics) over any repo, using the user's own model, with zero API keys and zero hallucination surface in the engine.</p>
+      <p class="pain-point"><strong>Primary pain point:</strong> AI-generated code passes coverage gates and silences CI while silently violating the written spec and being covered by tautological tests that can't catch real mutations — <strong>coverage is lying, and no one tool catches all three failure modes at once.</strong></p>
+    </div>
+    <div class="verdict-box">
+      <strong>Core loop verdict: STRONG.</strong> The three-court method is genuinely differentiated — REDLINE's implementation wall is a real engineering constraint, SPLITBRAIN's falsifiable trust-gap math is not a wrapper, and WARPATH's fixture-grounded postmortem is novel. The multi-host model (Claude/Bob/Codex/GPT all plugging into the same engine without any code change) is a force multiplier for demo coverage. The core loop is not weak; the risk is that it requires 90 seconds of explanation before judges get it.
+    </div>
+  </div>
+
+  <hr class="divider" />
+
+  
+  <div class="phase phase-2">
+    <span class="phase-label">Phase 2 · The Winner's Feature Matrix</span>
+
+    
+    <div class="category wow">
+      <div class="category-header">
+        <span class="cat-badge">Wow Factor</span>
+        <div>
+          <div class="cat-title">Demo-ability: the 10-second lean-forward moment</div>
+          <div class="cat-subtitle">Highly visual · Interactive · Instantly readable</div>
+        </div>
+      </div>
+      <div class="feature-list">
+        <div class="feature">
+          <div class="feature-name">Live Trust-Gap Ticker in the VS Code Status Bar <span class="feature-tag tag-build-now">Build Now</span></div>
+          <div class="feature-desc">A real-time status bar item that shows <code>TRIUMPH ▸ REDLINE 🟢11 🔴2 | SPLITBRAIN gap: 34% | WARPATH: clear</code> and updates live as a run completes. The entire court health of the repo is permanently visible in one line without opening any panel.</div>
+          <div class="feature-why">The 10-second demo: open VS Code, the judge sees three courts summarized in the corner of the editor. You run one command. The numbers change in real time. That is the product explained before you say a word.</div>
+        </div>
+        <div class="feature">
+          <div class="feature-name">REDLINE Red-Gutter Inlay Decorations</div>
+          <div class="feature-desc">When REDLINE returns a red clause, the extension injects VS Code editor decorations (gutter icons + inline ghost text) on the exact source lines whose spec anchor maps to a failing clause — a red stop sign in the gutter next to <code>src/payment.ts:42</code> with <code>⚠ W07 failing</code> inline. Not a report panel — the editor itself turns red.</div>
+          <div class="feature-why">Judges watching a live demo have never seen a spec-clause failure rendered as a first-class editor decoration. It makes the abstract "spec divergence" problem viscerally visible on real code.</div>
+        </div>
+      </div>
+    </div>
+
+    
+    <div class="category hard">
+      <div class="category-header">
+        <span class="cat-badge">Hard Tech Flex</span>
+        <div>
+          <div class="cat-title">Engineering rigor &amp; technical depth</div>
+          <div class="cat-subtitle">Novel architecture · Non-trivial implementation</div>
+        </div>
+      </div>
+      <div class="feature-list">
+        <div class="feature">
+          <div class="feature-name">The Implementation Wall as a Formal Provable Property</div>
+          <div class="feature-desc">Extend <code>assertNotWalled()</code> in the MCP engine to emit a machine-readable <code>wall_audit</code> record in every REDLINE result: the exact set of filesystem paths <em>requested</em> during the run, with a boolean <code>wall_respected: true/false</code> and a cryptographic hash of the test directory at time-of-run. The HTML report renders a "Wall Certificate" section. The claim "this verdict was reached without seeing the implementation" becomes a verifiable, inspectable artifact — not a promise.</div>
+          <div class="feature-why">This is the kind of formal correctness argument that PhD judges and senior engineers immediately recognize as real engineering. It turns a design principle into a tamper-evident proof.</div>
+        </div>
+        <div class="feature">
+          <div class="feature-name">SPLITBRAIN Async Streaming via Server-Sent Events <span class="feature-tag tag-build-now">Build Now</span></div>
+          <div class="feature-desc">Mutation runs take minutes. Instead of polling <code>splitbrain_status</code> on an interval, expose a <code>/api/jobs/:jobId/stream</code> SSE endpoint from the dashboard server that streams <code>data: {elapsed, killed, survived, remaining}</code> as Stryker emits per-mutant results. The dashboard and the VS Code panel progress log both consume the same stream. The judge sees a live kill-rate climbing in real time like a stock ticker.</div>
+          <div class="feature-why">SSE over stdio MCP with a fan-out to both a browser dashboard and a VS Code webview, all sourced from live Stryker stdout parsing, is a legitimately hard multi-surface streaming architecture. It demos spectacularly — numbers moving is always compelling.</div>
+        </div>
+      </div>
+    </div>
+
+    
+    <div class="category versatt">
+      <div class="category-header">
+        <span class="cat-badge">Versatility Hook</span>
+        <div>
+          <div class="cat-title">This isn't a toy — prove it</div>
+          <div class="cat-subtitle">Ecosystem integration · Real-world reach</div>
+        </div>
+      </div>
+      <div class="feature-list">
+        <div class="feature">
+          <div class="feature-name">One-Command CI Badge Export (<code>triumph-report --ci</code>)</div>
+          <div class="feature-desc">Add a <code>--ci</code> flag to <code>triumph-report.js</code> that writes a GitHub Actions-compatible <code>::set-output</code> block and a <code>triumph-badge.json</code> (shields.io endpoint format) containing REDLINE clause counts, SPLITBRAIN trust gap, and WARPATH status. A GitHub Actions workflow file is materialized by <code>triumph-setup --host github-actions</code>. The repo's README can now display a live TRIUMPH health badge. Judges can see it on the northstar repo right now.</div>
+          <div class="feature-why">Every serious open-source project has CI badges. A project that installs its own badge endpoint is signaling it is infrastructure, not a demo. This requires ~2 hours and is permanently visible on the repo during the hackathon presentation.</div>
+        </div>
+        <div class="feature">
+          <div class="feature-name">Triumph Report as a Portable Signed Snapshot (<code>POST /api/import</code> already exists)</div>
+          <div class="feature-desc">The <code>/api/import</code> endpoint exists but is undiscoverable. Build a one-click "Share report" button in the dashboard that serializes the current run as a self-contained signed JSON bundle and copies a <code>triumph://import?data=...</code> deep-link to the clipboard. Anyone with the extension installed can paste the link to import and inspect the exact run — clause verdicts, trust gap, postmortem — with no server, no account, no shared filesystem.</div>
+          <div class="feature-why">This is the "it works offline and across machines" demo moment that proves the architecture is sound. It also demonstrates that the engine output is genuinely portable and model-free — the same JSON works everywhere because there is no model in the data path.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <hr class="divider" />
+
+  
+  <div class="phase phase-3">
+    <span class="phase-label">Phase 3 · ROI Triage</span>
+    <h2 style="margin-bottom:16px">Impact vs. Implementation Time Matrix</h2>
+
+    <div class="matrix-wrap">
+      <svg class="matrix-svg" xmlns="http://www.w3.org/2000/svg">
+        
+        <rect x="60" y="20" width="600" height="300" fill="#fafafa" rx="4" stroke="#e5e7eb"></rect>
+        
+        <line x1="360" y1="20" x2="360" y2="320" stroke="#e0e3e8" stroke-width="1"></line>
+        <line x1="60" y1="170" x2="660" y2="170" stroke="#e0e3e8" stroke-width="1"></line>
+
+        
+        <text x="100" y="50" class="quadrant-label" fill="#b0b8c4">Quick Wins</text>
+        <text x="390" y="50" class="quadrant-label" fill="#b0b8c4">Big Bets</text>
+        <text x="100" y="310" class="quadrant-label" fill="#b0b8c4">Fill-ins</text>
+        <text x="380" y="310" class="quadrant-label" fill="#b0b8c4">Risky / Skip</text>
+
+        
+        <text x="360" y="370" text-anchor="middle" class="axis-label">← Short time (hours)         Long time (days) →</text>
+        <text x="18" y="170" text-anchor="middle" class="axis-label" transform="rotate(-90,18,170)">← Low impact         High impact →</text>
+
+        
+
+        
+        <circle cx="180" cy="60" r="12" fill="#dc2626" opacity="0.85"></circle>
+        <text x="198" y="55" class="dot-label" fill="#dc2626">① Status Bar Ticker</text>
+        <text x="198" y="68" style="font-size:10px;fill:#57606a;font-family:sans-serif">(2–3 hrs · Very High Impact)</text>
+
+        
+        <circle cx="290" cy="100" r="12" fill="#dc2626" opacity="0.85"></circle>
+        <text x="308" y="95" class="dot-label" fill="#dc2626">② SPLITBRAIN SSE Stream</text>
+        <text x="308" y="108" style="font-size:10px;fill:#57606a;font-family:sans-serif">(3–4 hrs · High Impact)</text>
+
+        
+        <circle cx="200" cy="130" r="10" fill="#7c5cd8" opacity="0.85"></circle>
+        <text x="218" y="125" class="dot-label" fill="#7c5cd8">③ CI Badge Export</text>
+        <text x="218" y="138" style="font-size:10px;fill:#57606a;font-family:sans-serif">(2 hrs · High Impact)</text>
+
+        
+        <circle cx="430" cy="90" r="10" fill="#7c5cd8" opacity="0.85"></circle>
+        <text x="448" y="85" class="dot-label" fill="#7c5cd8">④ Gutter Decorations</text>
+        <text x="448" y="98" style="font-size:10px;fill:#57606a;font-family:sans-serif">(4–6 hrs · Very High Impact)</text>
+
+        
+        <circle cx="510" cy="120" r="10" fill="#3b82d4" opacity="0.8"></circle>
+        <text x="528" y="115" class="dot-label" fill="#3b82d4">⑤ Wall Certificate</text>
+        <text x="528" y="128" style="font-size:10px;fill:#57606a;font-family:sans-serif">(5–7 hrs · High Impact)</text>
+
+        
+        <circle cx="370" cy="210" r="10" fill="#3b82d4" opacity="0.8"></circle>
+        <text x="388" y="205" class="dot-label" fill="#3b82d4">⑥ Portable Share Link</text>
+        <text x="388" y="218" style="font-size:10px;fill:#57606a;font-family:sans-serif">(2–3 hrs · Medium Impact)</text>
+
+        
+        <circle cx="80" cy="345" r="7" fill="#dc2626" opacity="0.85"></circle>
+        <text x="93" y="349" style="font-size:11px;fill:#dc2626;font-family:sans-serif;font-weight:700">Build Now</text>
+        <circle cx="180" cy="345" r="7" fill="#7c5cd8" opacity="0.85"></circle>
+        <text x="193" y="349" style="font-size:11px;fill:#7c5cd8;font-family:sans-serif;font-weight:700">Build If Time</text>
+        <circle cx="285" cy="345" r="7" fill="#3b82d4" opacity="0.85"></circle>
+        <text x="298" y="349" style="font-size:11px;fill:#3b82d4;font-family:sans-serif;font-weight:700">Nice to Have</text>
+      </svg>
+    </div>
+
+    <h2 style="margin-bottom:14px">The Two Features to Build Right Now</h2>
+
+    <div class="build-now-block">
+      <div class="build-now-header">
+        <h3>① Live Trust-Gap Status Bar Ticker</h3>
+        <span class="priority-badge">Priority 1</span>
+      </div>
+      <div class="why-now">
+        <strong>Why:</strong> The single biggest weakness of TRIUMPH in a demo context is that judges need 90 seconds to understand what they're looking at. A status bar item that reads <code>TRIUMPH ▸ 🟢11 🔴2 | gap 34% | WARPATH clear</code> eliminates that problem entirely. The product explains itself the moment VS Code opens. It also turns every subsequent demo action — running a court, watching numbers change — into a visible, trackable feedback loop. This is your opening slide, your product screenshot, and your live demo all in one.
+      </div>
+      <div class="effort"><strong>Effort:</strong> 2–3 hours. The data is already flowing through the extension panel (<code>src/panel.js</code> → <code>src/actions.js</code>). Hook into the same result callbacks and write to a <code>vscode.StatusBarItem</code>. No new data pipeline, no new API surface.</div>
+    </div>
+
+    <div class="build-now-block">
+      <div class="build-now-header">
+        <h3>② SPLITBRAIN Live SSE Streaming</h3>
+        <span class="priority-badge">Priority 2</span>
+      </div>
+      <div class="why-now">
+        <strong>Why:</strong> The current async poll model (<code>splitbrain_mutate</code> → <code>splitbrain_status</code>) is technically correct but visually dead. Mutation tests are the hardest part of the demo to sell because judges watch a spinner for 2 minutes and disengage. Replacing that with a live "kill-rate climbing" counter — streaming parsed Stryker stdout into the dashboard via SSE — transforms the wait from a liability into your best demo moment. A live ticker of "Killed: 47/120 mutants, 3 tautologies caught so far" is more compelling than any static report.
+      </div>
+      <div class="effort"><strong>Effort:</strong> 3–4 hours. The dashboard server (<code>dashboard/server/app.js</code>) already speaks HTTP. Add one SSE endpoint that consumes the Stryker child process stdout line-by-line (the process is already spawned in <code>lib/runners.js</code> via <code>spawnCollect</code>), parse the Stryker progress output, and fan it out to any connected SSE clients. The VS Code panel's log already renders streaming lines. The bridge architecture is already there.</div>
+    </div>
+
+  </div>
+
+  <footer>Made with IBM Bob</footer>
+</div>
+</body>
+</html>
