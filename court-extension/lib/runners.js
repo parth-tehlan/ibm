@@ -40,7 +40,12 @@ function supportsNoWebstorageFlag(cwd) {
     // Any failure (older Node's "bad option", missing binary, timeout) means
     // "not supported" - never guess a flag into existence.
     supported = !probe.error && probe.status === 0;
-  } catch { supported = false; }
+  } catch (e) {
+    // Unexpected spawnSync failure (e.g. node not on PATH). Treat as
+    // unsupported but log so the environment misconfiguration is visible.
+    console.error('[triumph] supportsNoWebstorageFlag probe failed:', e && e.message ? e.message : e);
+    supported = false;
+  }
   _flagSupportCache.set(key, supported);
   return supported;
 }
@@ -77,7 +82,13 @@ function resolveJestCli(repoRoot) {
       const abs = path.resolve(path.dirname(pkgPath), binRel);
       if (fs.existsSync(abs)) resolved = abs;
     }
-  } catch { /* jest not resolvable from repoRoot — caller falls back to npx */ }
+  } catch (e) {
+    // MODULE_NOT_FOUND means jest isn't installed — expected, caller falls back
+    // to npx. Any other error (corrupt package.json, fs error) is worth logging.
+    if (!e || e.code !== 'MODULE_NOT_FOUND') {
+      console.error('[triumph] resolveJestCli failed:', e && e.message ? e.message : e);
+    }
+  }
   _jestCliCache.set(key, resolved);
   return resolved;
 }
