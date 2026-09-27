@@ -46,6 +46,10 @@ more tests, (b) flags any clause with no test, and (c) writes the wall status to
 
 ## Steps
 
+0. **Ensure dependencies are installed.** Confirm `node_modules/` exists in the
+   repo root. If `node_modules/.bin/jest` is missing, run `npm install` before
+   proceeding — clause verdicts run the test suite via `jest`, and a missing
+   `node_modules` produces a parse/spawn error, not a real verdict.
 1. **Load the wall and coverage.** Confirm both exist. If either is missing,
    stop and report the gap rather than guessing.
 2. **Build the coverage matrix.** For each of W1..W8, look up which test file(s)
