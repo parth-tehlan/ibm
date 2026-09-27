@@ -17,6 +17,7 @@
 const { spawn, spawnSync, execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const toolenv = require('./toolenv');
 
 // Node 22.4+ added a native, guarded `localStorage`/`sessionStorage` global.
 // jest-environment-node forwards every own property of globalThis into the
@@ -49,12 +50,19 @@ function supportsNoWebstorageFlag(cwd) {
   _flagSupportCache.set(key, supported);
   return supported;
 }
-function withEnv(cwd) {
-  if (!supportsNoWebstorageFlag(cwd)) return process.env;
-  const flag = '--no-experimental-webstorage';
-  const existing = process.env.NODE_OPTIONS || '';
-  if (existing.split(/\s+/).filter(Boolean).includes(flag)) return process.env;
-  return { ...process.env, NODE_OPTIONS: [existing, flag].filter(Boolean).join(' ') };
+function withEnv(cwd, repoRoot) {
+  const base = supportsNoWebstorageFlag(cwd)
+    ? (() => {
+        const flag = '--no-experimental-webstorage';
+        const existing = process.env.NODE_OPTIONS || '';
+        if (existing.split(/\s+/).filter(Boolean).includes(flag)) return process.env;
+        return { ...process.env, NODE_OPTIONS: [existing, flag].filter(Boolean).join(' ') };
+      })()
+    : process.env;
+  // Prepend the tool path (repo .bin → configured dirs) so any tool spawned
+  // by name — jest fallback, stryker inside an npm script — resolves without
+  // the user having to npm-install the opened folder.
+  return toolenv.withToolPath(base, repoRoot || cwd);
 }
 
 // `npx jest ...` used to be spawned directly. On Windows, `npx` resolves to
@@ -67,30 +75,31 @@ function withEnv(cwd) {
 // own JS CLI entry point and spawning it with `node <entry> <args>` (the
 // same process.execPath + argv-array pattern src/mcp-client.js already uses
 // for court.js) sidesteps npx, the OS shell and any batch-file layer
-// entirely — argv reaches jest unmodified on every platform. Cached per
-// repoRoot: resolution is a handful of require.resolve calls, not free.
+// entirely — argv reaches jest unmodified on every platform.
+//
+// Resolution chain (lib/toolenv.js): the repo's own node_modules first
+// (version fidelity — ts-jest/babel transforms are version-sensitive and the
+// repo pinned them), then user-configured tool dirs (TRIUMPH_TOOL_PATH /
+// .triumph/tool-path.json), then the extension dir. This removes the old
+// hard requirement that the OPENED folder carry node_modules: a repo that
+// was never npm-installed still runs its courts against a configured or
+// globally-installed jest. Cached per repoRoot: resolution is a handful of
+// require.resolve calls, not free.
 const _jestCliCache = new Map();
 function resolveJestCli(repoRoot) {
   const key = repoRoot || '';
   if (_jestCliCache.has(key)) return _jestCliCache.get(key);
-  let resolved = null;
-  try {
-    const pkgPath = require.resolve('jest/package.json', { paths: [repoRoot] });
-    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-    const binRel = typeof pkg.bin === 'string' ? pkg.bin : (pkg.bin && pkg.bin.jest);
-    if (binRel) {
-      const abs = path.resolve(path.dirname(pkgPath), binRel);
-      if (fs.existsSync(abs)) resolved = abs;
-    }
-  } catch (e) {
-    // MODULE_NOT_FOUND means jest isn't installed — expected, caller falls back
-    // to npx. Any other error (corrupt package.json, fs error) is worth logging.
-    if (!e || e.code !== 'MODULE_NOT_FOUND') {
-      console.error('[triumph] resolveJestCli failed:', e && e.message ? e.message : e);
-    }
-  }
+const hit = toolenv.resolvePackageBin('jest', 'jest', toolenv.nodeToolSearchDirs(repoRoot));
+  const resolved = hit ? hit.bin : null;
   _jestCliCache.set(key, resolved);
   return resolved;
+}
+
+/** Where did the resolved jest come from? ('repo' = repo's own install). */
+function jestCliSource(repoRoot) {
+  const hit = toolenv.resolvePackageBin('jest', 'jest', toolenv.nodeToolSearchDirs(repoRoot));
+  if (!hit) return null;
+  return { bin: hit.bin, pkgDir: hit.pkgDir, source: hit.source, repoLocal: path.resolve(hit.source) === path.resolve(repoRoot || '') };
 }
 
 /**
@@ -114,28 +123,62 @@ function checkNodeModules(repoRoot) {
  * Run `jest <jestArgs>` for this repo and return spawnCollect's result
  * shape. Prefers jest's own CLI entry via `node <entry> <args>` (no shell,
  * no npx, no batch file — safe for any argv, including the regex
- * metacharacters allClauseFilesRegex/clauseFileRegex produce).
+ * metacharacters allClauseFilesRegex/clauseFileRegex produce). jest is
+ * located via lib/toolenv's resolution chain (repo node_modules →
+ * TRIUMPH_TOOL_PATH/.triumph/tool-path.json → extension dir), so the opened
+ * folder no longer needs its own node_modules when a jest is configured or
+ * globally reachable.
  *
- * Falls back to plain `npx` (shell:false — a real executable on PATH, no
- * batch-file layer, so no shell is needed or used) when jest isn't
- * resolvable from repoRoot; this matches the pre-existing POSIX behavior
- * exactly. On win32 that fallback is not attempted: `npx` there is the
- * `npx.cmd` batch shim, which Node's spawn cannot execute without
- * shell:true, and shell:true naively string-joins argv with no
- * per-argument escaping — silently corrupting a metacharacter-bearing
- * --testPathPattern into the wrong (or no) test selection is worse than
- * failing loudly, so this reports a clear, actionable error instead of
- * guessing through a shell.
+ * Last-resort fallback: plain `npx` (shell:false — a real executable on
+ * PATH, no batch-file layer, so no shell is needed or used) when jest isn't
+ * resolvable anywhere; this matches the pre-existing POSIX behavior exactly.
+ * On win32 that fallback is not attempted: `npx` there is the `npx.cmd`
+ * batch shim, which Node's spawn cannot execute without shell:true, and
+ * shell:true naively string-joins argv with no per-argument escaping —
+ * silently corrupting a metacharacter-bearing --testPathPattern into the
+ * wrong (or no) test selection is worse than failing loudly, so this
+ * reports a clear, actionable error instead of guessing through a shell.
  */
 async function runJestCli(repoRoot, jestArgs, spawnOpts) {
   const depErr = checkNodeModules(repoRoot);
   if (depErr) return depErr;
   const cli = resolveJestCli(repoRoot);
-  if (cli) return spawnCollect(process.execPath, [cli, ...jestArgs], spawnOpts);
+  if (cli) {
+    // When jest came from OUTSIDE the repo and the repo has no node_modules,
+    // jest will fail to resolve the repo config's named transforms/presets
+    // (they resolve against rootDir). Bridge that with a zero-copy junction
+    // so the foreign jest sees the same node_modules it was resolved from.
+    // The junction is removed as soon as the run settles (the repo must not
+    // be left pointing at a tool install), and recorded on the result for
+    // honest evidence.
+    const src = jestCliSource(repoRoot);
+    let junction = null;
+    if (src && !src.repoLocal && !(spawnOpts && spawnOpts.noAutoJunction)) {
+      // pkgDir is <node_modules>/jest (or <node_modules>/@scope/jest); the
+      // node_modules root is dirname for unscoped packages, dirname+1 for
+      // scoped ones.
+      const parent = path.dirname(src.pkgDir);
+      const nmTarget = path.basename(parent).startsWith('@') ? path.dirname(parent) : parent;
+      junction = toolenv.ensureNodeModulesJunction(repoRoot, nmTarget);
+    }
+    let r;
+    try {
+      r = await spawnCollect(process.execPath, [cli, ...jestArgs], spawnOpts);
+    } finally {
+      if (junction && junction.linked) {
+        toolenv.removeNodeModulesJunction(repoRoot, junction.target);
+      }
+    }
+    if (junction && junction.linked) r.junction = { linkPath: junction.linkPath, target: junction.target, removed: true };
+    else if (junction && !junction.linked && junction.reason) r.junction = { linked: false, reason: junction.reason };
+    return r;
+  }
   if (process.platform === 'win32') {
     return {
       ok: false, code: null, stdout: '', stderr: '',
-      error: `jest is not resolvable from ${repoRoot} (no node_modules/jest) — run npm install in the repo`,
+      error: 'jest is not resolvable (searched ' + toolenv.describeSearch(repoRoot) + ') — ' +
+        'run npm install in the repo, set TRIUMPH_TOOL_PATH to a directory with node_modules/jest, ' +
+        'or add one to .triumph/tool-path.json',
     };
   }
   return spawnCollect('npx', ['jest', ...jestArgs], spawnOpts);
@@ -143,7 +186,7 @@ async function runJestCli(repoRoot, jestArgs, spawnOpts) {
 
 function spawnCollect(cmd, args, opts) {
   return new Promise((resolve) => {
-    const child = spawn(cmd, args, { cwd: opts.cwd, env: withEnv(opts.cwd), shell: !!opts.shell });
+    const child = spawn(cmd, args, { cwd: opts.cwd, env: withEnv(opts.cwd, opts.repoRoot || opts.cwd), shell: !!opts.shell });
     let out = '';
     let err = '';
     const timer = setTimeout(() => {
@@ -408,4 +451,4 @@ async function runTests(cfg, clauseId) {
   }
 }
 
-module.exports = { runTests, runJestFiles, listJestTests, spawnCollect, extractJson, clauseFileRegex, allClauseFilesRegex, isClauseTestFile, execSync, runJestCli, resolveJestCli, checkNodeModules };
+module.exports = { runTests, runJestFiles, listJestTests, spawnCollect, extractJson, clauseFileRegex, allClauseFilesRegex, isClauseTestFile, execSync, runJestCli, resolveJestCli, checkNodeModules, withEnv };

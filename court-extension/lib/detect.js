@@ -117,7 +117,11 @@ function detectMutation(root, pkg) {
       if (conf && conf.jsonReporter && conf.jsonReporter.fileName) report = conf.jsonReporter.fileName;
     }
     if (pkg && pkg.scripts && pkg.scripts.mutation) command = 'npm run mutation';
-    else if (hasStryker) command = 'npx stryker run';
+    // Direct `stryker run`, not `npx stryker run`: the engine prepends the
+    // repo's node_modules/.bin (and any configured tool dirs) to PATH for
+    // spawned commands, so the bare binary resolves without npx's own
+    // node_modules lookup — and without npx's prompt-to-install behavior.
+    else if (hasStryker) command = 'stryker run';
     return { tool: 'stryker', report, command, confidence: strykerConf ? 'high' : 'medium' };
   }
   if (exists(root, 'mutmut') || exists(root, 'setup.cfg')) {

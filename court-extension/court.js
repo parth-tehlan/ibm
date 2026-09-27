@@ -45,6 +45,7 @@ const diffLib = require('./lib/diff');
 const microLib = require('./lib/micro');
 const verifyLib = require('./lib/verify');
 const { parseMutationLine } = require('./lib/mutation-progress');
+const toolenv = require('./lib/toolenv');
 
 const PKG = (() => { try { return require('./package.json'); } catch { return { version: '0.0.0' }; } })();
 const SERVER_INFO = { name: 'triumph-courts', version: PKG.version };
@@ -268,7 +269,11 @@ function emitProgress(job, jobId, event) {
 function spawnStream(cmd, args, opts, onLine) {
   const { spawn } = require('child_process');
   return new Promise((resolve) => {
-    const child = spawn(cmd, args, { cwd: opts.cwd, env: process.env, shell: !!opts.shell });
+    // Tool-path augmented env: a mutation command like `stryker run` (or an
+    // npm script wrapping it) resolves from the repo .bin first, then any
+    // configured tool dirs, without requiring node_modules in the OPENED
+    // folder when a configured/global install exists.
+    const child = spawn(cmd, args, { cwd: opts.cwd, env: toolenv.withToolPath(process.env, opts.repoRoot || opts.cwd), shell: !!opts.shell });
     let out = '';
     let err = '';
     let outBuf = '';
@@ -327,6 +332,7 @@ async function runMutationJob(cfg, jobId, claimedOverride) {
     // available immediately, before the process exits.
     const r = await spawnStream(cfg.mutation.command, [], {
       cwd: cfg.repoRoot,
+      repoRoot: cfg.repoRoot,
       timeoutMs: (cfg.mutation.timeoutSeconds || 900) * 1000,
       shell: true,
     }, (event) => emitProgress(job, jobId, { ...event, ts: Date.now() }));

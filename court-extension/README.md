@@ -143,6 +143,32 @@ mutation: { tool: stryker, report: reports/mutation/mutation.json, command: npm 
 wall: { denyGlobs: ['src/**'] }
 ```
 
+## Tool resolution (no node_modules in the opened folder?)
+
+The courts drive the repo's own toolchain (jest for REDLINE + SPLITBRAIN
+verify, stryker-or-friends for SPLITBRAIN mutation). The opened VS Code
+folder no longer **has** to carry `node_modules`. Resolution order:
+
+1. **The repo's own `node_modules`** — always preferred (version fidelity:
+   `ts-jest`/babel transforms are version-sensitive and the repo pinned them).
+2. **A configured tool path** — `TRIUMPH_TOOL_PATH` (PATH-style list), then
+   `<repo>/.triumph/tool-path.json`, then `~/.triumph/tool-path.json`, each
+   `{ "toolPath": ["dir", ...] }` where a dir contains a `node_modules`.
+3. **`PATH`** — globally-installed tools (`stryker`, jest).
+
+For spawned shell commands (`mutation.command`), the engine prepends the
+repo's `node_modules/.bin` and any configured tool `.bin` dirs to `PATH`,
+so a plain `stryker run` works without `npx` (and without npx's
+install-prompt). When jest is resolved from *outside* the repo and the repo
+has no `node_modules`, the engine creates a **zero-copy junction**
+(`<repo>/node_modules` → the tool install's `node_modules`) so jest can
+resolve the config's named transforms (e.g. `ts-jest`) against `rootDir`;
+the junction is removed as soon as the run settles and is recorded on the
+run result for audit. Nothing is ever copied into the repo's sources, and a
+real pre-existing `node_modules` is never touched.
+
+If no jest is found anywhere, the error names exactly what was searched.
+
 ## Mandatory properties (from BUILD-PROMPT)
 
 - **Path-1 caller execution** — the extension ships files only; each host's
