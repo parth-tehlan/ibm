@@ -41,6 +41,9 @@ const crypto = require('crypto');
 const { loadConfig, clauseTestFile } = require('./lib/config');
 const runners = require('./lib/runners');
 const trustgapLib = require('./lib/trustgap');
+const diffLib = require('./lib/diff');
+const microLib = require('./lib/micro');
+const verifyLib = require('./lib/verify');
 
 const PKG = (() => { try { return require('./package.json'); } catch { return { version: '0.0.0' }; } })();
 const SERVER_INFO = { name: 'triumph-courts', version: PKG.version };
@@ -516,6 +519,173 @@ async function courtSplitStatus(args) {
 }
 
 // ---------------------------------------------------------------------------
+// VERIFY — in-loop diff-scoped micro-mutation (the adversarial runtime)
+// ---------------------------------------------------------------------------
+/**
+ * triumph_verify_diff: the agent-facing self-correction tool.
+ *
+ * Input: a unified diff (the agent's proposed change), either pasted directly
+ * ({diff}) or captured from the repo ({from_git: true} -> `git diff HEAD`).
+ * Output: for every source file in the diff, plan <=3 micro-mutants on the
+ * added lines, execute each against the diff-impacted test files only, and
+ * return killed/survived verdicts with deterministic, operator-derived repair
+ * hints the calling agent can act on without any model involvement here.
+ *
+ * This is SPLITBRAIN-family tooling (honesty, not witness): it reads src/ by
+ * design and never touches wall.denyGlobs logic, which governs REDLINE only.
+ */
+async function courtVerifyDiff(args) {
+  const c = cfg();
+  const started = Date.now();
+
+  // --- acquire the diff text ---------------------------------------------
+  let diffText = args && typeof args.diff === 'string' ? args.diff : null;
+  let diffSource = 'argument';
+  if (!diffText && args && args.from_git) {
+    diffSource = 'git diff HEAD';
+    const r = await runners.spawnCollect('git', ['diff', 'HEAD'], { cwd: c.repoRoot, timeoutMs: 15_000 });
+    if (!r.ok && !r.stdout) {
+      return { court: 'SPLITBRAIN', tool: 'triumph_verify_diff', status: 'error', detail: 'git diff HEAD failed: ' + (r.error || r.stderr || 'unknown') };
+    }
+    diffText = r.stdout;
+  }
+  if (!diffText) {
+    return {
+      court: 'SPLITBRAIN', tool: 'triumph_verify_diff', status: 'error',
+      detail: 'no diff supplied — pass {diff: "<unified diff text>"} or {from_git: true}',
+    };
+  }
+
+  // --- parse + filter ------------------------------------------------------
+  const parsed = diffLib.parseDiff(diffText);
+  if (parsed.error) {
+    return { court: 'SPLITBRAIN', tool: 'triumph_verify_diff', status: 'error', detail: parsed.error };
+  }
+  // Normalize paths against the repo root. `git diff` invoked from a parent
+  // (or a monorepo root) emits paths like 'northstar/src/x.ts'; strip leading
+  // segments until each path resolves inside the repo. Honest failure: a path
+  // that never resolves is rejected with a reason, never silently mistargeted.
+  for (const f of parsed.files) {
+    f.path = resolveAgainstRepo(c.repoRoot, f.path);
+  }
+  for (const r of parsed.rejected) { /* paths kept verbatim for diagnosis */ }
+  const { mutable, skipped } = diffLib.mutableFiles(parsed);
+  if (mutable.length === 0) {
+    return {
+      court: 'SPLITBRAIN', tool: 'triumph_verify_diff', status: 'skipped',
+      detail: 'no mutable source files in diff (only tests/docs/config/binary changed, or files rejected)',
+      rejected: parsed.rejected, skipped,
+      diff: parsed.stats,
+      durationMs: Date.now() - started,
+    };
+  }
+
+  // --- per file: plan -> select tests -> execute ---------------------------
+  const fileResults = [];
+  let totalMutants = 0;
+  let totalKilled = 0;
+  let totalSurvived = 0;
+
+  for (const f of mutable) {
+    const srcAbs = path.join(c.repoRoot, f.path);
+    if (!fs.existsSync(srcAbs)) {
+      fileResults.push({ file: f.path, status: 'error', detail: 'file does not exist at new path (diff not applied?)' });
+      continue;
+    }
+    const srcText = fs.readFileSync(srcAbs, 'utf8');
+    const { mutants, skipped: planSkipped } = microLib.planFileMutants(f.path, srcText, f.addedLines);
+    if (mutants.length === 0) {
+      fileResults.push({ file: f.path, status: 'no-mutants', detail: 'added lines carried no mutable construct', skipped: planSkipped });
+      continue;
+    }
+
+    // Test-impact analysis.
+    const listed = await runners.listJestTests(c);
+    if (!listed.files) {
+      fileResults.push({ file: f.path, status: 'error', detail: 'jest --listTests failed: ' + listed.error, stderr: listed.stderr });
+      continue;
+    }
+    const { impacted, reasons } = microLib.selectImpactedTests(c, f.path, listed.files);
+    if (impacted.length === 0) {
+      fileResults.push({
+        file: f.path, status: 'uncovered',
+        detail: 'no test file statically references or names this source — the diff is untested by construction',
+        mutants: mutants.map(publicMutant),
+      });
+      totalMutants += mutants.length;
+      totalSurvived += mutants.length; // uncovered == survived, by definition of honesty
+      continue;
+    }
+
+    const exec = await verifyLib.executeMutants(c, srcAbs, f.path, mutants, impacted);
+    const killed = exec.results.filter((r) => r.status === 'killed');
+    const survived = exec.results.filter((r) => r.status === 'survived');
+    const errored = exec.results.filter((r) => r.status === 'error');
+    totalMutants += exec.results.length;
+    totalKilled += killed.length;
+    totalSurvived += survived.length;
+
+    fileResults.push({
+      file: f.path,
+      status: survived.length ? 'failed' : errored.length === exec.results.length ? 'error' : 'passed',
+      impactedTests: impacted.map((t) => rel(t)),
+      testSelection: reasons,
+      killed: killed.map((m) => ({ ...publicMutant(m), killedBy: m.killedBy })),
+      survivors: survived.map((m) => ({
+        ...publicMutant(m),
+        coveredBy: m.coveredBy,
+        repair: m.repair,
+      })),
+      errors: errored.map((m) => ({ id: m.id, line: m.line, detail: m.detail, stderr: m.stderr })),
+      durationMs: exec.durationMs,
+    });
+  }
+
+  const honest = totalSurvived === 0 && totalMutants > 0;
+  return {
+    court: 'SPLITBRAIN',
+    tool: 'triumph_verify_diff',
+    status: totalSurvived > 0 ? 'failed' : totalMutants === 0 ? 'skipped' : 'passed',
+    honest,
+    diffSource,
+    diff: { ...parsed.stats, mutantsGenerated: totalMutants, killed: totalKilled, survived: totalSurvived },
+    files: fileResults,
+    rejected: parsed.rejected,
+    retry_hint: totalSurvived > 0
+      ? 'Fix the missing assertions named in survivors[].repair, then re-run triumph_verify_diff with the updated diff to confirm each mutant is killed.'
+      : null,
+    durationMs: Date.now() - started,
+  };
+}
+
+/**
+ * Resolve a diff path to repo-relative. Tries the path as-is first, then
+ * strips leading segments until it exists under repoRoot. Returns the
+ * repo-relative path on success, or the original on failure (the caller
+ * rejects non-existent files with a named reason).
+ */
+function resolveAgainstRepo(repoRoot, p) {
+  if (!p) return p;
+  const norm = p.split('\\').join('/').replace(/^\.\//, '');
+  if (fs.existsSync(path.join(repoRoot, norm))) return norm;
+  const segs = norm.split('/');
+  for (let drop = 1; drop < segs.length - 1; drop++) {
+    const cand = segs.slice(drop).join('/');
+    if (fs.existsSync(path.join(repoRoot, cand))) return cand;
+  }
+  return norm;
+}
+
+/** Public mutant view: full line context, no internal mask artifacts. */
+function publicMutant(m) {
+  return {
+    id: m.id, file: m.file, line: m.line, operator: m.operator,
+    before: m.before, after: m.after,
+    lineBefore: m.lineBefore.trim(), lineAfter: m.lineAfter.trim(),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // WARPATH court
 // ---------------------------------------------------------------------------
 /**
@@ -691,6 +861,7 @@ const TOOLS = [
   { name: 'splitbrain_mutants', description: 'SPLITBRAIN: list mutants from the latest report (optionally filtered by status, e.g. Survived).', inputSchema: { type: 'object', properties: { status: { type: 'string' } } } },
   { name: 'splitbrain_mutate', description: 'SPLITBRAIN: start the mutation run in the background (async — returns a job_id immediately so chat never blocks). Poll with splitbrain_status. Pass claimed_coverage to have the completed job carry the trust gap.', inputSchema: { type: 'object', properties: { claimed_coverage: { type: 'number', description: 'optional explicit claimed line-coverage % override' } } } },
   { name: 'splitbrain_status', description: 'SPLITBRAIN: poll a mutation job (job_id) or list all jobs.', inputSchema: { type: 'object', properties: { job_id: { type: 'string' } } } },
+  { name: 'triumph_verify_diff', description: 'SPLITBRAIN (in-loop): verify the agent\'s proposed diff with diff-scoped micro-mutations. Plans ≤3 mutants on the added lines per changed source file, runs only the impacted tests, and returns killed/survived per mutant with deterministic repair hints for survivors. Pass {diff: "<unified diff>"} or {from_git: true}. Sub-second-to-few-second feedback — safe to call inside every agent loop.', inputSchema: { type: 'object', properties: { diff: { type: 'string', description: 'unified diff text (git diff output)' }, from_git: { type: 'boolean', description: 'capture `git diff HEAD` from the repo instead' } } } },
   // WARPATH
   { name: 'warpath_context', description: 'WARPATH: pull the deploy/metrics/logs incident context.', inputSchema: { type: 'object', properties: {} } },
   { name: 'warpath_triage', description: 'WARPATH: compute suspect deploy + signal window by timestamp correlation.', inputSchema: { type: 'object', properties: {} } },
@@ -707,6 +878,7 @@ const TOOL_HANDLERS = {
   splitbrain_mutants: courtSplitMutants,
   splitbrain_mutate: courtSplitMutate,
   splitbrain_status: courtSplitStatus,
+  triumph_verify_diff: courtVerifyDiff,
   warpath_context: courtWarpathContext,
   warpath_triage: courtWarpathTriage,
   warpath_postmortem: courtWarpathPostmortem,

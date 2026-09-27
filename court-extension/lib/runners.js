@@ -175,6 +175,65 @@ async function runJest(cfg, clauseId /* null = all clause suites */) {
   return { suites, raw: { numPassedTests: parsed.numPassedTests, numFailedTests: parsed.numFailedTests, numTotalTests: parsed.numTotalTests, exitCode: r.code } };
 }
 
+/**
+ * Run an explicit set of test files (repo-relative or absolute paths) under
+ * jest and return the normalized suite shape. This is the diff-scoped
+ * selector axis: unlike runJest(cfg, clauseId) — which targets clause
+ * witness suites by anchored pattern — this runs exactly the files named,
+ * using positional args (no --testPathPattern, no pattern-looseness risk).
+ *
+ * Options:
+ *   extraArgs  : additional jest CLI args appended verbatim (e.g. --testPathIgnorePatterns)
+ *   timeoutMs  : per-run timeout (default 120s)
+ *   requireFiles: absolute paths forced via --require (unused hook for future preload)
+ */
+async function runJestFiles(cfg, testFiles, opts = {}) {
+  const relFiles = testFiles.map((f) =>
+    path.isAbsolute(f) ? path.relative(cfg.repoRoot, f) : f
+  ).map((f) => f.split(path.sep).join('/'));
+  const args = ['jest', '--json', ...relFiles];
+  let r = await spawnCollect('npx', args, {
+    cwd: cfg.repoRoot,
+    timeoutMs: opts.timeoutMs || 120_000,
+  });
+  const parsed = extractJson(r.stdout);
+  if (!parsed) {
+    return { suites: null, raw: null, error: r.error || 'no-parse', stderr: (r.stderr || '').split('\n').slice(-10) };
+  }
+  const suites = (parsed.testResults || []).map((tr) => ({
+    name: tr.name,
+    file: tr.name,
+    status: tr.status,
+    message: tr.message || '',
+    assertions: (tr.assertionResults || []).map((a) => ({
+      title: a.title,
+      status: a.status,
+      failureMessages: a.failureMessages || [],
+    })),
+  }));
+  return {
+    suites,
+    raw: {
+      numPassedTests: parsed.numPassedTests,
+      numFailedTests: parsed.numFailedTests,
+      numTotalTests: parsed.numTotalTests,
+      numRuntimeErrorTestSuites: parsed.numRuntimeErrorTestSuites || 0,
+      exitCode: r.code,
+    },
+  };
+}
+
+/** List every test file jest would discover (cheap, read-only). */
+async function listJestTests(cfg, opts = {}) {
+  const r = await spawnCollect('npx', ['jest', '--listTests'], {
+    cwd: cfg.repoRoot,
+    timeoutMs: opts.timeoutMs || 60_000,
+  });
+  if (!r.ok) return { files: null, error: r.error || `exit ${r.code}`, stderr: (r.stderr || '').split('\n').slice(-6) };
+  const files = r.stdout.split('\n').map((s) => s.trim()).filter((s) => s && !s.startsWith('['));
+  return { files, error: null };
+}
+
 // ---------------------------------------------------------------------------
 // pytest (unit6: json-report plugin when present, else -q parse fallback)
 // ---------------------------------------------------------------------------
@@ -264,4 +323,4 @@ async function runTests(cfg, clauseId) {
   }
 }
 
-module.exports = { runTests, spawnCollect, extractJson, clauseFileRegex, allClauseFilesRegex, isClauseTestFile, execSync };
+module.exports = { runTests, runJestFiles, listJestTests, spawnCollect, extractJson, clauseFileRegex, allClauseFilesRegex, isClauseTestFile, execSync };
