@@ -9,9 +9,23 @@
     "url": "git+https://github.com/parth-tehlan/ibm.git"
   },
   "license": "MIT",
-  "engines": { "vscode": "^1.101.0" },
-  "categories": ["Testing", "Chat", "Machine Learning", "Other"],
-  "keywords": ["mcp", "testing", "mutation-testing", "spec", "postmortem", "agents"],
+  "engines": {
+    "vscode": "^1.101.0"
+  },
+  "categories": [
+    "Testing",
+    "Chat",
+    "Machine Learning",
+    "Other"
+  ],
+  "keywords": [
+    "mcp",
+    "testing",
+    "mutation-testing",
+    "spec",
+    "postmortem",
+    "agents"
+  ],
   "main": "./src/extension.js",
   "activationEvents": [
     "onStartupFinished"
@@ -51,12 +65,24 @@
     ],
     "menus": {
       "commandPalette": [
-        { "command": "triumph.installCourts" },
-        { "command": "triumph.detectConfig" },
-        { "command": "triumph.runCourt" },
-        { "command": "triumph.generateReport" },
-        { "command": "triumph.openReport" },
-        { "command": "triumph.dashboardRun" }
+        {
+          "command": "triumph.installCourts"
+        },
+        {
+          "command": "triumph.detectConfig"
+        },
+        {
+          "command": "triumph.runCourt"
+        },
+        {
+          "command": "triumph.generateReport"
+        },
+        {
+          "command": "triumph.openReport"
+        },
+        {
+          "command": "triumph.dashboardRun"
+        }
       ]
     },
     "viewsContainers": {
@@ -82,7 +108,14 @@
       "properties": {
         "triumph.defaultHost": {
           "type": "string",
-          "enum": ["vscode", "claude", "bob", "codex", "generic", "all"],
+          "enum": [
+            "vscode",
+            "claude",
+            "bob",
+            "codex",
+            "generic",
+            "all"
+          ],
           "default": "all",
           "description": "Agent host(s) the 'Install courts' command targets."
         },
@@ -98,7 +131,7 @@
     "setup": "node bin/triumph-setup.js",
     "report": "node bin/triumph-report.js",
     "stage:dashboard": "node bin/stage-dashboard.js",
-    "test": "node tests/runners-safety.js && node tests/webstorage-flag-safety.js && node tests/mutation-safety.js && node tests/run.js && node tests/properties.js && node tests/hosts-safety.js && node tests/wall-strength.js && node tests/extension.js && node tests/panel.js && node tests/dashboard.js && node tests/dashboard-integration.js && node tests/mcp-client.js",
+    "test": "node tests/runners-safety.js && node tests/webstorage-flag-safety.js && node tests/mutation-safety.js && node tests/run.js && node tests/properties.js && node tests/hosts-safety.js && node tests/wall-strength.js && node tests/extension.js && node tests/panel.js && node tests/dashboard.js && node tests/dashboard-integration.js && node tests/mcp-client.js && node tests/validator-parity.js",
     "test:live": "node tests/properties-live.js",
     "test:packaged:bob": "node ../scripts/verify-packaged-bob.mjs"
   },

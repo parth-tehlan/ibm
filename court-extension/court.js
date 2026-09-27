@@ -87,7 +87,15 @@ function cfg() {
 // Helpers
 // ---------------------------------------------------------------------------
 function readJson(fp) {
-  return JSON.parse(fs.readFileSync(fp, 'utf8'));
+  // Never leak a raw ENOENT/SyntaxError to the MCP caller: name the offending
+  // file (repo-relative) and the failure, so a malformed evidence artifact is
+  // diagnosable from the JSON-RPC error alone. The dispatcher still converts
+  // this to a per-tool error response — the engine process never dies here.
+  let text;
+  try { text = fs.readFileSync(fp, 'utf8'); }
+  catch (e) { throw new Error(`cannot read evidence ${rel(fp)}: ${e.message}`); }
+  try { return JSON.parse(text); }
+  catch (e) { throw new Error(`invalid JSON in evidence ${rel(fp)}: ${e.message}`); }
 }
 function writeJson(fp, obj) {
   fs.mkdirSync(path.dirname(fp), { recursive: true });

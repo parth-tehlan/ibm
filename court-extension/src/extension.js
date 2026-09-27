@@ -42,6 +42,175 @@ function enginePath() {
   return (override && fs.existsSync(override)) ? override : ENGINE_ENTRY;
 }
 
+async function cmdDetectConfig() {
+  const root = repoRoot();
+  if (!root) return vscode.window.showWarningMessage('TRIUMPH: open a workspace folder first.');
+  const { config, notes } = detect(root);
+  const dest = path.join(root, '.triumph.yml');
+  if (fs.existsSync(dest)) {
+    const choice = await vscode.window.showWarningMessage(
+      'TRIUMPH: .triumph.yml already exists. Overwriting discards any hand-tuned paths.',
+      { modal: true }, 'Overwrite');
+    if (choice !== 'Overwrite') return;
+  }
+  const header = '# TRIUMPH 3-court repo adapter. See schemas/triumph-config.schema.json in the extension.\n';
+  fs.writeFileSync(dest, header + toYaml(config) + '\n', 'utf8');
+  const doc = await vscode.workspace.openTextDocument(dest);
+  await vscode.window.showTextDocument(doc);
+  vscode.window.showInformationMessage('TRIUMPH: .triumph.yml written. ' + notes.join(' · '));
+}
+
+async function cmdInstallCourts() {
+  const root = repoRoot();
+  if (!root) return vscode.window.showWarningMessage('TRIUMPH: open a workspace folder first.');
+
+  // Ensure config exists first (auto-detect if missing).
+  const hasConfig = ['.triumph.yml', '.triumph.yaml', '.triumph.json'].some((n) => fs.existsSync(path.join(root, n)));
+  if (!hasConfig) await cmdDetectConfig();
+
+  const cfgDefault = vscode.workspace.getConfiguration('triumph').get('defaultHost') || 'all';
+  const picked = await vscode.window.showQuickPick(
+    ['all', ...Object.keys(HOSTS)].map((id) => ({
+      label: id,
+      description: id === 'all' ? 'every known host' : (HOSTS[id] ? HOSTS[id].name : 'VS Code Chat'),
+      picked: cfgDefault === id || cfgDefault === 'all',
+    })),
+    { placeHolder: 'Install courts into which agent host?', canPickMany: false }
+  );
+  if (!picked) return;
+  const hosts = picked.label === 'all' ? Object.keys(HOSTS) : [picked.label];
+
+  const written = [];
+  for (const h of hosts) {
+    try {
+      const r = installHost(h, root);
+      written.push(...r.files.map((f) => path.relative(root, f)));
+    } catch (e) {
+      vscode.window.showErrorMessage(`TRIUMPH ${h}: ${e.message}`);
+    }
+  }
+  const extVersion = require('../package.json').version;
+  const choice = await vscode.window.showInformationMessage(
+    `TRIUMPH courts installed (${hosts.join(', ')}) — extension v${extVersion}. ${written.length} files written. ` +
+    `If you expected skills/rules/modes and only see agents+mcp.json, reload the window (Developer: Reload Window) so the host picks up the current extension build.`,
+    'Show files'
+  );
+  if (choice === 'Show files') {
+    vscode.window.showQuickPick(written, { placeHolder: 'Installed files' });
+  }
+}
+
+async function cmdRunCourt() {
+  const root = repoRoot();
+  if (!root) return vscode.window.showWarningMessage('TRIUMPH: open a workspace folder first.');
+  const court = await vscode.window.showQuickPick([
+    { label: 'REDLINE', description: 'spec-witness verdicts per clause' },
+    { label: 'SPLITBRAIN', description: 'honesty audit (mutation vs claimed coverage)' },
+    { label: 'WARPATH', description: 'incident forensics triage' },
+  ], { placeHolder: 'Which court?' });
+  if (!court) return;
+
+  const client = new McpClient(enginePath(), root);
+  try {
+    await client.start();
+    let result;
+    if (court.label === 'REDLINE') {
+      result = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: 'REDLINE running witness suites…' }, () => client.call('redline_verdict_all'));
+    } else if (court.label === 'SPLITBRAIN') {
+      const start = await client.call('splitbrain_mutate');
+      if (start.status === 'started') {
+        vscode.window.showInformationMessage(`SPLITBRAIN mutation running (job ${start.job_id}). Poll: splitbrain_status.`);
+        result = start;
+      } else {
+        result = await client.call('splitbrain_trustgap');
+      }
+    } else {
+      result = await client.call('warpath_triage');
+    }
+    const doc = await vscode.workspace.openTextDocument({ content: JSON.stringify(result, null, 2), language: 'json' });
+    await vscode.window.showTextDocument(doc, { preview: true });
+  } catch (e) {
+    vscode.window.showErrorMessage('TRIUMPH: ' + (e && e.message ? e.message : e));
+  } finally {
+    client.dispose();
+  }
+}
+
+async function cmdGenerateReport() {
+  const root = repoRoot();
+  if (!root) return vscode.window.showWarningMessage('TRIUMPH: open a workspace folder first.');
+  await vscode.window.withProgress(
+    { location: vscode.ProgressLocation.Notification, title: 'TRIUMPH: running courts…', cancellable: false },
+    async (progress) => {
+      const client = new McpClient(enginePath(), root);
+      try {
+        await client.start();
+        const input = { repo: path.basename(root), repoRootAbs: root, generated: new Date().toISOString() };
+        progress.report({ message: 'REDLINE …' });
+        input.redline = await client.call('redline_verdict_all');
+        progress.report({ message: 'SPLITBRAIN …' });
+        input.splitbrain = await client.call('splitbrain_trustgap');
+        progress.report({ message: 'WARPATH …' });
+        input.warpath = await client.call('warpath_triage');
+
+        const outDir = path.join(root, 'reports', 'triumph');
+        fs.mkdirSync(outDir, { recursive: true });
+        fs.writeFileSync(path.join(outDir, 'triumph-input.json'), JSON.stringify(input, null, 2) + '\n', 'utf8');
+        const { mdPath, htmlPath } = writeReports(input, outDir);
+        const pick = await vscode.window.showInformationMessage('TRIUMPH report written.', 'Open HTML', 'Open MD');
+        if (pick === 'Open HTML') {
+          const panel = vscode.window.createWebviewPanel('triumphReport', 'TRIUMPH 3-Court Report', vscode.ViewColumn.One, { enableScripts: true });
+          panel.webview.html = fs.readFileSync(htmlPath, 'utf8');
+        } else if (pick === 'Open MD') {
+          const doc = await vscode.workspace.openTextDocument(mdPath);
+          await vscode.window.showTextDocument(doc);
+        }
+      } catch (e) {
+        vscode.window.showErrorMessage('TRIUMPH report: ' + (e && e.message ? e.message : e));
+      } finally {
+        client.dispose();
+      }
+    }
+  );
+}
+
+async function cmdOpenReport() {
+  const root = repoRoot();
+  if (!root) return;
+  const htmlPath = path.join(root, 'reports', 'triumph', 'triumph-report.html');
+  if (!fs.existsSync(htmlPath)) return vscode.window.showWarningMessage('TRIUMPH: no report yet — run "Generate report".');
+  const panel = vscode.window.createWebviewPanel('triumphReport', 'TRIUMPH 3-Court Report', vscode.ViewColumn.One, { enableScripts: true });
+  panel.webview.html = fs.readFileSync(htmlPath, 'utf8');
+}
+
+/** TRIUMPH: Run courts and publish to the dashboard. */
+async function cmdDashboardRun(context) {
+  const root = repoRoot();
+  if (!root) return vscode.window.showWarningMessage('TRIUMPH: open a workspace folder first.');
+  await vscode.window.withProgress(
+    { location: vscode.ProgressLocation.Notification, title: 'TRIUMPH: running courts → dashboard…', cancellable: false },
+    async () => {
+      try {
+        const historyDir = path.join(context.globalStorageUri.fsPath, 'dashboard-history');
+        fs.mkdirSync(historyDir, { recursive: true });
+        const { url } = await dashboardCmd.runAndPublish(vscode, {
+          root,
+          enginePath: enginePath(),
+          requested: ['redline', 'splitbrain', 'warpath'],
+          existingRun: null,
+          historyDir,
+          openExternal: (u) => vscode.env.openExternal(vscode.Uri.parse(u)),
+        });
+        vscode.window.showInformationMessage(
+          'TRIUMPH run published. Dashboard stays connected for this session — browser "Run again" re-runs the courts.',
+          'Open in dashboard'
+        ).then((p) => { if (p) vscode.env.openExternal(vscode.Uri.parse(url)); });
+      } catch (e) {
+        vscode.window.showErrorMessage('TRIUMPH dashboard: ' + (e && e.message ? e.message : e));
+      }
+    }
+  );
+}
 /** Register the engine as an MCP server for VS Code chat (agent mode). */
 function registerMcpProvider(context) {
   if (!vscode.lm || typeof vscode.lm.registerMcpServerDefinitionProvider !== 'function') {

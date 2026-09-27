@@ -57,7 +57,9 @@ export function createApp({ history = createHistory(), bridge = createBridge({ h
       if (!projects.has(project.id)) projects.set(project.id, { id: project.id, name: project.name, lastRunAt: null, runCount: 0, connected: true });
       else projects.get(project.id).connected = true;
     }
-    for (const record of projects.values()) record.runCount = (await history.listRuns(record.id)).length;
+    // One round of reads for every project, never a sequential N+1 await chain.
+    const runCounts = await Promise.all([...projects.keys()].map(async (id) => (await history.listRuns(id)).length));
+    [...projects.values()].forEach((record, i) => { record.runCount = runCounts[i]; });
     res.json([...projects.values()].sort((a, b) => (b.lastRunAt || '').localeCompare(a.lastRunAt || '') || a.name.localeCompare(b.name)));
   }));
   app.get('/api/projects/:id/runs', route(async (req, res) => {

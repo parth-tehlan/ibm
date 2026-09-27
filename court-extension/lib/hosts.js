@@ -80,6 +80,13 @@ function mergeMcp(fp, repoRoot, kind) {
 function loadYaml() {
   // Bundle the parser with the extension: Bob installs must work without an
   // unrelated global npm installation, while the court engine remains zero-dep.
+  //
+  // NOTE — two YAML implementations coexist deliberately. lib/config.js ships
+  // a zero-dep YAML *subset* parser for `.triumph.yml` (author-controlled,
+  // flat schema). This vendored full parser exists solely for merging the
+  // user's pre-existing Bob `custom_modes.yaml` (arbitrary third-party YAML:
+  // anchors, comments, key order), where a subset parser would corrupt the
+  // document on round-trip. Do not "dedupe" one into the other.
   return require('../vendor/yaml');
 }
 
