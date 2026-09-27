@@ -14,16 +14,31 @@ const maintenance = setInterval(async () => {
   catch (error) { console.error('Dashboard maintenance failed:', error); }
 }, 10_000);
 maintenance.unref();
+// Only when this process was forked with an 'ipc' stdio channel does a real
+// parent IPC channel exist. `process.connected` is true then, undefined when
+// standalone. process.send is *callable* standalone but emits an async
+// 'error' (EINVAL), which try/catch cannot catch — so gate strictly on
+// process.connected === true and also swallow any process-level IPC error.
+const ipc = typeof process.send === 'function' && process.connected === true;
+function ipcSend(message) {
+  if (!ipc) return;
+  try { process.send(message); } catch { /* no live IPC channel — running standalone */ }
+}
+// A standalone run has no IPC channel; never let a stray IPC write crash us.
+process.on('error', (err) => {
+  if (err && (err.code === 'EINVAL' || err.code === 'EPIPE' || err.syscall === 'write')) return;
+  throw err;
+});
 const server = app.listen(port, host, () => {
   const address = server.address();
   const url = `http://127.0.0.1:${address.port}`;
   console.log(`Gaia dashboard listening on ${url}`);
   // IPC exists only when a trusted editor-host process forked this server.
   // Never put registration or its secret on a browser-accessible HTTP route.
-  if (process.send) process.send({ type: 'gaia.ready', url });
+  ipcSend({ type: 'gaia.ready', url });
 });
 
-if (process.send) {
+if (ipc) {
   process.on('message', async (message) => {
     if (!message || typeof message !== 'object') return;
     // Live mutation progress relayed by the trusted editor host (Feature:
@@ -41,9 +56,9 @@ if (process.send) {
     try {
       await app.locals.bridge.sweep();
       const { project, token } = app.locals.bridge.registerProject({ project: message.project });
-      process.send({ type: 'gaia.registered', requestId: message.requestId, project, token });
+      ipcSend({ type: 'gaia.registered', requestId: message.requestId, project, token });
     } catch (error) {
-      process.send({ type: 'gaia.registrationError', requestId: message.requestId,
+      ipcSend({ type: 'gaia.registrationError', requestId: message.requestId,
         error: error?.code === 'CONFLICT' ? 'Project is already connected' : 'Invalid project registration' });
     }
   });
