@@ -2,7 +2,7 @@
 
 > **"Build tests, review coverage honestly, and debug incidents — for any repo, any model, any platform."**
 
-Gaia (formerly TRIUMPH) is a developer extension and CLI tool designed to enforce the 3-court testing method across any codebase. By orchestrating spec-witness test creation, coverage honesty audits, and incident forensics through the Model Context Protocol (MCP), Gaia provides rigorous, model-agnostic quality and survivability guarantees.
+Gaia is a developer extension and CLI tool designed to enforce the 3-court testing method across any codebase. By orchestrating spec-witness test creation, coverage honesty audits, and incident forensics through the Model Context Protocol (MCP), Gaia provides rigorous, model-agnostic quality and survivability guarantees.
 
 ---
 
@@ -17,7 +17,7 @@ Gaia (formerly TRIUMPH) is a developer extension and CLI tool designed to enforc
 5. [Quick Start](#5-quick-start)
    - [5a. VS Code (GUI)](#5a-vs-code-quick-start)
    - [5b. CLI](#5b-cli-quick-start)
-6. [Configuration (.gaia.yml / .triumph.yml)](#6-configuration-gaiayml--triumphyml)
+6. [Configuration (.gaia.yml)](#6-configuration-gaiayml)
 7. [Installing Courts into Your Agent Host](#7-installing-courts-into-your-agent-host)
 8. [Running the Courts](#8-running-the-courts)
 9. [Reading the Reports](#9-reading-the-reports)
@@ -48,9 +48,9 @@ Gaia serves three core roles:
 
 | Court | What it does | MCP tool prefix |
 | :--- | :--- | :--- |
-| **WITNESS** *(formerly REDLINE)* | **Spec-witness**: Tests authored from the spec contract alone, wall-enforced (never reads `src`) | `witness_*` (`redline_*`) |
-| **TRUSTGAP** *(formerly SPLITBRAIN)* | **Honesty audit**: Claimed coverage vs. real mutation kill-rate; names tautologies | `trustgap_*` (`splitbrain_*`) |
-| **TRIAGE** *(formerly WARPATH)* | **Incident forensics**: Correlates deploy/metrics/log fixtures, isolates suspect deploy | `triage_*` (`warpath_*`) |
+| **WITNESS** | **Spec-witness**: Tests authored from the spec contract alone, wall-enforced (never reads `src`) | `witness_*` |
+| **TRUSTGAP** | **Honesty audit**: Claimed coverage vs. real mutation kill-rate; names tautologies | `trustgap_*` |
+| **TRIAGE** | **Incident forensics**: Correlates deploy/metrics/log fixtures, isolates suspect deploy | `triage_*` |
 
 ### WITNESS (Spec-Witness Testing)
 WITNESS tests whether your code satisfies its contractual specification without looking at how the code was implemented. Tests are authored strictly from specification contracts, OpenAPI definitions, or requirements documents. A strict file-access deny-wall (`wall.denyGlobs`, e.g., denying access to `src/**`) prevents the agent from reading the implementation. This guarantees tests are objective witnesses to the spec, avoiding the common failure mode where tests merely mirror the existing code bugs.
@@ -104,18 +104,18 @@ When production failures happen, TRIAGE provides automated root-cause analysis. 
 ### 4a. Installing the VS Code Extension
 
 #### Option A — From the .vsix file (All platforms, recommended)
-1. Download `triumph-courts.vsix` (or `gaia-courts.vsix`) from the latest GitHub Release:  
+1. Download `gaia-courts.vsix` from the latest GitHub Release:  
    [https://github.com/parth-tehlan/ibm/releases/latest](https://github.com/parth-tehlan/ibm/releases/latest)
 2. Open VS Code (or code-server).
 3. Open the Extensions panel (`Ctrl+Shift+X` on Windows/Linux, `Cmd+Shift+X` on macOS).
 4. Click the `⋯` (More Actions) menu in the Extensions view title bar → **Install from VSIX…**
-5. Select the downloaded `.vsix` file.
+5. Select the downloaded `gaia-courts.vsix` file.
 6. When prompted, click **Reload Window** (or open Command Palette `Ctrl+Shift+P` / `Cmd+Shift+P` → type `Developer: Reload Window`).
-7. Verify installation: Open Extensions panel → search `Gaia` (or `TRIUMPH`) → should show version `0.3.0` (or latest).
+7. Verify installation: Open Extensions panel → search `Gaia` → should show version `0.3.0` (or latest).
 
 #### Option B — Install into code-server via CLI
 ```bash
-code-server --install-extension triumph-courts.vsix --force
+code-server --install-extension gaia-courts.vsix --force
 ```
 
 #### Option C — Build from source (Advanced)
@@ -134,10 +134,10 @@ npm test
 node bin/vsce-node18.cjs package
 
 # Install into VS Code
-code --install-extension triumph-courts.vsix --force
+code --install-extension gaia-courts.vsix --force
 
 # OR for code-server:
-code-server --install-extension triumph-courts.vsix --force
+code-server --install-extension gaia-courts.vsix --force
 ```
 
 ### 4b. CLI Installation (No VS Code Required)
@@ -156,8 +156,8 @@ No global npm install is required — all CLI tools can be run directly using No
 ### 5a. VS Code Quick Start
 
 1. Open your repository folder in VS Code (`File` → `Open Folder…`).
-2. Click the **Gaia** (TRIUMPH) icon in the Activity Bar (left sidebar) to open the **3-Court** panel.
-3. In the **Config** section, click **Auto-detect** to generate `.gaia.yml` (or `.triumph.yml`) for your repository.
+2. Click the **Gaia** icon in the Activity Bar (left sidebar) to open the **3-Court** panel.
+3. In the **Config** section, click **Auto-detect** to generate `.gaia.yml` for your repository.
 4. In the **Install courts** section, select your agent host (**Bob**, **Claude**, **Codex**, **VS Code**, or **All**) and click **Install**.
 5. In the **Run** section, choose a court:
    - **WITNESS** — Spec-witness test authoring and verification
@@ -187,9 +187,9 @@ All reports are written relative to your repository root:
 
 ---
 
-## 6. Configuration (.gaia.yml / .triumph.yml)
+## 6. Configuration (.gaia.yml)
 
-Gaia is completely repository-agnostic: every path, test regex, and command runner is configured in a single YAML file placed at your repo root. Both `.gaia.yml` and `.triumph.yml` are supported.
+Gaia is completely repository-agnostic: every path, test regex, and command runner is configured in a single YAML file placed at your repo root (`.gaia.yml`).
 
 ### Minimal Configuration
 
@@ -277,17 +277,17 @@ Running "Install courts" writes the court subagent instructions and MCP wiring d
 | **Claude Code** | `.claude/agents/*.md` + `.mcp.json` |
 | **OpenAI Codex** | Agent definitions + MCP configuration |
 | **VS Code Chat** | Chat participant registrations + `.vscode/mcp.json` |
-| **Generic** | `.gaia/` (or `.triumph/`) subagent prompt templates + MCP configuration |
+| **Generic** | `.gaia/` subagent prompt templates + MCP configuration |
 
 ### Safe Installation Guarantees
 - **Non-destructive Merging**: Existing agent modes are merged by slug name. Your custom tools and prompts are never overwritten.
 - **MCP Setting Preservation**: Existing MCP tool configurations retain their user overrides (such as `disabled`, `alwaysAllow`, and environment variables).
-- **Automated Backups**: Timestamped backup copies (`*.triumph-backup-*` or `*.gaia-backup-*`) are automatically created alongside any modified files.
+- **Automated Backups**: Timestamped backup copies (`*.gaia-backup-*`) are automatically created alongside any modified files.
 - **Atomic Rollback**: If an error occurs during installation, all modified files are immediately restored from their backups.
 
 ### Rollback Process
 1. Backup files are displayed in the VS Code panel under "Show files and backups" and listed in CLI command outputs.
-2. To undo changes, copy the `.triumph-backup-*` file over the active configuration file.
+2. To undo changes, copy the backup file over the active configuration file.
 3. Newly created subagent prompt files can simply be removed.
 
 ---
@@ -315,7 +315,6 @@ Send JSON-RPC 2.0 requests over `stdin`:
 {"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"trustgap_mutate","arguments":{}}}
 {"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"triage_incident","arguments":{}}}
 ```
-*(Legacy tool aliases `redline_*`, `splitbrain_*`, and `warpath_*` remain fully supported).*
 
 ### 8c. Via Your AI Agent Host (IBM Bob, Claude Code, etc.)
 Once courts are installed:
@@ -365,7 +364,7 @@ Once courts are installed:
 | **Claude Code** | `--host claude` | Writes `.claude/agents/*.md` subagents and `.mcp.json`. |
 | **OpenAI Codex** | `--host codex` | Provisions Codex agent definitions and MCP wiring. |
 | **VS Code Chat** | `--host vscode` | Registers chat participants and configures `.vscode/mcp.json`. |
-| **Generic / Other** | `--host generic` | Provisions `.gaia/` (`.triumph/`) subagents for any MCP-compliant host. |
+| **Generic / Other** | `--host generic` | Provisions `.gaia/` subagents for any MCP-compliant host. |
 | **All** | `--host all` | *Default.* Provisions configurations for all detected hosts simultaneously. |
 
 Gaia is completely model-agnostic. Switching agent hosts requires only passing a different `--host` flag. The deterministic engine and rendered reports remain identical regardless of which model powers your agent.
@@ -384,16 +383,16 @@ node court-extension/court.js --repo /path/to/your/repo
 
 | Tool | Court | Description |
 | :--- | :--- | :--- |
-| `witness_verdict_all`<br>*(alias: `redline_verdict_all`)* | WITNESS | Runs all spec-witness test suites; returns Red/Yellow/Green verdict per clause. Wall-enforced against implementation paths. |
-| `witness_clause`<br>*(alias: `redline_clause`)* | WITNESS | Evaluates a single spec clause (e.g., `W4`) and returns test execution details and failures. |
-| `witness_clauses`<br>*(alias: `redline_clauses`)* | WITNESS | Lists all spec clause IDs extracted from the specification contract. |
-| `trustgap_mutate`<br>*(alias: `splitbrain_mutate`)* | TRUSTGAP | Starts async mutation testing run in the background; returns a `job_id` immediately so chat never blocks. |
-| `trustgap_status`<br>*(alias: `splitbrain_status`)* | TRUSTGAP | Polls the progress or completion status of an active mutation job. |
-| `trustgap_report`<br>*(alias: `splitbrain_trustgap`)* | TRUSTGAP | Returns claimed coverage vs. honest mutation kill-rate, naming every tautology and surviving mutant. |
-| `trustgap_mutants`<br>*(alias: `splitbrain_mutants`)* | TRUSTGAP | Lists mutants from the latest mutation report, with optional filtering by status (e.g., `Survived`). |
-| `triage_incident`<br>*(alias: `warpath_triage`)* | TRIAGE | Computes suspect deployment and anomalous signal window by correlating timestamps across fixtures. |
-| `triage_context`<br>*(alias: `warpath_context`)* | TRIAGE | Pulls raw deploy, metrics, and log fixture incident context. |
-| `triage_postmortem`<br>*(alias: `warpath_postmortem`)* | TRIAGE | Renders a structured postmortem under the configured incident directory. |
+| `witness_verdict_all` | WITNESS | Runs all spec-witness test suites; returns Red/Yellow/Green verdict per clause. Wall-enforced against implementation paths. |
+| `witness_clause` | WITNESS | Evaluates a single spec clause (e.g., `W4`) and returns test execution details and failures. |
+| `witness_clauses` | WITNESS | Lists all spec clause IDs extracted from the specification contract. |
+| `trustgap_mutate` | TRUSTGAP | Starts async mutation testing run in the background; returns a `job_id` immediately so chat never blocks. |
+| `trustgap_status` | TRUSTGAP | Polls the progress or completion status of an active mutation job. |
+| `trustgap_report` | TRUSTGAP | Returns claimed coverage vs. honest mutation kill-rate, naming every tautology and surviving mutant. |
+| `trustgap_mutants` | TRUSTGAP | Lists mutants from the latest mutation report, with optional filtering by status (e.g., `Survived`). |
+| `triage_incident` | TRIAGE | Computes suspect deployment and anomalous signal window by correlating timestamps across fixtures. |
+| `triage_context` | TRIAGE | Pulls raw deploy, metrics, and log fixture incident context. |
+| `triage_postmortem` | TRIAGE | Renders a structured postmortem under the configured incident directory. |
 | `courts_about` | Meta | Returns the 3-court manifesto, loaded configuration source, and active wall policy. |
 
 ---
@@ -443,14 +442,14 @@ npm test
 node bin/vsce-node18.cjs package
 
 # Install into code-server
-code-server --install-extension triumph-courts.vsix --force
+code-server --install-extension gaia-courts.vsix --force
 ```
 
 ---
 
 ## 13. Contributing
 
-- Review [CONTRIBUTIONS.md](file:///c:/Users/Parth/OneDrive/Desktop/College/ibm_/ibm/CONTRIBUTIONS.md) for contribution guidelines and project history.
+- Review [CONTRIBUTIONS.md](CONTRIBUTIONS.md) for contribution guidelines and project history.
 - The `northstar/` directory serves as the canonical reference implementation, validated continuously against the Gaia engine.
 - To execute the comprehensive test suite:
   ```bash
@@ -463,4 +462,4 @@ code-server --install-extension triumph-courts.vsix --force
 
 ## 14. License
 
-Distributed under the MIT License. See [court-extension/LICENSE](file:///c:/Users/Parth/OneDrive/Desktop/College/ibm_/ibm/court-extension/LICENSE) for details.
+Distributed under the MIT License. See [court-extension/LICENSE](court-extension/LICENSE) for details.
